@@ -39,7 +39,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.3.2"
 
 
 def _resource_dir() -> str:
@@ -1449,22 +1449,35 @@ def _fetch_postit_cards():
 
 # --- 포스트잇 카드 하나짜리 UI(다음 두 화면에서 공통으로 씀) + 인터랙션 JS ---
 POSTIT_CARD_CSS = """
-  .postit-card { border-radius: 6px; padding: 10px 12px; position: relative; font-size: 12.5px; color: #3A3652;
-                 box-shadow: 1px 3px 8px rgba(0,0,0,0.14); }
+  .postit-card { border-radius: 2px 2px 10px 2px; padding: 12px 13px 10px; position: relative; font-size: 12.5px;
+                 color: #3A3652; box-shadow: 2px 4px 10px rgba(0,0,0,0.16), 0 1px 1px rgba(0,0,0,0.06);
+                 transform: rotate(var(--tilt, -1deg)); transition: transform .15s; }
+  .postit-card:nth-child(3n) { --tilt: 1.2deg; }
+  .postit-card:nth-child(3n+1) { --tilt: -1.5deg; }
+  .postit-card:nth-child(3n+2) { --tilt: 0.6deg; }
+  .postit-card:hover { transform: rotate(0deg) scale(1.015); z-index: 2; }
+  .postit-card::after {
+    /* 종이 오른쪽 아래가 살짝 말려 올라간 느낌 */
+    content: ''; position: absolute; right: 0; bottom: 0; width: 16px; height: 16px;
+    background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.10) 50%);
+    border-radius: 0 0 10px 0;
+  }
   .postit-card.done { opacity: 0.5; }
   .postit-card.done .ptext { text-decoration: line-through; }
-  .postit-card .ptag { font-size: 9.5px; font-weight: 800; opacity: 0.55; text-transform: uppercase; margin-bottom: 4px; }
+  .postit-card .ptag { font-size: 9.5px; font-weight: 800; opacity: 0.5; text-transform: uppercase; margin-bottom: 4px; }
   .postit-card .ptext { font-weight: 700; line-height: 1.4; word-break: break-word; cursor: text; outline: none;
                          min-height: 1.4em; white-space: pre-wrap; }
-  .postit-card .psub { font-size: 10.5px; opacity: 0.7; margin-top: 5px; }
-  .postit-card .prow { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .postit-card .psub { font-size: 10.5px; opacity: 0.65; margin-top: 5px; }
+  .postit-card .prow { display: flex; align-items: center; justify-content: space-between; margin-top: 8px;
+                        opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .postit-card:hover .prow, .postit-card:focus-within .prow { opacity: 1; pointer-events: auto; }
   .postit-card .pcolors { display: flex; gap: 4px; }
-  .postit-card .pdot { width: 13px; height: 13px; border-radius: 50%; cursor: pointer; border: 1.5px solid rgba(0,0,0,0.12); }
+  .postit-card .pdot { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; border: 1.5px solid rgba(0,0,0,0.14); }
   .postit-card .pdot.active { border-color: #3A3652; border-width: 2px; }
   .postit-card .pactions { display: flex; align-items: center; gap: 4px; }
-  .postit-card .pactions input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
-  .postit-card .pdel { border: none; background: rgba(255,255,255,0.55); border-radius: 5px; cursor: pointer;
-                        font-size: 10.5px; padding: 2px 5px; color: #5C577A; }
+  .postit-card .pactions input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; }
+  .postit-card .pdel { border: none; background: rgba(255,255,255,0.6); border-radius: 5px; cursor: pointer;
+                        font-size: 10px; padding: 2px 5px; color: #5C577A; }
 """
 
 POSTIT_CARD_JS = """
@@ -1687,6 +1700,9 @@ body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; backgrou
 .list { flex: 1; overflow-y: auto; padding: 8px; user-select: text; }
 .list .postit-card { margin-bottom: 8px; }
 .empty { text-align: center; color: #B7B3CC; font-size: 12px; padding: 20px 8px; }
+.resize-handle { position: fixed; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+                  background: linear-gradient(135deg, transparent 50%, rgba(91,63,191,0.35) 50%);
+                  border-radius: 0 0 10px 0; }
 """ + POSTIT_CARD_CSS + """
 </style></head>
 <body>
@@ -1726,6 +1742,7 @@ body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; backgrou
     <div class="empty" id="postitEmpty">📌 카드가 없어요<br>➕로 메모를 추가해보세요</div>
     {% endif %}
   </div>
+  <div class="resize-handle" id="resizeHandle" title="드래그해서 크기 조절"></div>
 <script>
 """ + POSTIT_CARD_JS % "{{ color_presets|tojson }}" + """
 function closeWidget() {
@@ -1761,6 +1778,36 @@ function closeWidget() {
   });
 
   document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+// frameless(테두리 없는) 창이라 OS가 기본 제공하는 크기조절 모서리가 안 보여서,
+// 우측 하단에 직접 만든 손잡이로 크기를 조절한다.
+(function setupResize() {
+  const handle = document.getElementById('resizeHandle');
+  let resizing = false, startMouseX = 0, startMouseY = 0, startW = 0, startH = 0, pending = false;
+
+  handle.addEventListener('mousedown', (e) => {
+    if (!window.pywebview) return;
+    resizing = true;
+    startMouseX = e.screenX;
+    startMouseY = e.screenY;
+    startW = window.innerWidth;
+    startH = window.innerHeight;
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!resizing || pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      const dw = e.screenX - startMouseX;
+      const dh = e.screenY - startMouseY;
+      window.pywebview.api.resize_widget(startW + dw, startH + dh);
+      pending = false;
+    });
+  });
+
+  document.addEventListener('mouseup', () => { resizing = false; });
 })();
 </script>
 </body></html>

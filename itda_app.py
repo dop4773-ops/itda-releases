@@ -181,6 +181,12 @@ class Api:
             creationflags = (
                 getattr(subprocess, "DETACHED_PROCESS", 0)
                 | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                # 이게 없으면, 잇다 프로세스가 Windows Job Object에 묶여있는 경우
+                # (드물지 않음) 잇다가 종료될 때 "분리시켜서" 띄워둔 이 헬퍼까지
+                # 같이 강제 종료돼버릴 수 있다 - 그래서 업데이트 설치 도중에 헬퍼가
+                # 사라져서 앱이 다시 안 켜지는 문제로 이어졌던 것으로 보인다.
+                # 이 플래그는 부모의 Job에서 확실히 떨어져 나가게 만든다.
+                | getattr(subprocess, "CREATE_BREAKAWAY_FROM_JOB", 0)
             )
             subprocess.Popen(
                 ["powershell.exe", "-WindowStyle", "Hidden", "-Command", ps_script],
@@ -270,6 +276,19 @@ class Api:
                 pass
         return "ok"
 
+    def resize_widget(self, width, height):
+        """포스트잇 위젯은 frameless(테두리 없음) 창이라 OS가 기본 제공하는 크기조절
+        모서리가 안 보인다 - 그래서 화면 안에 직접 만든 크기조절 손잡이가 이 메서드를
+        호출해서 크기를 조절한다."""
+        if self._widget_window is not None:
+            try:
+                width = max(200, int(width))
+                height = max(150, int(height))
+                self._widget_window.resize(width, height)
+            except Exception:
+                pass
+        return "ok"
+
 
 def _update_lock_path(base_dir: str) -> str:
     return os.path.join(base_dir, ".update_in_progress")
@@ -355,6 +374,23 @@ def _setup_tray(window, base_dir: str, api: "Api") -> bool:
     return True
 
 
+def _wait_for_flask_ready(port: int, timeout: float = 15.0):
+    """고정 시간만 자고 넘어가는 대신, 실제로 Flask가 요청에 응답하는지 짧은 간격으로
+    확인하면서 기다린다. 창을 너무 일찍 띄우면 서버가 아직 준비 안 된 상태라 첫 클릭이
+    "응답없음"으로 보이는 문제가 있었어서, 이제 실제 준비 완료를 확인하고 넘어간다."""
+    import urllib.request
+
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{port}/add", timeout=1.0)
+            return True
+        except Exception:
+            time.sleep(0.2)
+    print(f"안내: {timeout}초 동안 Flask 준비 확인을 못 했지만, 일단 창을 띄웁니다.", file=sys.stderr)
+    return False
+
+
 def _try_focus_existing_instance(port: int) -> bool:
     """트레이 상주 기능 때문에, 사용자가 실행 중인 걸 모르고 아이콘을 다시 눌러서
     두 번째 인스턴스가 뜰 수 있다. 이 경우 서로 다른 프로세스가 각자 다른 메모리에
@@ -425,18 +461,18 @@ def main():
 
     lock_path = _update_lock_path(base_dir)
     if os.path.exists(lock_path):
-        # 잠금 파일이 5분 넘게 안 지워졌으면 예전 업데이트 시도가 실패해서 못 지운
+        # 잠금 파일이 2분 넘게 안 지워졌으면 예전 업데이트 시도가 실패해서 못 지운
         # 걸로 보고 무시한다 (안 그러면 앱이 영영 안 켜지는 상황이 생길 수 있음).
         try:
             age_sec = time.time() - os.path.getmtime(lock_path)
         except Exception:
             age_sec = 9999
-        if age_sec < 300:
+        if age_sec < 120:
             print("업데이트 설치가 진행 중인 것 같아 대기 화면만 보여주고 종료합니다.")
             _show_update_waiting_window()
             return
         else:
-            print("5분 넘게 안 지워진 업데이트 잠금 파일을 무시하고 정상 실행합니다.")
+            print("2분 넘게 안 지워진 업데이트 잠금 파일을 무시하고 정상 실행합니다.")
             try:
                 os.remove(lock_path)
             except Exception:
@@ -451,8 +487,11 @@ def main():
     flask_thread = threading.Thread(target=_run_flask, args=(base_dir, port), daemon=True)
     flask_thread.start()
 
-    # Flask가 실제로 요청을 받을 준비가 될 때까지 잠깐 대기
-    time.sleep(1.0)
+    # Flask가 실제로 요청을 받을 준비가 될 때까지 대기. 예전엔 무조건 1초만 자고
+    # 넘어갔는데, 컴퓨터가 느리거나 첫 DB 마이그레이션이 오래 걸리면 1초로는 부족해서
+    # 창이 뜨자마자 첫 클릭이 "응답없음"으로 보이는 문제가 있었음 - 이제 실제로
+    # 서버가 응답하는지 직접 확인하면서 최대 15초까지 기다린다.
+    _wait_for_flask_ready(port, timeout=15.0)
 
     import webview
     api = Api(port)
