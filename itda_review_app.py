@@ -2578,18 +2578,32 @@ async function startUpdate() {
 
   const btn = document.getElementById('updateNowBtn');
   btn.disabled = true;
-  btn.textContent = '다운로드 중... (잠시만 기다려주세요)';
+  btn.textContent = '다운로드 중... 0%';
+
+  // 다운로드 진행률을 0.5초마다 물어봐서 버튼 텍스트로 보여줌
+  const progressTimer = setInterval(async () => {
+    try {
+      const p = await window.pywebview.api.get_download_progress();
+      if (!p.done && !p.error) {
+        btn.textContent = `다운로드 중... ${p.percent}%`;
+      }
+    } catch (e) { /* 진행률 조회 실패는 무시 - 치명적이지 않음 */ }
+  }, 500);
+
   try {
     const result = await window.pywebview.api.download_and_install_update(_latestUpdateData.download_url);
+    clearInterval(progressTimer);
     if (result.ok) {
-      btn.textContent = '설치 중... 앱이 곧 재시작됩니다';
-      setTimeout(() => { window.pywebview.api.quit_app(); }, 1200);
+      btn.textContent = '설치 중... 잠시 후 앱이 자동으로 다시 열려요';
+      alert('업데이트를 설치할게요.\\n\\n앱이 지금 닫히고, 설치 진행 창이 잠깐 보였다가,\\n완료되면 자동으로 다시 열려요.\\n(30초~1분 정도 걸릴 수 있어요, 너무 급하게 다시 실행하지 말아주세요)');
+      window.pywebview.api.quit_app();
     } else {
       alert('업데이트 실패: ' + result.error);
       btn.disabled = false;
       btn.textContent = '⬇️ 지금 업데이트';
     }
   } catch (e) {
+    clearInterval(progressTimer);
     alert('업데이트 중 오류가 발생했습니다: ' + e);
     btn.disabled = false;
     btn.textContent = '⬇️ 지금 업데이트';

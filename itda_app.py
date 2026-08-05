@@ -108,6 +108,7 @@ class Api:
         self._widget_window = None
         self.main_window = None  # main()에서 설정 - quit_app()이 종료시킬 대상
         self._tray_icon = None   # _setup_tray()가 설정 - quit_app()이 함께 정지시킬 대상
+        self._download_progress = {"percent": 0, "done": False, "error": None}
 
     def pick_file(self, file_types=None):
         import webview
@@ -119,33 +120,62 @@ class Api:
             return result[0]
         return None
 
+    def get_download_progress(self):
+        """다운로드 중일 때 JS가 주기적으로 호출해서 진행률(%)을 물어보는 용도."""
+        return self._download_progress
+
     def download_and_install_update(self, url):
-        """새 버전의 설치 파일(Itda_Setup.exe)을 받아서, 창을 조용히(화면 안 뜨게)
-        설치하고 자동으로 재시작하는 헬퍼 프로세스를 준비한다.
+        """새 버전의 설치 파일(Itda_Setup.exe)을 받아서, 설치 진행 상황이 화면에
+        보이는 채로(완전 무음 설치 아님 - 뭔가 되고 있다는 걸 알 수 있게) 설치하고
+        자동으로 재시작하는 헬퍼 프로세스를 준비한다.
         실제 종료는 이 함수가 성공한 뒤 JS가 quit_app()을 별도로 호출해야 실행됨
         (다운로드 도중에 앱이 꺼지면 안 되니까 순서를 분리)."""
         import urllib.request
         import tempfile
 
+        self._download_progress = {"percent": 0, "done": False, "error": None}
+
+        def _report(block_num, block_size, total_size):
+            if total_size > 0:
+                pct = min(100, int(block_num * block_size * 100 / total_size))
+                self._download_progress["percent"] = pct
+
         try:
             tmp_dir = tempfile.gettempdir()
             installer_path = os.path.join(tmp_dir, "Itda_Setup_update.exe")
-            urllib.request.urlretrieve(url, installer_path)
+            urllib.request.urlretrieve(url, installer_path, reporthook=_report)
+            self._download_progress["percent"] = 100
         except Exception as e:
+            self._download_progress["error"] = str(e)
             return {"ok": False, "error": f"다운로드 실패: {e}"}
 
         try:
             import subprocess
             base_dir = _base_dir()
             exe_path = os.path.join(base_dir, "잇다.exe")
+            lock_path = _update_lock_path(base_dir)
+            log_path = os.path.join(base_dir, "itda_update_log.txt")
+
+            # 설치가 진행 중이라는 걸 표시하는 잠금 파일 - main()이 시작할 때 이 파일이
+            # 있으면 "업데이트 중이니 기다려주세요" 화면만 보여주고 정상 실행은 안 해서,
+            # 헬퍼가 아직 설치 중인데 사용자가 급하게 다시 실행해서 꼬이는 걸 방지한다.
+            with open(lock_path, "w", encoding="utf-8") as f:
+                f.write("updating")
+
             # 지금 이 프로세스가 완전히 종료된 뒤(quit_app 호출 후)에 설치 프로그램을
-            # 조용히 돌리고, 설치가 끝나면 새 버전을 자동으로 다시 실행하는 헬퍼.
-            # 지금 프로세스와 완전히 분리된(detached) 별도 프로세스로 띄워야
+            # 돌리고, 설치가 끝나면 잠금 파일을 지우고 새 버전을 자동으로 다시 실행하는
+            # 헬퍼. 지금 프로세스와 완전히 분리된(detached) 별도 프로세스로 띄워야
             # 잇다가 종료돼도 이 헬퍼는 안 죽고 계속 진행된다.
+            # /VERYSILENT(완전 무음) 대신 /SILENT를 써서 - 사용자 입력은 필요 없지만
+            # 작은 진행 표시줄은 보이게 해서 "지금 뭔가 되고 있다"는 걸 알 수 있게 한다.
             ps_script = (
+                f'"[$([DateTime]::Now)] 업데이트 시작, 2초 대기" | Out-File -FilePath "{log_path}" -Append -Encoding utf8; '
                 f'Start-Sleep -Seconds 2; '
+                f'"[$([DateTime]::Now)] 설치 프로그램 실행: {installer_path}" | Out-File -FilePath "{log_path}" -Append -Encoding utf8; '
                 f'Start-Process -FilePath "{installer_path}" '
-                f'-ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait; '
+                f'-ArgumentList "/SILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait; '
+                f'"[$([DateTime]::Now)] 설치 완료, 잠금 해제 후 재시작" | Out-File -FilePath "{log_path}" -Append -Encoding utf8; '
+                f'Remove-Item -Path "{lock_path}" -Force -ErrorAction SilentlyContinue; '
                 f'Start-Process -FilePath "{exe_path}"'
             )
             creationflags = (
@@ -159,6 +189,7 @@ class Api:
         except Exception as e:
             return {"ok": False, "error": f"업데이트 준비 실패: {e}"}
 
+        self._download_progress["done"] = True
         return {"ok": True}
 
     def quit_app(self):
@@ -238,6 +269,10 @@ class Api:
             except Exception:
                 pass
         return "ok"
+
+
+def _update_lock_path(base_dir: str) -> str:
+    return os.path.join(base_dir, ".update_in_progress")
 
 
 def _tray_enabled(base_dir: str) -> bool:
@@ -364,9 +399,48 @@ def _maybe_check_update_on_start(base_dir: str, port: int):
         pass  # 조용히 실패 - 시작 시 자동 확인은 "되면 좋고" 기능이라 앱 실행을 막으면 안 됨
 
 
+def _show_update_waiting_window():
+    """설치 헬퍼가 아직 돌고 있는 도중에 사용자가 급하게 앱을 다시 실행했을 때,
+    혼란스러운 "응답없음" 대신 명확한 안내 화면을 보여준다."""
+    import webview
+    html = """
+    <html><head><meta charset="utf-8"></head>
+    <body style="font-family:'Malgun Gothic','맑은 고딕',sans-serif;display:flex;align-items:center;
+                  justify-content:center;height:100vh;margin:0;background:#F8F7FC;color:#34324A;">
+      <div style="text-align:center;">
+        <div style="font-size:34px;margin-bottom:10px;">⏳</div>
+        <h2 style="margin:0 0 8px;font-size:16px;">업데이트 설치 중입니다</h2>
+        <p style="color:#9691AB;font-size:12.5px;line-height:1.6;">
+          잠시 후 자동으로 새 버전이 실행돼요.<br>이 창은 그냥 닫으셔도 괜찮아요.</p>
+      </div>
+    </body></html>
+    """
+    webview.create_window("잇다 - 업데이트 중", html=html, width=380, height=240, resizable=False)
+    webview.start()
+
+
 def main():
     port = 5050
     base_dir = _base_dir()
+
+    lock_path = _update_lock_path(base_dir)
+    if os.path.exists(lock_path):
+        # 잠금 파일이 5분 넘게 안 지워졌으면 예전 업데이트 시도가 실패해서 못 지운
+        # 걸로 보고 무시한다 (안 그러면 앱이 영영 안 켜지는 상황이 생길 수 있음).
+        try:
+            age_sec = time.time() - os.path.getmtime(lock_path)
+        except Exception:
+            age_sec = 9999
+        if age_sec < 300:
+            print("업데이트 설치가 진행 중인 것 같아 대기 화면만 보여주고 종료합니다.")
+            _show_update_waiting_window()
+            return
+        else:
+            print("5분 넘게 안 지워진 업데이트 잠금 파일을 무시하고 정상 실행합니다.")
+            try:
+                os.remove(lock_path)
+            except Exception:
+                pass
 
     if _try_focus_existing_instance(port):
         print("잇다가 이미 실행 중이라 기존 창을 그대로 사용합니다 (새 인스턴스는 띄우지 않음).")

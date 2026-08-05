@@ -33,6 +33,10 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableDirPage=no
+; 제거해도 assistant.db/itda_config.json처럼 일부러 남겨두는 파일들 때문에 폴더가
+; 완전히 비지는 않는데, 그것 때문에 재설치할 때마다 "폴더가 존재합니다" 경고가 뜨던
+; 문제가 있었음 - 이 경고를 꺼서 그냥 조용히 넘어가게 함 (동작 자체는 항상 안전함)
+DirExistsWarning=no
 
 [Languages]
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
@@ -77,4 +81,23 @@ function InitializeUninstall(): Boolean;
 begin
   KillRunningItda;
   Result := True;
+end;
+
+// 앱 파일을 지운 뒤, assistant.db/itda_config.json처럼 일부러 남겨뒀던 사용자 데이터도
+// 같이 지울지 한 번 물어본다. "아니오"가 기본적으로 안전한 선택(데이터 보존)이고,
+// 정말 완전히 깨끗하게 지우고 싶을 때만 "예"를 누르면 폴더까지 통째로 삭제된다.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    if DirExists(ExpandConstant('{app}')) then
+    begin
+      if MsgBox('저장된 데이터(assistant.db, 설정, 로그 등)도 함께 삭제할까요?' + #13#10 +
+                '나중에 재설치했을 때 기존 데이터를 이어서 쓰려면 "아니요"를 선택하세요.',
+                mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        DelTree(ExpandConstant('{app}'), True, True, True);
+      end;
+    end;
+  end;
 end;
