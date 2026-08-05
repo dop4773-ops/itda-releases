@@ -29,13 +29,20 @@ jobs:
         # 깜빡하고 안 맞춰서 "빌드는 됐는데 버전 표시가 안 맞는" 문제가 반복됐었음.
         # 이제 git 태그 이름을 그대로 정답으로 삼아서 빌드 직전에 자동으로 덮어쓴다 -
         # 태그와 실제 빌드된 exe의 버전이 항상 100% 일치하는 게 보장됨.
+        # (백틱으로 따옴표 이스케이프하는 방식이 파싱 에러를 일으켜서, 그냥 문자열을
+        # 이어붙이는 훨씬 단순한 방식으로 교체함)
         run: |
           $version = "${{ github.ref_name }}" -replace '^v', ''
           Write-Host "이번 빌드 버전: $version"
-          (Get-Content itda_review_app.py) -replace 'APP_VERSION = "[^"]*"', "APP_VERSION = `"$version`"" | Set-Content itda_review_app.py
-          (Get-Content installer.iss) -replace '#define MyAppVersion "[^"]*"', "#define MyAppVersion `"$version`"" | Set-Content installer.iss
-          Select-String -Path itda_review_app.py -Pattern "APP_VERSION ="
-          Select-String -Path installer.iss -Pattern "MyAppVersion"
+
+          $newAppVersionLine = 'APP_VERSION = "' + $version + '"'
+          (Get-Content itda_review_app.py) -replace 'APP_VERSION = "[^"]*"', $newAppVersionLine | Set-Content itda_review_app.py
+
+          $newIssVersionLine = '#define MyAppVersion "' + $version + '"'
+          (Get-Content installer.iss) -replace '#define MyAppVersion "[^"]*"', $newIssVersionLine | Set-Content installer.iss
+
+          Get-Content itda_review_app.py | Select-String "APP_VERSION ="
+          Get-Content installer.iss | Select-String "MyAppVersion"
         shell: powershell
 
       - name: 의존 패키지 설치
