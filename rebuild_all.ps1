@@ -12,6 +12,7 @@
 #       콘솔 보이는 디버그 버전이 필요하면 build_exe.ps1 -Debug를 따로 실행하세요.
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 
 Write-Host "===== 이전 빌드 결과물 정리 =====" -ForegroundColor Cyan
 foreach ($dir in @("build", "dist", "Output")) {

@@ -83,12 +83,14 @@ def _run_flask(base_dir: str, port: int):
 
 
 class Api:
-    """설정 화면의 '찾아보기' 버튼, 포스트잇의 '바탕화면에 띄우기' 버튼이 호출하는
-    JS API 브릿지 (window.pywebview.api.함수이름(...) 형태로 호출됨)."""
+    """설정 화면의 '찾아보기'/'지금 업데이트' 버튼, 포스트잇의 '바탕화면에 띄우기' 버튼이
+    호출하는 JS API 브릿지 (window.pywebview.api.함수이름(...) 형태로 호출됨)."""
 
     def __init__(self, port: int):
         self.port = port
         self._widget_window = None
+        self.main_window = None  # main()에서 설정 - quit_app()이 종료시킬 대상
+        self._tray_icon = None   # _setup_tray()가 설정 - quit_app()이 함께 정지시킬 대상
 
     def pick_file(self, file_types=None):
         import webview
@@ -99,6 +101,64 @@ class Api:
         if result:
             return result[0]
         return None
+
+    def download_and_install_update(self, url):
+        """새 버전의 설치 파일(Itda_Setup.exe)을 받아서, 창을 조용히(화면 안 뜨게)
+        설치하고 자동으로 재시작하는 헬퍼 프로세스를 준비한다.
+        실제 종료는 이 함수가 성공한 뒤 JS가 quit_app()을 별도로 호출해야 실행됨
+        (다운로드 도중에 앱이 꺼지면 안 되니까 순서를 분리)."""
+        import urllib.request
+        import tempfile
+
+        try:
+            tmp_dir = tempfile.gettempdir()
+            installer_path = os.path.join(tmp_dir, "Itda_Setup_update.exe")
+            urllib.request.urlretrieve(url, installer_path)
+        except Exception as e:
+            return {"ok": False, "error": f"다운로드 실패: {e}"}
+
+        try:
+            import subprocess
+            base_dir = _base_dir()
+            exe_path = os.path.join(base_dir, "잇다.exe")
+            # 지금 이 프로세스가 완전히 종료된 뒤(quit_app 호출 후)에 설치 프로그램을
+            # 조용히 돌리고, 설치가 끝나면 새 버전을 자동으로 다시 실행하는 헬퍼.
+            # 지금 프로세스와 완전히 분리된(detached) 별도 프로세스로 띄워야
+            # 잇다가 종료돼도 이 헬퍼는 안 죽고 계속 진행된다.
+            ps_script = (
+                f'Start-Sleep -Seconds 2; '
+                f'Start-Process -FilePath "{installer_path}" '
+                f'-ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" -Wait; '
+                f'Start-Process -FilePath "{exe_path}"'
+            )
+            creationflags = (
+                getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            )
+            subprocess.Popen(
+                ["powershell.exe", "-WindowStyle", "Hidden", "-Command", ps_script],
+                creationflags=creationflags,
+            )
+        except Exception as e:
+            return {"ok": False, "error": f"업데이트 준비 실패: {e}"}
+
+        return {"ok": True}
+
+    def quit_app(self):
+        """download_and_install_update()가 성공한 뒤 JS가 호출 - 트레이/창/Flask까지
+        전부 종료시켜서, 백그라운드에 준비해둔 설치 헬퍼가 안전하게 파일을 교체할 수
+        있게 한다 (잇다.exe가 실행 중이면 파일이 잠겨서 설치가 실패하므로)."""
+        try:
+            if self._tray_icon is not None:
+                self._tray_icon.stop()
+        except Exception:
+            pass
+        try:
+            if self.main_window is not None:
+                self.main_window.destroy()
+        except Exception:
+            pass
+        os._exit(0)
 
     def open_postit_widget(self):
         """포스트잇 위젯을 화면 우측 하단에 항상 위(on_top)로 띄운다.
@@ -126,9 +186,9 @@ class Api:
             "잇다 포스트잇",
             f"http://127.0.0.1:{self.port}/postit/widget",
             width=width, height=height, x=x, y=y,
-            frameless=True, on_top=True, resizable=True,
+            frameless=True, on_top=True, resizable=True, easy_drag=False,
             background_color="#F8F7FC",
-            js_api=self,  # 위젯 창 안의 X 버튼이 close_postit_widget()을 호출할 수 있도록
+            js_api=self,  # 위젯 창 안의 버튼들이 여기 메서드를 호출할 수 있도록
         )
         return "created"
 
@@ -141,6 +201,26 @@ class Api:
                 pass
             self._widget_window = None
         return "closed"
+
+    def get_widget_position(self):
+        """드래그 시작 시점의 창 위치를 알려준다 (커스텀 드래그 계산용)."""
+        if self._widget_window is not None:
+            try:
+                return [self._widget_window.x, self._widget_window.y]
+            except Exception:
+                pass
+        return [0, 0]
+
+    def move_widget(self, x, y):
+        """헤더를 드래그할 때 마우스가 움직인 만큼 정확히 창을 옮긴다.
+        pywebview 기본 제공 드래그(easy_drag)가 마우스 포인터랑 창 사이에
+        거리가 벌어지는 문제가 있어서, 직접 델타를 계산해 이동시키는 방식으로 교체함."""
+        if self._widget_window is not None:
+            try:
+                self._widget_window.move(int(x), int(y))
+            except Exception:
+                pass
+        return "ok"
 
 
 def _tray_enabled(base_dir: str) -> bool:
@@ -157,7 +237,7 @@ def _tray_enabled(base_dir: str) -> bool:
         return True
 
 
-def _setup_tray(window, base_dir: str) -> bool:
+def _setup_tray(window, base_dir: str, api: "Api") -> bool:
     """트레이 아이콘을 띄우고, 창을 닫아도 완전히 종료되지 않고 트레이에 상주하게 만든다.
     pystray/Pillow가 없으면 조용히 포기하고 평범한 창(닫으면 진짜 종료)으로 동작한다."""
     try:
@@ -209,6 +289,7 @@ def _setup_tray(window, base_dir: str) -> bool:
         pystray.MenuItem("종료", on_quit),
     )
     tray_icon = pystray.Icon("itda", image, "잇다 (Itda)", menu)
+    api._tray_icon = tray_icon
 
     # pystray.Icon.run()도 자체 이벤트 루프라 블로킹됨 - webview.start()와 별도 스레드로 분리
     tray_thread = threading.Thread(target=tray_icon.run, daemon=True)
@@ -237,6 +318,35 @@ def _try_focus_existing_instance(port: int) -> bool:
         return False
 
 
+def _maybe_check_update_on_start(base_dir: str, port: int):
+    """"시작 시 자동으로 업데이트 확인" 설정이 켜져있으면, 창이 뜨고 나서 잠깐 뒤에
+    백그라운드에서 조용히 한 번 확인한다. 실패해도(네트워크 없음 등) 앱 시작에는
+    전혀 영향 안 주도록 전부 조용히 무시한다."""
+    time.sleep(2.0)  # Flask/창이 완전히 안정된 뒤에 시도
+    config_path = os.path.join(base_dir, "itda_config.json")
+    if not os.path.exists(config_path):
+        return
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        if not cfg.get("auto_check_update", True):
+            return
+        repo = (cfg.get("update_repo") or "").strip()
+        if not repo:
+            return
+
+        import urllib.request
+        import json as _json
+        body = _json.dumps({"repo": repo}).encode("utf-8")
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{port}/settings/check_update", data=body,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass  # 조용히 실패 - 시작 시 자동 확인은 "되면 좋고" 기능이라 앱 실행을 막으면 안 됨
+
+
 def main():
     port = 5050
     base_dir = _base_dir()
@@ -263,6 +373,7 @@ def main():
         min_size=(780, 560),
         js_api=api,
     )
+    api.main_window = window  # quit_app()이 나중에 이 창을 종료시킬 수 있도록
 
     # 나중에 두 번째 인스턴스가 실행되면 "창 좀 보여줘"라고 여기로 요청을 보낸다
     # (트레이에 숨어있을 때 실수로 다시 실행해도 창만 다시 보여주고 끝나게)
@@ -274,10 +385,14 @@ def main():
         return "ok"
 
     if _tray_enabled(base_dir):
-        tray_ok = _setup_tray(window, base_dir)
+        tray_ok = _setup_tray(window, base_dir, api)
         if tray_ok:
             print("트레이 아이콘 활성화됨 - 창을 닫아도 작업표시줄에서 계속 실행됩니다. "
                   "완전히 끄려면 트레이 아이콘 우클릭 > 종료를 눌러주세요.")
+
+    # "시작 시 업데이트 확인" 설정이 켜져있으면, 창이 뜬 뒤 백그라운드에서 조용히
+    # 한 번 확인한다 (실패해도 앱 시작 자체에는 영향 없게 별도 스레드+예외 처리).
+    threading.Thread(target=_maybe_check_update_on_start, args=(base_dir, port), daemon=True).start()
 
     webview.start()
 

@@ -39,7 +39,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.3.0"
 
 
 def _resource_dir() -> str:
@@ -75,9 +75,17 @@ _LLM_TEST_STATUS = {"ok": None, "message": "아직 연결 테스트를 안 했�
 PROFILE_NAME = "사용자"
 PROFILE_DEPT = "잇다 사용 중"
 UPDATE_REPO = ""  # "owner/repo" 형식, GitHub 릴리스로 업데이트 확인할 때 사용
+AUTO_CHECK_UPDATE = True  # 앱 시작할 때 자동으로 업데이트 확인할지
 TRAY_ENABLED = True  # 작업표시줄 트레이 상주 (itda_app.py가 시작 시점에 이 값을 config에서 직접 읽음)
-POSTIT_ENABLED = True  # 포스트잇 기능 (아직 준비 중 - 설정 토글만 미리 마련)
-_UPDATE_STATUS = {"state": "unknown", "message": "아직 업데이트 확인을 안 했습니다"}  # state: unknown/ok/newer/fail
+POSTIT_ENABLED = True  # 포스트잇 기능
+_UPDATE_STATUS = {
+    "state": "unknown",   # unknown/ok/newer/fail
+    "message": "아직 업데이트 확인을 안 했습니다",
+    "latest_version": None,
+    "release_notes": None,
+    "download_url": None,   # Itda_Setup.exe 실제 다운로드 링크 (원클릭 업데이트용)
+    "release_url": None,    # 릴리스 페이지 링크 (수동으로 볼 때용)
+}
 
 
 def _log_debug(msg: str):
@@ -128,7 +136,7 @@ def _save_all_config():
     한 곳에서만 전체를 저장하도록 통일함."""
     _save_config({
         "db_path": DB_PATH, "model_path": MODEL_PATH, "ml_model_path": ML_MODEL_PATH,
-        "sources": SOURCES, "update_repo": UPDATE_REPO,
+        "sources": SOURCES, "update_repo": UPDATE_REPO, "auto_check_update": AUTO_CHECK_UPDATE,
         "profile_name": PROFILE_NAME, "profile_dept": PROFILE_DEPT,
         "tray_enabled": TRAY_ENABLED, "postit_enabled": POSTIT_ENABLED,
     })
@@ -137,7 +145,7 @@ def _save_all_config():
 def _apply_config_globals(cfg: dict):
     """설정 파일 내용을 현재 실행 중인 전역변수에 즉시 반영 (앱 재시작 없이 적용)."""
     global DB_PATH, MODEL_PATH, ML_MODEL_PATH, SOURCES, UPDATE_REPO, PROFILE_NAME, PROFILE_DEPT
-    global TRAY_ENABLED, POSTIT_ENABLED
+    global TRAY_ENABLED, POSTIT_ENABLED, AUTO_CHECK_UPDATE
     if cfg.get("db_path"):
         DB_PATH = cfg["db_path"]
     if cfg.get("model_path"):
@@ -152,6 +160,7 @@ def _apply_config_globals(cfg: dict):
         PROFILE_DEPT = cfg["profile_dept"]
     TRAY_ENABLED = bool(cfg.get("tray_enabled", True))
     POSTIT_ENABLED = bool(cfg.get("postit_enabled", True))
+    AUTO_CHECK_UPDATE = bool(cfg.get("auto_check_update", True))
 
 _LLM_CACHE = {"llm": None, "grammar": None, "model_path": None}
 
@@ -266,6 +275,14 @@ CREATE TABLE IF NOT EXISTS suggestions (
     reviewed_utc TEXT,
     UNIQUE(source, event_id)
 );
+
+CREATE TABLE IF NOT EXISTS memo (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    color TEXT DEFAULT '#FFF3B0',
+    status TEXT DEFAULT 'pending',
+    created_utc TEXT NOT NULL
+);
 """
 
 
@@ -274,13 +291,15 @@ def init_db_schema():
     conn.executescript(FULL_SCHEMA)
     conn.commit()
 
-    # 포스트잇 기능용 pinned 컬럼 - 기존에 만들어둔 DB에는 없을 수 있어서
+    # 포스트잇 기능용 pinned/color 컬럼 - 기존에 만들어둔 DB에는 없을 수 있어서
     # 없는 경우에만 안전하게 추가 (있는 걸 또 추가하면 에러나므로 먼저 확인)
     cur = conn.cursor()
     for table in ("todo", "calendar", "notice"):
         cols = [row[1] for row in cur.execute(f"PRAGMA table_info({table})").fetchall()]
         if "pinned" not in cols:
             cur.execute(f"ALTER TABLE {table} ADD COLUMN pinned INTEGER DEFAULT 0")
+        if "color" not in cols:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN color TEXT")
     conn.commit()
     conn.close()
 
@@ -359,6 +378,9 @@ SHARED_CSS = """
   .profile-dept { font-size: 11px; color: #9B96B3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .profile-dot { width: 8px; height: 8px; border-radius: 50%; background: #6FCF97; flex-shrink: 0;
                  box-shadow: 0 0 0 3px rgba(111,207,151,0.22); }
+  .update-badge { display: block; margin: 8px 14px 0; padding: 8px 10px; border-radius: 9px;
+                  background: #FDF1D9; color: #9A6A15; font-size: 11px; font-weight: 700;
+                  text-decoration: none; text-align: center; }
   .sidebar-version { padding: 6px 22px 16px; font-size: 10.5px; color: #ADA8C4; }
 
   .content { flex: 1; height: 100%; padding: 36px 40px; overflow-y: auto; }
@@ -396,11 +418,17 @@ def sidebar_html(active: str) -> str:
 
     profile_active = " settings-active" if active == "settings" else ""
 
+    update_badge = ""
+    if _UPDATE_STATUS.get("state") == "newer":
+        v = _UPDATE_STATUS.get("latest_version") or "?"
+        update_badge = f'<a href="/settings" class="update-badge">🔔 새 버전 v{v} 발견</a>'
+
     return (
         f'<nav class="sidebar"><a href="/" class="sidebar-logo"><span class="badge">잇</span>'
         f'<span class="logo-stack"><span class="logo-main">잇다</span><span class="logo-sub">Itda</span></span></a>'
         f'<div class="side-links">{_links(primary)}'
         f'<div class="side-divider"></div>{_links(secondary)}</div>'
+        f'{update_badge}'
         f'<a href="/settings" class="sidebar-profile{profile_active}" title="설정 (프로필/이름 변경 포함)">'
         f'<div class="profile-avatar">👤</div>'
         f'<div class="profile-text"><div class="profile-name">{PROFILE_NAME}</div>'
@@ -1094,9 +1122,21 @@ LIST_HTML = """
   .filters a.active { background: #5B3FBF; color: #fff; border-color: #5B3FBF; }
   .sort-select { padding: 7px 12px; border-radius: 999px; border: 1px solid #ECE8F7; background: #fff;
                  color: #6E6A87; font-size: 12.5px; font-weight: 500; cursor: pointer; }
-  .status-tabs { margin-bottom: 20px; }
+  .status-tabs { margin-bottom: 16px; }
   .status-tabs a { color: #ADA8C4; text-decoration: none; font-size: 12.5px; margin-right: 14px; padding-bottom: 4px; }
   .status-tabs a.active { color: #2E2C42; font-weight: 700; border-bottom: 2px solid #5B3FBF; }
+  .bulk-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .search-input { flex: 1; min-width: 160px; padding: 8px 12px; border-radius: 999px; border: 1px solid #ECE8F7;
+                   background: #fff; font-size: 12.5px; color: #34324A; }
+  .select-all-label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #6E6A87;
+                       cursor: pointer; white-space: nowrap; }
+  .select-all-label input { width: 15px; height: 15px; cursor: pointer; accent-color: #8B5FE0; }
+  .selected-count { font-size: 11.5px; color: #ADA8C4; white-space: nowrap; }
+  .bulk-delete-btn { padding: 7px 14px; border-radius: 999px; border: none; background: #FCE9E9; color: #9E3B3B;
+                      font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .bulk-delete-btn:disabled { background: #F3F1F8; color: #C7C2D6; cursor: default; }
+  .no-results { padding: 30px; text-align: center; color: #B7B3CC; font-size: 13px; }
+  .item-select-cb { width: 16px; height: 16px; margin-top: 3px; cursor: pointer; accent-color: #5B3FBF; flex-shrink: 0; }
   .group-head { font-size: 12.5px; font-weight: 700; color: #9691AB; margin: 22px 0 10px; text-transform: uppercase; letter-spacing: 0.3px; }
   .group-head:first-of-type { margin-top: 0; }
   .item { background: #fff; border-radius: 13px; padding: 15px 18px; margin-bottom: 10px;
@@ -1156,13 +1196,26 @@ LIST_HTML = """
     <a href="/list?category={{ category_filter }}&status=done&sort={{ sort }}" class="{{ 'active' if status_filter == 'done' else '' }}">완료</a>
   </div>
 
+  <div class="bulk-bar">
+    <input type="text" class="search-input" id="searchInput" placeholder="🔍 내용 검색..." oninput="filterItems()">
+    <label class="select-all-label">
+      <input type="checkbox" id="selectAllCb" onchange="toggleSelectAll(this.checked)"> 전체 선택
+    </label>
+    <span class="selected-count" id="selectedCount"></span>
+    <button type="button" class="bulk-delete-btn" id="bulkDeleteBtn" onclick="bulkDelete()" disabled>🗑 선택 삭제</button>
+  </div>
+
   {% if groups|length == 0 %}
     <div class="empty">아직 저장된 항목이 없어요.<br>"빠른 추가"나 "분석하기"로 항목을 등록해보세요.</div>
   {% else %}
+    <div class="no-results" id="noResults" style="display:none;">검색 결과가 없어요.</div>
     {% for group_label, group_items in groups %}
     <div class="group-head">{{ group_label }}</div>
     {% for it in group_items %}
-    <div class="item {{ 'done' if it.status == 'done' else '' }}" id="item-{{ it.table }}-{{ it.id }}">
+    <div class="item {{ 'done' if it.status == 'done' else '' }}" id="item-{{ it.table }}-{{ it.id }}"
+         data-search="{{ (it.content ~ ' ' ~ (it.sender or '') ~ ' ' ~ (it.event_subtype or ''))|lower }}">
+      <input type="checkbox" class="item-select-cb" data-table="{{ it.table }}" data-id="{{ it.id }}"
+             onchange="updateBulkBar()">
       {% if it.table != 'reference' %}
       <form class="toggle" method="post" action="/list/toggle/{{ it.table }}/{{ it.id }}">
         <input type="hidden" name="return_url" value="{{ return_url }}">
@@ -1210,6 +1263,73 @@ LIST_HTML = """
 </div></main>
 </div>
 <script>
+function filterItems() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const items = document.querySelectorAll('.item');
+  let visibleCount = 0;
+  items.forEach(el => {
+    const match = !q || (el.dataset.search || '').includes(q);
+    el.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  // 검색으로 다 가려진 그룹 헤더도 숨기기
+  document.querySelectorAll('.group-head').forEach(gh => {
+    let sib = gh.nextElementSibling;
+    let hasVisible = false;
+    while (sib && !sib.classList.contains('group-head')) {
+      if (sib.classList.contains('item') && sib.style.display !== 'none') hasVisible = true;
+      sib = sib.nextElementSibling;
+    }
+    gh.style.display = hasVisible ? '' : 'none';
+  });
+  document.getElementById('noResults').style.display = (visibleCount === 0 && q) ? '' : 'none';
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.item-select-cb').forEach(cb => {
+    const item = cb.closest('.item');
+    if (item.style.display !== 'none') cb.checked = checked;  // 검색으로 숨겨진 건 제외
+  });
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.item-select-cb:checked');
+  const countEl = document.getElementById('selectedCount');
+  const btn = document.getElementById('bulkDeleteBtn');
+  countEl.textContent = checked.length > 0 ? `${checked.length}개 선택됨` : '';
+  btn.disabled = checked.length === 0;
+}
+
+async function bulkDelete() {
+  const checked = [...document.querySelectorAll('.item-select-cb:checked')];
+  if (checked.length === 0) return;
+  if (!confirm(`선택한 ${checked.length}개 항목을 삭제할까요? 되돌릴 수 없어요.`)) return;
+
+  const items = checked.map(cb => ({table: cb.dataset.table, id: parseInt(cb.dataset.id)}));
+  const btn = document.getElementById('bulkDeleteBtn');
+  btn.disabled = true;
+  btn.textContent = '삭제 중...';
+  try {
+    const resp = await fetch('/api/list/bulk_delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({items})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      checked.forEach(cb => cb.closest('.item').remove());
+      document.getElementById('selectAllCb').checked = false;
+      updateBulkBar();
+    } else {
+      alert('삭제 실패: ' + (data.error || '알 수 없는 오류'));
+    }
+  } catch (e) {
+    alert('삭제 중 오류가 발생했습니다: ' + e);
+  } finally {
+    btn.textContent = '🗑 선택 삭제';
+  }
+}
+
 function startEdit(table, id) {
   document.getElementById(`content-display-${table}-${id}`).style.display = 'none';
   const subtypeDisplay = document.getElementById(`subtype-display-${table}-${id}`);
@@ -1294,78 +1414,232 @@ def list_view():
     )
 
 
-def _fetch_pinned_items():
+POSTIT_CARD_COLORS = {"todo": "#FFF3B0", "calendar": "#B9E6D8", "notice": "#FBC9D9"}
+POSTIT_COLOR_PRESETS = ["#FFF3B0", "#FBC9D9", "#B9E6D8", "#B8D9F5", "#DCC9F5", "#FFD6A5"]
+
+
+def _fetch_postit_cards():
+    """포스트잇에 보여줄 카드 전체를 가져온다 - 내 목록에서 고정(pinned)한 항목 +
+    포스트잇에서 직접 만든 자유 메모를 한 리스트로 합쳐서 반환."""
     conn = get_conn()
     cur = conn.cursor()
-    items = []
+    cards = []
     for t in ("todo", "calendar", "notice"):
         extra = ", event_subtype" if t == "calendar" else ""
         rows = cur.execute(
-            f"SELECT id, content, status{extra} FROM {t} WHERE pinned=1 ORDER BY id DESC"
+            f"SELECT id, content, status, color{extra} FROM {t} WHERE pinned=1 ORDER BY id DESC"
         ).fetchall()
         for r in rows:
-            items.append({
-                "table": t, "id": r["id"], "content": r["content"], "status": r["status"],
+            cards.append({
+                "kind": "pinned", "table": t, "id": r["id"], "content": r["content"],
+                "status": r["status"], "color": r["color"] or POSTIT_CARD_COLORS[t],
                 "event_subtype": r["event_subtype"] if t == "calendar" else None,
+                "tag": LIST_CATEGORY_LABELS[t],
             })
+    memo_rows = cur.execute("SELECT id, content, color, status FROM memo ORDER BY id DESC").fetchall()
+    for r in memo_rows:
+        cards.append({
+            "kind": "memo", "table": None, "id": r["id"], "content": r["content"],
+            "status": r["status"], "color": r["color"] or "#FFF3B0", "event_subtype": None,
+            "tag": "메모",
+        })
     conn.close()
-    return items
+    return cards
 
 
-POSTIT_CARD_COLORS = {"todo": "#FFF3B0", "calendar": "#B9E6D8", "notice": "#FBC9D9"}
+# --- 포스트잇 카드 하나짜리 UI(다음 두 화면에서 공통으로 씀) + 인터랙션 JS ---
+POSTIT_CARD_CSS = """
+  .postit-card { border-radius: 6px; padding: 10px 12px; position: relative; font-size: 12.5px; color: #3A3652;
+                 box-shadow: 1px 3px 8px rgba(0,0,0,0.14); }
+  .postit-card.done { opacity: 0.5; }
+  .postit-card.done .ptext { text-decoration: line-through; }
+  .postit-card .ptag { font-size: 9.5px; font-weight: 800; opacity: 0.55; text-transform: uppercase; margin-bottom: 4px; }
+  .postit-card .ptext { font-weight: 700; line-height: 1.4; word-break: break-word; cursor: text; outline: none;
+                         min-height: 1.4em; white-space: pre-wrap; }
+  .postit-card .psub { font-size: 10.5px; opacity: 0.7; margin-top: 5px; }
+  .postit-card .prow { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .postit-card .pcolors { display: flex; gap: 4px; }
+  .postit-card .pdot { width: 13px; height: 13px; border-radius: 50%; cursor: pointer; border: 1.5px solid rgba(0,0,0,0.12); }
+  .postit-card .pdot.active { border-color: #3A3652; border-width: 2px; }
+  .postit-card .pactions { display: flex; align-items: center; gap: 4px; }
+  .postit-card .pactions input[type=checkbox] { width: 15px; height: 15px; cursor: pointer; }
+  .postit-card .pdel { border: none; background: rgba(255,255,255,0.55); border-radius: 5px; cursor: pointer;
+                        font-size: 10.5px; padding: 2px 5px; color: #5C577A; }
+"""
+
+POSTIT_CARD_JS = """
+const POSTIT_COLORS = %s;
+
+function renderPostitCard(c) {
+  const colorDots = POSTIT_COLORS.map(col =>
+    `<span class="pdot ${col === c.color ? 'active' : ''}" style="background:${col};" onclick="setCardColor('${c.kind}', ${c.table ? "'"+c.table+"'" : 'null'}, ${c.id}, '${col}', this)"></span>`
+  ).join('');
+  return `
+    <div class="postit-card ${c.status === 'done' ? 'done' : ''}" style="background:${c.color};" data-kind="${c.kind}" data-table="${c.table || ''}" data-id="${c.id}">
+      <div class="ptag">${c.tag}</div>
+      <div class="ptext" contenteditable="true"
+           onblur="saveCardContent('${c.kind}', ${c.table ? "'"+c.table+"'" : 'null'}, ${c.id}, this)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${escapeHtmlPostit(c.content)}</div>
+      ${c.event_subtype ? `<div class="psub">🗓 ${escapeHtmlPostit(c.event_subtype)}</div>` : ''}
+      <div class="prow">
+        <div class="pcolors">${colorDots}</div>
+        <div class="pactions">
+          <input type="checkbox" ${c.status === 'done' ? 'checked' : ''} title="완료"
+                 onchange="toggleCardStatus('${c.kind}', ${c.table ? "'"+c.table+"'" : 'null'}, ${c.id}, this)">
+          <button type="button" class="pdel" onclick="deleteCard('${c.kind}', ${c.table ? "'"+c.table+"'" : 'null'}, ${c.id}, this)">${c.kind === 'memo' ? '삭제' : '해제'}</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtmlPostit(s) {
+  const div = document.createElement('div');
+  div.textContent = s || '';
+  return div.innerHTML;
+}
+
+async function toggleCardStatus(kind, table, id, checkbox) {
+  const card = checkbox.closest('.postit-card');
+  try {
+    const resp = await fetch('/api/postit/toggle_status', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind, table, id})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      card.classList.toggle('done', checkbox.checked);
+    }
+  } catch (e) { alert('처리 중 오류: ' + e); }
+}
+
+async function setCardColor(kind, table, id, color, dotEl) {
+  const card = dotEl.closest('.postit-card');
+  try {
+    const resp = await fetch('/api/postit/set_color', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind, table, id, color})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      card.style.background = color;
+      card.querySelectorAll('.pdot').forEach(d => d.classList.remove('active'));
+      dotEl.classList.add('active');
+    }
+  } catch (e) { alert('처리 중 오류: ' + e); }
+}
+
+async function saveCardContent(kind, table, id, el) {
+  const content = el.textContent.trim();
+  if (!content) { el.textContent = '(내용 없음)'; return; }
+  try {
+    await fetch('/api/postit/update_content', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind, table, id, content})
+    });
+  } catch (e) { alert('저장 중 오류: ' + e); }
+}
+
+async function deleteCard(kind, table, id, btn) {
+  const msg = kind === 'memo' ? '이 메모를 삭제할까요?' : '포스트잇에서 고정 해제할까요? (내 목록에는 남아있어요)';
+  if (!confirm(msg)) return;
+  const card = btn.closest('.postit-card');
+  try {
+    const resp = await fetch('/api/postit/delete', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind, table, id})
+    });
+    const data = await resp.json();
+    if (data.ok) { card.remove(); checkEmptyState(); }
+  } catch (e) { alert('삭제 중 오류: ' + e); }
+}
+
+async function addMemo() {
+  try {
+    const resp = await fetch('/api/memo/create', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content: '새 메모', color: POSTIT_COLORS[0]})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const card = {kind: 'memo', table: null, id: data.id, content: '새 메모', color: POSTIT_COLORS[0], status: 'pending', event_subtype: null, tag: '메모'};
+      const grid = document.getElementById('postitGrid');
+      grid.insertAdjacentHTML('afterbegin', renderPostitCard(card));
+      checkEmptyState();
+      const newText = grid.querySelector('.postit-card .ptext');
+      if (newText) { newText.focus(); document.execCommand('selectAll', false, null); }
+    }
+  } catch (e) { alert('메모 추가 중 오류: ' + e); }
+}
+
+function checkEmptyState() {
+  const grid = document.getElementById('postitGrid');
+  const empty = document.getElementById('postitEmpty');
+  if (!grid) return;
+  const hasCards = grid.querySelectorAll('.postit-card').length > 0;
+  if (empty) empty.style.display = hasCards ? 'none' : '';
+  grid.style.display = hasCards ? '' : 'none';
+}
+"""
+
 
 POSTIT_HTML = """
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><title>잇다 - 포스트잇</title>
 <style>{{ shared_css|safe }}
-  .postit-toolbar { margin-bottom: 18px; }
+  .postit-toolbar { margin-bottom: 18px; display: flex; gap: 10px; }
   .float-btn { padding: 10px 18px; border: none; border-radius: 10px; background: linear-gradient(90deg,#A78BFA,#93C5FD);
                color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .postit-grid { display: flex; flex-wrap: wrap; gap: 14px; }
-  .postit-card { width: 200px; min-height: 140px; border-radius: 4px; padding: 14px 14px 40px;
-                 box-shadow: 2px 4px 10px rgba(0,0,0,0.12); position: relative; font-size: 13px;
-                 color: #3A3652; transform: rotate(-1deg); }
-  .postit-card:nth-child(even) { transform: rotate(1deg); }
-  .postit-card .ptag { font-size: 10px; font-weight: 800; opacity: 0.55; text-transform: uppercase; margin-bottom: 6px; }
-  .postit-card .ptext { font-weight: 700; line-height: 1.4; word-break: break-word; }
-  .postit-card .psub { font-size: 11px; opacity: 0.7; margin-top: 6px; }
-  .postit-card .punpin { position: absolute; bottom: 10px; right: 10px; border: none; background: rgba(255,255,255,0.6);
-                          border-radius: 6px; padding: 4px 8px; font-size: 10.5px; cursor: pointer; color: #5C577A; }
+  .add-memo-btn { padding: 10px 18px; border: 1px dashed #C9BFF0; border-radius: 10px; background: #fff;
+                   color: #7C5FE0; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .postit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
   .postit-empty { background: #fff; border-radius: 16px; padding: 48px; text-align: center; border: 1px solid #F0EDF9; }
   .postit-empty .emoji { font-size: 36px; margin-bottom: 10px; }
   .postit-empty p { color: #9691AB; font-size: 13px; line-height: 1.6; }
   .postit-empty a { color: #8B5FE0; font-weight: 600; }
+""" + POSTIT_CARD_CSS + """
 </style></head><body><div class="app-shell">{{ sidebar|safe }}
 <main class="content"><div class="content-inner">
   <h1>포스트잇</h1>
-  <div class="sub">"내 목록"에서 📌로 고정한 항목들이 여기 모여요</div>
+  <div class="sub">"내 목록"에서 📌로 고정한 항목 + 직접 작성한 메모가 여기 모여요</div>
 
   <div class="postit-toolbar">
     <button type="button" class="float-btn" onclick="openWidget()">🖥️ 바탕화면에 띄우기</button>
+    <button type="button" class="add-memo-btn" onclick="addMemo()">➕ 메모 추가</button>
   </div>
 
-  {% if items|length == 0 %}
-  <div class="postit-empty">
+  <div class="postit-empty" id="postitEmpty" style="{{ 'display:none;' if cards|length > 0 else '' }}">
     <div class="emoji">📌</div>
-    <p><b>아직 고정된 항목이 없어요</b><br>
-    <a href="/list">내 목록</a>에서 중요한 항목 옆의 📌 버튼을 눌러 고정해보세요.</p>
+    <p><b>아직 카드가 없어요</b><br>
+    "메모 추가"로 바로 써보거나, <a href="/list">내 목록</a>에서 항목을 고정해보세요.</p>
   </div>
-  {% else %}
-  <div class="postit-grid">
-    {% for it in items %}
-    <div class="postit-card" style="background:{{ colors[it.table] }};">
-      <div class="ptag">{{ labels[it.table] }}</div>
-      <div class="ptext">{{ it.content }}</div>
-      {% if it.event_subtype %}<div class="psub">🗓 {{ it.event_subtype }}</div>{% endif %}
-      <form method="post" action="/list/pin/{{ it.table }}/{{ it.id }}" style="margin:0;">
-        <input type="hidden" name="return_url" value="/postit">
-        <button type="submit" class="punpin">고정 해제</button>
-      </form>
+  <div class="postit-grid" id="postitGrid" style="{{ 'display:none;' if cards|length == 0 else '' }}">
+    {% for c in cards %}
+    <div class="postit-card {{ 'done' if c.status == 'done' else '' }}" style="background:{{ c.color }};"
+         data-kind="{{ c.kind }}" data-table="{{ c.table or '' }}" data-id="{{ c.id }}">
+      <div class="ptag">{{ c.tag }}</div>
+      <div class="ptext" contenteditable="true"
+           onblur="saveCardContent('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ c.content }}</div>
+      {% if c.event_subtype %}<div class="psub">🗓 {{ c.event_subtype }}</div>{% endif %}
+      <div class="prow">
+        <div class="pcolors">
+          {% for col in color_presets %}
+          <span class="pdot {{ 'active' if col == c.color else '' }}" style="background:{{ col }};"
+                onclick="setCardColor('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, '{{ col }}', this)"></span>
+          {% endfor %}
+        </div>
+        <div class="pactions">
+          <input type="checkbox" {{ 'checked' if c.status == 'done' else '' }} title="완료"
+                 onchange="toggleCardStatus('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">
+          <button type="button" class="pdel" onclick="deleteCard('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">{{ '삭제' if c.kind == 'memo' else '해제' }}</button>
+        </div>
+      </div>
     </div>
     {% endfor %}
   </div>
-  {% endif %}
 </div></main></div>
 <script>
+""" + POSTIT_CARD_JS % "{{ color_presets|tojson }}" + """
 async function openWidget() {
   if (!window.pywebview) {
     alert('바탕화면 위젯은 잇다 앱(데스크톱 프로그램)에서만 사용할 수 있어요.');
@@ -1385,9 +1659,9 @@ async function openWidget() {
 @app.route("/postit")
 def postit_placeholder():
     from flask import render_template_string
-    items = _fetch_pinned_items()
+    cards = _fetch_postit_cards()
     return render_template_string(
-        POSTIT_HTML, items=items, labels=LIST_CATEGORY_LABELS, colors=POSTIT_CARD_COLORS,
+        POSTIT_HTML, cards=cards, color_presets=POSTIT_COLOR_PRESETS,
         shared_css=SHARED_CSS, sidebar=sidebar_html("postit"),
     )
 
@@ -1401,44 +1675,93 @@ POSTIT_WIDGET_HTML = """
 html, body { height: 100%; }
 body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; background: #F8F7FC;
        display: flex; flex-direction: column; border-radius: 10px; overflow: hidden;
-       border: 1px solid #E7E3F6; }
+       border: 1px solid #E7E3F6; user-select: none; }
 .header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px;
-          background: #EFECFB; flex-shrink: 0; }
-.header .title { font-size: 11.5px; font-weight: 800; color: #5B3FBF; }
-.header .close { border: none; background: none; color: #9691AB; cursor: pointer; font-size: 13px;
+          background: #EFECFB; flex-shrink: 0; cursor: move; }
+.header .title { font-size: 11.5px; font-weight: 800; color: #5B3FBF; pointer-events: none; }
+.header .btns { display: flex; gap: 2px; }
+.header button { border: none; background: none; color: #9691AB; cursor: pointer; font-size: 12.5px;
                   padding: 2px 6px; border-radius: 5px; }
-.header .close:hover { background: rgba(0,0,0,0.06); color: #E0645E; }
-.list { flex: 1; overflow-y: auto; padding: 10px; }
-.card { border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 1px 2px 6px rgba(0,0,0,0.15);
-        font-size: 12.5px; color: #3A3652; }
-.card .tag { font-size: 9px; font-weight: 800; opacity: 0.55; text-transform: uppercase; margin-bottom: 3px; }
-.card .text { font-weight: 700; line-height: 1.35; word-break: break-word; }
-.card .sub { font-size: 10.5px; opacity: 0.7; margin-top: 4px; }
+.header button:hover { background: rgba(0,0,0,0.06); }
+.header .close:hover { color: #E0645E; }
+.list { flex: 1; overflow-y: auto; padding: 8px; user-select: text; }
+.list .postit-card { margin-bottom: 8px; }
 .empty { text-align: center; color: #B7B3CC; font-size: 12px; padding: 20px 8px; }
+""" + POSTIT_CARD_CSS + """
 </style></head>
 <body>
-  <div class="header">
+  <div class="header" id="dragHeader">
     <span class="title">📌 잇다 포스트잇</span>
-    <button type="button" class="close" onclick="closeWidget()" title="닫기">✕</button>
+    <div class="btns">
+      <button type="button" onclick="addMemo()" title="메모 추가">➕</button>
+      <button type="button" onclick="location.reload()" title="새로고침">⟳</button>
+      <button type="button" class="close" onclick="closeWidget()" title="닫기">✕</button>
+    </div>
   </div>
-  <div class="list">
-    {% if items|length == 0 %}
-    <div class="empty">📌 고정된 항목이 없어요<br>내 목록에서 고정해보세요</div>
-    {% endif %}
-    {% for it in items %}
-    <div class="card" style="background:{{ colors[it.table] }};">
-      <div class="tag">{{ labels[it.table] }}</div>
-      <div class="text">{{ it.content }}</div>
-      {% if it.event_subtype %}<div class="sub">🗓 {{ it.event_subtype }}</div>{% endif %}
+  <div class="list" id="postitGrid">
+    {% for c in cards %}
+    <div class="postit-card {{ 'done' if c.status == 'done' else '' }}" style="background:{{ c.color }};"
+         data-kind="{{ c.kind }}" data-table="{{ c.table or '' }}" data-id="{{ c.id }}">
+      <div class="ptag">{{ c.tag }}</div>
+      <div class="ptext" contenteditable="true"
+           onblur="saveCardContent('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ c.content }}</div>
+      {% if c.event_subtype %}<div class="psub">🗓 {{ c.event_subtype }}</div>{% endif %}
+      <div class="prow">
+        <div class="pcolors">
+          {% for col in color_presets %}
+          <span class="pdot {{ 'active' if col == c.color else '' }}" style="background:{{ col }};"
+                onclick="setCardColor('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, '{{ col }}', this)"></span>
+          {% endfor %}
+        </div>
+        <div class="pactions">
+          <input type="checkbox" {{ 'checked' if c.status == 'done' else '' }} title="완료"
+                 onchange="toggleCardStatus('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">
+          <button type="button" class="pdel" onclick="deleteCard('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">{{ '삭제' if c.kind == 'memo' else '해제' }}</button>
+        </div>
+      </div>
     </div>
     {% endfor %}
+    {% if cards|length == 0 %}
+    <div class="empty" id="postitEmpty">📌 카드가 없어요<br>➕로 메모를 추가해보세요</div>
+    {% endif %}
   </div>
 <script>
+""" + POSTIT_CARD_JS % "{{ color_presets|tojson }}" + """
 function closeWidget() {
   if (window.pywebview) { window.pywebview.api.close_postit_widget(); }
 }
-// 60초마다 자동 새로고침 - 내 목록에서 새로 고정한 항목이 위젯에도 반영되게
-setTimeout(() => location.reload(), 60000);
+
+// pywebview 기본 드래그(easy_drag)가 마우스 포인터랑 창 위치가 어긋나는 문제가 있어서,
+// 헤더를 직접 마우스로 추적해서 델타만큼 정확히 옮기는 방식으로 대체함.
+(function setupDrag() {
+  const header = document.getElementById('dragHeader');
+  let dragging = false, startMouseX = 0, startMouseY = 0, startWinX = 0, startWinY = 0, pending = false;
+
+  header.addEventListener('mousedown', async (e) => {
+    if (e.target.closest('button')) return;  // 헤더 안의 버튼 클릭은 드래그 아님
+    if (!window.pywebview) return;
+    dragging = true;
+    startMouseX = e.screenX;
+    startMouseY = e.screenY;
+    const pos = await window.pywebview.api.get_widget_position();
+    startWinX = pos[0];
+    startWinY = pos[1];
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging || pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      const dx = e.screenX - startMouseX;
+      const dy = e.screenY - startMouseY;
+      window.pywebview.api.move_widget(startWinX + dx, startWinY + dy);
+      pending = false;
+    });
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
 </script>
 </body></html>
 """
@@ -1447,10 +1770,124 @@ setTimeout(() => location.reload(), 60000);
 @app.route("/postit/widget")
 def postit_widget():
     from flask import render_template_string
-    items = _fetch_pinned_items()
+    cards = _fetch_postit_cards()
     return render_template_string(
-        POSTIT_WIDGET_HTML, items=items, labels=LIST_CATEGORY_LABELS, colors=POSTIT_CARD_COLORS,
+        POSTIT_WIDGET_HTML, cards=cards, color_presets=POSTIT_COLOR_PRESETS,
     )
+
+
+@app.route("/api/postit/toggle_status", methods=["POST"])
+def api_postit_toggle_status():
+    data = request.get_json(force=True, silent=True) or {}
+    kind, item_id, table = data.get("kind"), data.get("id"), data.get("table")
+    if not isinstance(item_id, int):
+        return jsonify({"ok": False, "error": "잘못된 항목"}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    if kind == "memo":
+        row = cur.execute("SELECT status FROM memo WHERE id=?", (item_id,)).fetchone()
+        if row:
+            new_status = "pending" if row["status"] == "done" else "done"
+            cur.execute("UPDATE memo SET status=? WHERE id=?", (new_status, item_id))
+    elif kind == "pinned" and table in ("todo", "calendar", "notice"):
+        row = cur.execute(f"SELECT status FROM {table} WHERE id=?", (item_id,)).fetchone()
+        if row:
+            new_status = "pending" if row["status"] == "done" else "done"
+            cur.execute(f"UPDATE {table} SET status=? WHERE id=?", (new_status, item_id))
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "잘못된 요청"}), 400
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/postit/set_color", methods=["POST"])
+def api_postit_set_color():
+    data = request.get_json(force=True, silent=True) or {}
+    kind, item_id, table, color = data.get("kind"), data.get("id"), data.get("table"), data.get("color")
+    if not isinstance(item_id, int) or not isinstance(color, str) or not color.startswith("#") or len(color) not in (4, 7):
+        return jsonify({"ok": False, "error": "잘못된 색상"}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    if kind == "memo":
+        cur.execute("UPDATE memo SET color=? WHERE id=?", (color, item_id))
+    elif kind == "pinned" and table in ("todo", "calendar", "notice"):
+        cur.execute(f"UPDATE {table} SET color=? WHERE id=?", (color, item_id))
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "잘못된 요청"}), 400
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/postit/update_content", methods=["POST"])
+def api_postit_update_content():
+    data = request.get_json(force=True, silent=True) or {}
+    kind, item_id, table = data.get("kind"), data.get("id"), data.get("table")
+    content = (data.get("content") or "").strip()
+    if not isinstance(item_id, int):
+        return jsonify({"ok": False, "error": "잘못된 항목"}), 400
+    if not content:
+        return jsonify({"ok": False, "error": "내용을 입력해주세요"}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    if kind == "memo":
+        cur.execute("UPDATE memo SET content=? WHERE id=?", (content, item_id))
+    elif kind == "pinned" and table in ("todo", "calendar", "notice"):
+        cur.execute(f"UPDATE {table} SET content=? WHERE id=?", (content, item_id))
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "잘못된 요청"}), 400
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/postit/delete", methods=["POST"])
+def api_postit_delete():
+    """메모는 완전히 삭제하고, 고정된 항목(할일/일정/공지)은 삭제가 아니라 고정만
+    해제한다 - 실제 항목은 '내 목록'에 계속 남아있어야 하므로."""
+    data = request.get_json(force=True, silent=True) or {}
+    kind, item_id, table = data.get("kind"), data.get("id"), data.get("table")
+    if not isinstance(item_id, int):
+        return jsonify({"ok": False, "error": "잘못된 항목"}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    if kind == "memo":
+        cur.execute("DELETE FROM memo WHERE id=?", (item_id,))
+    elif kind == "pinned" and table in ("todo", "calendar", "notice"):
+        cur.execute(f"UPDATE {table} SET pinned=0 WHERE id=?", (item_id,))
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "잘못된 요청"}), 400
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/memo/create", methods=["POST"])
+def api_memo_create():
+    data = request.get_json(force=True, silent=True) or {}
+    content = (data.get("content") or "새 메모").strip() or "새 메모"
+    color = data.get("color") or POSTIT_COLOR_PRESETS[0]
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO memo (content, color, status, created_utc) VALUES (?, ?, 'pending', ?)",
+        (content, color, now),
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
 
 
 @app.route("/list/toggle/<table>/<int:item_id>", methods=["POST"])
@@ -1535,6 +1972,32 @@ def api_list_update():
     conn.close()
 
     return jsonify({"ok": True})
+
+
+@app.route("/api/list/bulk_delete", methods=["POST"])
+def api_list_bulk_delete():
+    data = request.get_json(force=True, silent=True) or {}
+    items = data.get("items")
+    if not isinstance(items, list) or not items:
+        return jsonify({"ok": False, "error": "삭제할 항목이 없습니다"}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    deleted = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        table = it.get("table")
+        item_id = it.get("id")
+        # table은 반드시 화이트리스트 안에서만 허용 (요청 데이터로 임의 테이블명 주입 방지)
+        if table not in LIST_TABLES or not isinstance(item_id, int):
+            continue
+        cur.execute(f"DELETE FROM {table} WHERE id=?", (item_id,))
+        deleted += cur.rowcount
+    conn.commit()
+    conn.close()
+
+    return jsonify({"ok": True, "deleted": deleted})
 
 
 ANALYZE_HTML = """
@@ -1930,6 +2393,15 @@ SETTINGS_HTML = """
   .update-status.fail { background: #FCE9E9; color: #9E3B3B; }
   .update-status.unknown { background: #F4F2FA; color: #8C87A6; }
   .update-status a { color: inherit; text-decoration: underline; font-weight: 700; }
+  .release-notes-box { margin-top: 8px; padding: 10px 12px; background: #FAF9FD; border: 1px solid #ECE8F7;
+                        border-radius: 8px; font-size: 11.5px; color: #6E6A87; white-space: pre-wrap;
+                        max-height: 140px; overflow-y: auto; line-height: 1.6; }
+  .update-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .update-now-btn { flex: 1; padding: 9px; border: none; border-radius: 8px;
+                     background: linear-gradient(90deg,#7FD8AE,#93C5FD); color: #14532D;
+                     font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .update-now-btn:disabled { background: #F3F1F8; color: #C7C2D6; cursor: default; }
+  .update-manual-link { font-size: 11.5px; color: #8B5FE0; font-weight: 600; white-space: nowrap; }
   .message { padding: 8px 12px; border-radius: 8px; margin-bottom: 14px; font-size: 12px;
              background: #E3F7EC; color: #1F6E48; }
   .message.warn { background: #FDF1D9; color: #9A6A15; }
@@ -2010,7 +2482,11 @@ SETTINGS_HTML = """
       </label>
       <label class="check-row">
         <input type="checkbox" name="postit_enabled" {{ 'checked' if postit_enabled else '' }}>
-        <span>포스트잇 기능 사용 (준비 중 - 완성되면 이 옵션으로 켜고 끌 수 있어요)</span>
+        <span>포스트잇 기능 사용 (바탕화면 위젯 + 메모)</span>
+      </label>
+      <label class="check-row">
+        <input type="checkbox" name="auto_check_update" {{ 'checked' if auto_check_update else '' }}>
+        <span>시작 시 자동으로 업데이트 확인 (아래에 GitHub 저장소가 설정돼 있어야 동작해요)</span>
       </label>
       <div class="hint">저장 후 다음 실행부터 적용돼요 (지금 켜져있는 창에는 즉시 반영 안 됨)</div>
     </div>
@@ -2029,6 +2505,17 @@ SETTINGS_HTML = """
     <div class="update-status {{ 'ok' if update_status.state == 'ok' else ('newer' if update_status.state == 'newer' else ('fail' if update_status.state == 'fail' else 'unknown')) }}" id="updateStatusBox">
       {{ update_status.message|safe }}
     </div>
+
+    <div id="updateAvailableBox" style="{{ '' if update_status.state == 'newer' else 'display:none;' }}">
+      <div class="release-notes-box" id="releaseNotesBox">{{ update_status.release_notes or '' }}</div>
+      <div class="update-actions">
+        <button type="button" class="update-now-btn" id="updateNowBtn" onclick="startUpdate()"
+                {{ '' if update_status.download_url else 'disabled' }}>⬇️ 지금 업데이트</button>
+        <a class="update-manual-link" href="{{ update_status.release_url or '#' }}" target="_blank">수동으로 받기</a>
+      </div>
+      <div class="hint">업데이트를 누르면 새 버전을 내려받고, 앱이 자동으로 닫혔다가 새 버전으로 다시 열려요.</div>
+    </div>
+
     <button type="button" class="test-btn-inline" onclick="checkUpdate()">🔍 업데이트 확인</button>
     <div class="hint">저장소를 지정하면 GitHub의 최신 릴리스와 현재 버전을 비교해줘요. 아직 실제 배포 저장소가 없다면 비워두세요.</div>
   </div>
@@ -2046,20 +2533,66 @@ SETTINGS_HTML = """
 </div>
 
 <script>
+let _latestUpdateData = null;
+
 async function checkUpdate() {
   const repo = document.getElementById('update_repo_input').value.trim();
   const statusEl = document.getElementById('updateStatusBox');
+  const box = document.getElementById('updateAvailableBox');
   statusEl.textContent = '확인 중...';
+  box.style.display = 'none';
   try {
     const resp = await fetch('/settings/check_update', {
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo})
     });
     const data = await resp.json();
+    _latestUpdateData = data;
     statusEl.className = 'update-status ' + data.state;
     statusEl.innerHTML = data.message;
+
+    if (data.state === 'newer') {
+      box.style.display = 'block';
+      document.getElementById('releaseNotesBox').textContent = data.release_notes || '(릴리스 노트 없음)';
+      const btn = document.getElementById('updateNowBtn');
+      btn.disabled = !data.download_url;
+      document.querySelector('.update-manual-link').href = data.release_url || '#';
+    }
   } catch (e) {
     statusEl.className = 'update-status fail';
     statusEl.textContent = '요청 중 오류가 발생했습니다: ' + e;
+  }
+}
+
+async function startUpdate() {
+  if (!window.pywebview) {
+    alert('원클릭 업데이트는 잇다 앱(데스크톱 프로그램)에서만 사용할 수 있어요.\\n"수동으로 받기" 링크를 이용해주세요.');
+    return;
+  }
+  if (!_latestUpdateData || !_latestUpdateData.download_url) {
+    alert('다운로드 링크를 찾을 수 없어요. 업데이트 확인을 다시 눌러보세요.');
+    return;
+  }
+  if (!confirm(`v${_latestUpdateData.latest_version}으로 업데이트할까요?\\n앱이 자동으로 닫혔다가 새 버전으로 다시 열려요.`)) {
+    return;
+  }
+
+  const btn = document.getElementById('updateNowBtn');
+  btn.disabled = true;
+  btn.textContent = '다운로드 중... (잠시만 기다려주세요)';
+  try {
+    const result = await window.pywebview.api.download_and_install_update(_latestUpdateData.download_url);
+    if (result.ok) {
+      btn.textContent = '설치 중... 앱이 곧 재시작됩니다';
+      setTimeout(() => { window.pywebview.api.quit_app(); }, 1200);
+    } else {
+      alert('업데이트 실패: ' + result.error);
+      btn.disabled = false;
+      btn.textContent = '⬇️ 지금 업데이트';
+    }
+  } catch (e) {
+    alert('업데이트 중 오류가 발생했습니다: ' + e);
+    btn.disabled = false;
+    btn.textContent = '⬇️ 지금 업데이트';
   }
 }
 
@@ -2139,6 +2672,7 @@ def _settings_context(message=None):
         shared_css=SHARED_CSS, sidebar=sidebar_html("settings"),
         llm_status_ok=_LLM_TEST_STATUS["ok"], llm_status_message=_LLM_TEST_STATUS["message"],
         app_version=APP_VERSION, update_repo=UPDATE_REPO, update_status=_UPDATE_STATUS,
+        auto_check_update=AUTO_CHECK_UPDATE,
         profile_name=PROFILE_NAME, profile_dept=PROFILE_DEPT,
         tray_enabled=TRAY_ENABLED, postit_enabled=POSTIT_ENABLED,
         config_path=os.path.abspath(CONFIG_PATH), log_path=os.path.join(log_dir, "itda_debug.log"),
@@ -2153,7 +2687,7 @@ def settings():
         return render_template_string(SETTINGS_HTML, **_settings_context())
 
     global DB_PATH, MODEL_PATH, ML_MODEL_PATH, SOURCES, PROFILE_NAME, PROFILE_DEPT
-    global TRAY_ENABLED, POSTIT_ENABLED
+    global TRAY_ENABLED, POSTIT_ENABLED, AUTO_CHECK_UPDATE
 
     db_path = request.form.get("db_path", "").strip() or "assistant.db"
     model_path = request.form.get("model_path", "").strip() or None
@@ -2163,6 +2697,7 @@ def settings():
     # 체크박스는 체크 안 하면 폼에 아예 안 딸려오므로, 존재 여부로 판단
     tray_enabled = request.form.get("tray_enabled") == "on"
     postit_enabled = request.form.get("postit_enabled") == "on"
+    auto_check_update = request.form.get("auto_check_update") == "on"
 
     # source_name_<idx> 패턴으로 실제 존재하는 인덱스를 스캔한다 (중간 행이 삭제돼서
     # 인덱스가 연속이 아니어도 안전하게 처리하기 위함)
@@ -2213,6 +2748,7 @@ def settings():
     DB_PATH, MODEL_PATH, ML_MODEL_PATH, SOURCES = db_path, model_path, ml_model_path, sources
     PROFILE_NAME, PROFILE_DEPT = profile_name, profile_dept
     TRAY_ENABLED, POSTIT_ENABLED = tray_enabled, postit_enabled
+    AUTO_CHECK_UPDATE = auto_check_update
     _save_all_config()
 
     if skipped_reasons:
@@ -2234,6 +2770,10 @@ def settings_check_update():
     # 저장소 입력값은 즉시 설정 파일에도 반영 (다른 항목은 안 건드림)
     _save_all_config()
 
+    # 매번 새로 확인하는 거니 이전 결과(릴리스노트/다운로드링크 등)는 초기화
+    _UPDATE_STATUS.update({"latest_version": None, "release_notes": None,
+                            "download_url": None, "release_url": None})
+
     if not repo:
         _UPDATE_STATUS["state"] = "unknown"
         _UPDATE_STATUS["message"] = "GitHub 저장소를 입력하지 않았습니다."
@@ -2249,6 +2789,14 @@ def settings_check_update():
             release = _json.loads(resp.read().decode("utf-8"))
         latest_tag = str(release.get("tag_name", "")).lstrip("v")
         release_url = release.get("html_url", f"https://github.com/{repo}/releases")
+        release_notes = release.get("body") or "(릴리스 노트가 작성되지 않았습니다)"
+
+        # Itda_Setup.exe 애셋의 실제 다운로드 링크를 찾는다 (원클릭 업데이트용)
+        download_url = None
+        for asset in release.get("assets", []):
+            if str(asset.get("name", "")).lower().endswith(".exe"):
+                download_url = asset.get("browser_download_url")
+                break
 
         if not latest_tag:
             _UPDATE_STATUS["state"] = "fail"
@@ -2258,10 +2806,13 @@ def settings_check_update():
             _UPDATE_STATUS["message"] = f"최신 버전을 사용 중이에요 (v{APP_VERSION})"
         else:
             _UPDATE_STATUS["state"] = "newer"
-            _UPDATE_STATUS["message"] = (
-                f"새 버전이 있어요: v{latest_tag} (현재 v{APP_VERSION}) - "
-                f'<a href="{release_url}" target="_blank">다운로드 페이지 열기</a>'
-            )
+            _UPDATE_STATUS["message"] = f"새 버전이 있어요: v{latest_tag} (현재 v{APP_VERSION})"
+            _UPDATE_STATUS["latest_version"] = latest_tag
+            _UPDATE_STATUS["release_notes"] = release_notes
+            _UPDATE_STATUS["release_url"] = release_url
+            _UPDATE_STATUS["download_url"] = download_url
+            if not download_url:
+                _UPDATE_STATUS["message"] += " (설치 파일을 못 찾아서 원클릭 업데이트는 안 돼요 - 릴리스에 exe가 첨부됐는지 확인해주세요)"
     except Exception as e:
         _UPDATE_STATUS["state"] = "fail"
         _UPDATE_STATUS["message"] = f"업데이트 확인 실패: {e}"

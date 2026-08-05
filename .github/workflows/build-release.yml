@@ -7,6 +7,11 @@ on:
     tags:
       - 'v*'
 
+# GitHub이 최근 기본 정책을 "읽기 전용"으로 바꿔서, 릴리스를 만들려면(=저장소에 쓰기)
+# 이렇게 명시적으로 허용해줘야 함 - 이게 없으면 마지막 릴리스 생성 단계에서 403 에러 남
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest

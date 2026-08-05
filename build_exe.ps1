@@ -25,6 +25,21 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
+
+# py -3.12 -c "import X"가 (X가 없어서) 실패할 때, 일부 PowerShell 환경에서
+# $ErrorActionPreference="Stop"과 맞물려 스크립트 전체가 죽어버리는 문제가 있었다.
+# 위의 설정 하나로는 환경에 따라 안 먹힐 수 있어서, 더 확실하게 try/catch로
+# 감싸서 어떤 PowerShell 버전에서도 절대 스크립트가 안 죽게 만든다.
+function Test-PyModule {
+    param([string]$ModuleName)
+    try {
+        py -3.12 -c "import $ModuleName" *>$null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
 
 if (-not (Test-Path "itda_app.py")) {
     Write-Host "itda_app.py가 이 폴더에 없습니다. C:\itda_project 에서 실행해주세요." -ForegroundColor Red
@@ -88,33 +103,31 @@ $hiddenImports = @(
 # joblib/scikit-learn은 선택사항("지금 수집하기"의 ML 2단계용) - 실제로 설치돼있을 때만
 # hidden-import에 추가한다. 예전엔 무조건 추가해서, 설치 안 하고 빌드하면 exe 안에 이
 # 모듈들이 아예 안 담긴 채로 "No module named 'joblib'" 에러가 나는 문제가 있었음.
-py -3.12 -c "import joblib" 2>$null
-if ($LASTEXITCODE -eq 0) {
+$hasJoblib = Test-PyModule "joblib"
+if ($hasJoblib) {
     $hiddenImports += "joblib"
     Write-Host "joblib 감지됨 - 지금 수집하기(ML 2단계) 기능 포함해서 빌드" -ForegroundColor Cyan
 } else {
     Write-Host "joblib 미설치 - 지금 수집하기(ML 2단계) 기능 없이 빌드됩니다" -ForegroundColor Yellow
     Write-Host "  (pip install joblib scikit-learn 실행 후 재빌드하면 활성화됩니다)" -ForegroundColor Yellow
 }
-py -3.12 -c "import sklearn" 2>$null
-if ($LASTEXITCODE -eq 0) {
+$hasSklearn = Test-PyModule "sklearn"
+if ($hasSklearn) {
     $hiddenImports += "sklearn.feature_extraction.text"
     $hiddenImports += "sklearn.linear_model"
-} elseif ($LASTEXITCODE -ne 0 -and $hiddenImports -contains "joblib") {
+} elseif ($hasJoblib) {
     Write-Host "경고: joblib은 있는데 scikit-learn이 없어요 - 둘 다 있어야 ML 기능이 동작합니다" -ForegroundColor Yellow
 }
 
 # pystray/Pillow는 선택사항 - 실제로 설치돼있을 때만 hidden-import에 추가한다
 # (설치 안 된 모듈을 억지로 추가하면 PyInstaller 빌드 자체가 실패함)
-py -3.12 -c "import pystray" 2>$null
-if ($LASTEXITCODE -eq 0) {
+if (Test-PyModule "pystray") {
     $hiddenImports += "pystray"
     Write-Host "pystray 감지됨 - 트레이 상주 기능 포함해서 빌드" -ForegroundColor Cyan
 } else {
     Write-Host "pystray 미설치 - 트레이 상주 기능 없이 빌드 (pip install pystray pillow 후 재빌드하면 활성화)" -ForegroundColor Yellow
 }
-py -3.12 -c "import PIL" 2>$null
-if ($LASTEXITCODE -eq 0) {
+if (Test-PyModule "PIL") {
     $hiddenImports += "PIL"
 }
 
@@ -126,8 +139,7 @@ $hiddenImportArgs = $hiddenImports | ForEach-Object { "--hidden-import"; $_ }
 # 같은 에러로 실패하는 문제가 있었음. --collect-all로 데이터+바이너리+서브모듈을
 # 통째로 포함시켜야 한다.
 $collectAllArgs = @()
-py -3.12 -c "import llama_cpp" 2>$null
-if ($LASTEXITCODE -eq 0) {
+if (Test-PyModule "llama_cpp") {
     $collectAllArgs += @("--collect-all", "llama_cpp")
     Write-Host "llama_cpp 감지됨 - 네이티브 라이브러리까지 전부 포함해서 빌드" -ForegroundColor Cyan
 } else {
@@ -135,8 +147,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # scikit-learn도 컴파일된 확장 모듈(.pyd)이 많아서 --hidden-import만으로는 누락될 수 있음
-py -3.12 -c "import sklearn" 2>$null
-if ($LASTEXITCODE -eq 0) {
+if ($hasSklearn) {
     $collectAllArgs += @("--collect-all", "sklearn")
 }
 

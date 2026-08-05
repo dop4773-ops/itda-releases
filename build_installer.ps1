@@ -11,6 +11,7 @@
 # 결과물: Output\Itda_Setup.exe (이 파일 하나만 배포하면 됨)
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 
 if (-not (Test-Path "dist\잇다\잇다.exe")) {
     Write-Host "dist\잇다\잇다.exe가 없습니다. 먼저 build_exe.ps1을 실행해주세요:" -ForegroundColor Red
