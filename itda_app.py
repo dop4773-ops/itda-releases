@@ -105,7 +105,8 @@ class Api:
 
     def __init__(self, port: int):
         self.port = port
-        self._widget_window = None
+        self._note_windows = {}   # note_key -> webview.Window (개별로 꺼낸 포스트잇들)
+        self._calendar_window = None  # 캘린더 위젯 (하나만 띄움)
         self.main_window = None  # main()에서 설정 - quit_app()이 종료시킬 대상
         self._tray_icon = None   # _setup_tray()가 설정 - quit_app()이 함께 정지시킬 대상
         self._download_progress = {"percent": 0, "done": False, "error": None}
@@ -207,84 +208,176 @@ class Api:
                 self._tray_icon.stop()
         except Exception:
             pass
-        try:
-            if self.main_window is not None:
-                self.main_window.destroy()
-        except Exception:
-            pass
+        for w in list(self._note_windows.values()) + [self._calendar_window, self.main_window]:
+            try:
+                if w is not None:
+                    w.destroy()
+            except Exception:
+                pass
         os._exit(0)
 
-    def open_postit_widget(self):
-        """포스트잇 위젯을 화면 우측 하단에 항상 위(on_top)로 띄운다.
-        이미 떠있으면 새로 안 만들고 그냥 다시 보여주기만 함."""
+    # ---------- 개별 포스트잇(드래그로 꺼내기) ----------
+
+    def get_main_window_bounds(self):
+        """메인 창의 화면상 위치+크기 [x, y, width, height]. 카드를 드래그하다가
+        이 범위 밖에서 놓으면 "바탕화면으로 꺼낸다"고 판단하는 기준으로 쓰인다."""
+        if self.main_window is not None:
+            try:
+                return [self.main_window.x, self.main_window.y,
+                        self.main_window.width, self.main_window.height]
+            except Exception:
+                pass
+        return [0, 0, 0, 0]
+
+    def extract_note(self, kind, table, item_id, x, y):
+        """카드를 메인 창 밖으로 드래그해서 놓았을 때 호출됨 - 그 카드 하나만 보여주는
+        작은 창을 그 위치에 새로 띄운다. 이미 같은 항목이 떠있으면 그 창을 보여주기만."""
         import webview
 
-        if self._widget_window is not None:
+        key = f"{kind}:{table or ''}:{item_id}"
+        existing = self._note_windows.get(key)
+        if existing is not None:
             try:
-                self._widget_window.show()
+                existing.show()
                 return "shown_existing"
             except Exception:
-                self._widget_window = None  # 창이 이미 닫혔던 경우 - 아래에서 새로 만듦
+                self._note_windows.pop(key, None)
 
-        width, height = 260, 420
+        width, height = 190, 170
+        table_part = table or "none"
+        win = webview.create_window(
+            "포스트잇",
+            f"http://127.0.0.1:{self.port}/postit/note/{kind}/{table_part}/{item_id}",
+            width=width, height=height,
+            x=max(0, int(x) - width // 2), y=max(0, int(y) - 20),
+            frameless=True, on_top=True, resizable=True, easy_drag=False,
+            background_color="#FFF3B0",
+            js_api=self,
+        )
+        self._note_windows[key] = win
+        return "created"
+
+    def spawn_note_nearby(self, from_key, kind, table, item_id):
+        """개별 포스트잇 창 안의 '새 메모' 버튼에서 호출 - 기존 창 바로 옆에 새 창을 띄운다."""
+        base = self._note_windows.get(from_key)
+        x = (base.x + 40) if base is not None else 200
+        y = (base.y + 40) if base is not None else 200
+        return self.extract_note(kind, table, item_id, x + 95, y + 85)
+
+    def close_note(self, note_key):
+        w = self._note_windows.pop(note_key, None)
+        if w is not None:
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        return "closed"
+
+    def minimize_note(self, note_key):
+        w = self._note_windows.get(note_key)
+        if w is not None:
+            try:
+                w.minimize()
+            except Exception:
+                pass
+        return "ok"
+
+    def get_note_position(self, note_key):
+        w = self._note_windows.get(note_key)
+        if w is not None:
+            try:
+                return [w.x, w.y]
+            except Exception:
+                pass
+        return [0, 0]
+
+    def move_note(self, note_key, x, y):
+        w = self._note_windows.get(note_key)
+        if w is not None:
+            try:
+                w.move(int(x), int(y))
+            except Exception:
+                pass
+        return "ok"
+
+    def resize_note(self, note_key, width, height):
+        w = self._note_windows.get(note_key)
+        if w is not None:
+            try:
+                w.resize(max(160, int(width)), max(120, int(height)))
+            except Exception:
+                pass
+        return "ok"
+
+    # ---------- 캘린더 위젯 ----------
+
+    def open_calendar_widget(self):
+        import webview
+
+        if self._calendar_window is not None:
+            try:
+                self._calendar_window.show()
+                return "shown_existing"
+            except Exception:
+                self._calendar_window = None
+
+        width, height = 300, 380
         x, y = None, None
         try:
             screens = webview.screens
             if screens:
                 sw, sh = screens[0].width, screens[0].height
-                x, y = sw - width - 24, sh - height - 80  # 작업표시줄 위, 우측 하단
+                x, y = sw - width - 24, sh - height - 80
         except Exception:
-            pass  # 화면 크기 못 가져와도 창은 그냥 기본 위치에 뜨게 (기능 자체는 동작)
+            pass
 
-        self._widget_window = webview.create_window(
-            "잇다 포스트잇",
-            f"http://127.0.0.1:{self.port}/postit/widget",
+        self._calendar_window = webview.create_window(
+            "잇다 캘린더",
+            f"http://127.0.0.1:{self.port}/postit/calendar",
             width=width, height=height, x=x, y=y,
             frameless=True, on_top=True, resizable=True, easy_drag=False,
             background_color="#F8F7FC",
-            js_api=self,  # 위젯 창 안의 버튼들이 여기 메서드를 호출할 수 있도록
+            js_api=self,
         )
         return "created"
 
-    def close_postit_widget(self):
-        """프레임 없는 창이라 자체 닫기(X) 버튼이 없어서, 위젯 안의 X 버튼이 이걸 호출해서 닫는다."""
-        if self._widget_window is not None:
+    def close_calendar_widget(self):
+        if self._calendar_window is not None:
             try:
-                self._widget_window.destroy()
+                self._calendar_window.destroy()
             except Exception:
                 pass
-            self._widget_window = None
+            self._calendar_window = None
         return "closed"
 
-    def get_widget_position(self):
-        """드래그 시작 시점의 창 위치를 알려준다 (커스텀 드래그 계산용)."""
-        if self._widget_window is not None:
+    def minimize_calendar_widget(self):
+        if self._calendar_window is not None:
             try:
-                return [self._widget_window.x, self._widget_window.y]
-            except Exception:
-                pass
-        return [0, 0]
-
-    def move_widget(self, x, y):
-        """헤더를 드래그할 때 마우스가 움직인 만큼 정확히 창을 옮긴다.
-        pywebview 기본 제공 드래그(easy_drag)가 마우스 포인터랑 창 사이에
-        거리가 벌어지는 문제가 있어서, 직접 델타를 계산해 이동시키는 방식으로 교체함."""
-        if self._widget_window is not None:
-            try:
-                self._widget_window.move(int(x), int(y))
+                self._calendar_window.minimize()
             except Exception:
                 pass
         return "ok"
 
-    def resize_widget(self, width, height):
-        """포스트잇 위젯은 frameless(테두리 없음) 창이라 OS가 기본 제공하는 크기조절
-        모서리가 안 보인다 - 그래서 화면 안에 직접 만든 크기조절 손잡이가 이 메서드를
-        호출해서 크기를 조절한다."""
-        if self._widget_window is not None:
+    def get_calendar_widget_position(self):
+        if self._calendar_window is not None:
             try:
-                width = max(200, int(width))
-                height = max(150, int(height))
-                self._widget_window.resize(width, height)
+                return [self._calendar_window.x, self._calendar_window.y]
+            except Exception:
+                pass
+        return [0, 0]
+
+    def move_calendar_widget(self, x, y):
+        if self._calendar_window is not None:
+            try:
+                self._calendar_window.move(int(x), int(y))
+            except Exception:
+                pass
+        return "ok"
+
+    def resize_calendar_widget(self, width, height):
+        if self._calendar_window is not None:
+            try:
+                self._calendar_window.resize(max(240, int(width)), max(200, int(height)))
             except Exception:
                 pass
         return "ok"

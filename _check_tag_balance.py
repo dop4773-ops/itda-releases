@@ -73,11 +73,18 @@ m.init_db_schema()
 client = m.app.test_client()
 
 all_ok = True
-pages = ['/', '/review', '/add', '/analyze', '/settings', '/list', '/postit', '/postit/widget']
+pages = ['/', '/review', '/add', '/analyze', '/settings', '/list', '/postit', '/postit/calendar']
 for path in pages:
     r = client.get(path)
     ok = check_page(path, r.get_data(as_text=True))
     all_ok = all_ok and ok
+
+# 메모 하나 만들어서 개별 포스트잇 노트 창도 검사
+r = client.post('/api/memo/create', json={'content': '태그검사용', 'color': '#FFF3B0'})
+memo_id = r.get_json()['id']
+r = client.get(f'/postit/note/memo/none/{memo_id}')
+ok = check_page(f'/postit/note/memo/none/{memo_id}', r.get_data(as_text=True))
+all_ok = all_ok and ok
 
 os.remove('test_tagcheck.db')
 if os.path.exists('test_tagcheck_config.json'):

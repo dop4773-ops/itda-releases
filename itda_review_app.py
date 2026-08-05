@@ -39,7 +39,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.3.2"
+APP_VERSION = "1.5.0"
 
 
 def _resource_dir() -> str:
@@ -545,6 +545,41 @@ def _parse_day_in_month(text: str, year: int, month: int):
         da = int(m.group(1))
         return da if 1 <= da <= 31 else None
     return None
+
+
+def _build_calendar_widget_data(selected_day=None):
+    """캘린더 위젯이 쓰는 데이터 - 대시보드용과 달리 각 항목의 id도 같이 줘서
+    위젯 안에서 바로 수정/삭제할 수 있게 한다."""
+    import calendar as cal_mod
+
+    now = datetime.datetime.now()
+    year, month, today_day = now.year, now.month, now.day
+    if selected_day is None:
+        selected_day = today_day
+
+    cal = cal_mod.Calendar(firstweekday=6)
+    weeks = cal.monthdayscalendar(year, month)
+
+    conn = get_conn()
+    cur = conn.cursor()
+    rows = cur.execute(
+        "SELECT id, content, event_subtype, status FROM calendar WHERE status='pending' ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+
+    day_items = {}
+    for r in rows:
+        day = _parse_day_in_month(r["event_subtype"] or "", year, month)
+        if day:
+            day_items.setdefault(day, []).append(
+                {"id": r["id"], "content": r["content"], "event_subtype": r["event_subtype"] or ""}
+            )
+
+    return {
+        "year": year, "month": month, "today": today_day, "selected_day": selected_day,
+        "weeks": weeks, "day_items": day_items,
+        "selected_items": day_items.get(selected_day, []),
+    }
 
 
 def _build_calendar_grid():
@@ -1447,6 +1482,32 @@ def _fetch_postit_cards():
     return cards
 
 
+def _fetch_single_card(kind: str, table, item_id: int):
+    """개별 포스트잇 창(드래그로 꺼낸 것) 하나가 자기 내용을 표시할 때 쓴다."""
+    conn = get_conn()
+    cur = conn.cursor()
+    if kind == "memo":
+        row = cur.execute("SELECT id, content, color, status FROM memo WHERE id=?", (item_id,)).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {"kind": "memo", "table": None, "id": row["id"], "content": row["content"],
+                "status": row["status"], "color": row["color"] or POSTIT_COLOR_PRESETS[0],
+                "event_subtype": None, "tag": "메모"}
+    if kind == "pinned" and table in ("todo", "calendar", "notice"):
+        extra = ", event_subtype" if table == "calendar" else ""
+        row = cur.execute(f"SELECT id, content, status, color{extra} FROM {table} WHERE id=?", (item_id,)).fetchone()
+        conn.close()
+        if not row:
+            return None
+        return {"kind": "pinned", "table": table, "id": row["id"], "content": row["content"],
+                "status": row["status"], "color": row["color"] or POSTIT_CARD_COLORS[table],
+                "event_subtype": row["event_subtype"] if table == "calendar" else None,
+                "tag": LIST_CATEGORY_LABELS[table]}
+    conn.close()
+    return None
+
+
 # --- 포스트잇 카드 하나짜리 UI(다음 두 화면에서 공통으로 씀) + 인터랙션 JS ---
 POSTIT_CARD_CSS = """
   .postit-card { border-radius: 2px 2px 10px 2px; padding: 12px 13px 10px; position: relative; font-size: 12.5px;
@@ -1599,16 +1660,19 @@ function checkEmptyState() {
 POSTIT_HTML = """
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><title>잇다 - 포스트잇</title>
 <style>{{ shared_css|safe }}
-  .postit-toolbar { margin-bottom: 18px; display: flex; gap: 10px; }
+  .postit-toolbar { margin-bottom: 10px; display: flex; gap: 10px; }
   .float-btn { padding: 10px 18px; border: none; border-radius: 10px; background: linear-gradient(90deg,#A78BFA,#93C5FD);
                color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
   .add-memo-btn { padding: 10px 18px; border: 1px dashed #C9BFF0; border-radius: 10px; background: #fff;
                    color: #7C5FE0; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .drag-hint { font-size: 11.5px; color: #B7B3CC; margin-bottom: 16px; }
   .postit-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
   .postit-empty { background: #fff; border-radius: 16px; padding: 48px; text-align: center; border: 1px solid #F0EDF9; }
   .postit-empty .emoji { font-size: 36px; margin-bottom: 10px; }
   .postit-empty p { color: #9691AB; font-size: 13px; line-height: 1.6; }
   .postit-empty a { color: #8B5FE0; font-weight: 600; }
+  .postit-card { cursor: grab; }
+  .postit-card.dragging-out { cursor: grabbing; box-shadow: 4px 10px 22px rgba(0,0,0,0.28); }
 """ + POSTIT_CARD_CSS + """
 </style></head><body><div class="app-shell">{{ sidebar|safe }}
 <main class="content"><div class="content-inner">
@@ -1616,9 +1680,10 @@ POSTIT_HTML = """
   <div class="sub">"내 목록"에서 📌로 고정한 항목 + 직접 작성한 메모가 여기 모여요</div>
 
   <div class="postit-toolbar">
-    <button type="button" class="float-btn" onclick="openWidget()">🖥️ 바탕화면에 띄우기</button>
+    <button type="button" class="float-btn" onclick="openCalendarWidget()">📅 캘린더 꺼내기</button>
     <button type="button" class="add-memo-btn" onclick="addMemo()">➕ 메모 추가</button>
   </div>
+  <div class="drag-hint">💡 카드를 잡고 창 밖으로 드래그하면 그 카드만 바탕화면에 따로 떨어져 나와요</div>
 
   <div class="postit-empty" id="postitEmpty" style="{{ 'display:none;' if cards|length > 0 else '' }}">
     <div class="emoji">📌</div>
@@ -1653,17 +1718,78 @@ POSTIT_HTML = """
 </div></main></div>
 <script>
 """ + POSTIT_CARD_JS % "{{ color_presets|tojson }}" + """
-async function openWidget() {
+async function openCalendarWidget() {
   if (!window.pywebview) {
     alert('바탕화면 위젯은 잇다 앱(데스크톱 프로그램)에서만 사용할 수 있어요.');
     return;
   }
   try {
-    await window.pywebview.api.open_postit_widget();
+    await window.pywebview.api.open_calendar_widget();
   } catch (e) {
-    alert('위젯을 여는 중 오류가 발생했습니다: ' + e);
+    alert('캘린더 위젯을 여는 중 오류가 발생했습니다: ' + e);
   }
 }
+
+// 카드를 창 밖으로 드래그해서 놓으면, 그 카드 하나만 보여주는 작은 창을
+// 그 위치에 새로 띄운다 (진짜 포스트잇을 떼어내는 느낌).
+let _dragState = null;
+
+function setupCardDrag(cardEl) {
+  cardEl.addEventListener('mousedown', async (e) => {
+    if (e.target.closest('button, input, .ptext')) return;  // 버튼/입력/텍스트편집 중엔 드래그 안 함
+    if (!window.pywebview) return;
+    const bounds = await window.pywebview.api.get_main_window_bounds();
+    _dragState = { card: cardEl, startX: e.screenX, startY: e.screenY, bounds, dragging: false };
+  });
+}
+document.querySelectorAll('.postit-card').forEach(setupCardDrag);
+
+document.addEventListener('mousemove', (e) => {
+  if (!_dragState) return;
+  const dx = e.screenX - _dragState.startX;
+  const dy = e.screenY - _dragState.startY;
+  if (!_dragState.dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+    _dragState.dragging = true;
+    _dragState.card.classList.add('dragging-out');
+  }
+  if (_dragState.dragging) {
+    _dragState.card.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+    _dragState.card.style.zIndex = 999;
+    _dragState.card.style.position = 'relative';
+  }
+});
+
+document.addEventListener('mouseup', async (e) => {
+  if (!_dragState) return;
+  const { card, dragging, bounds } = _dragState;
+  card.style.transform = '';
+  card.style.zIndex = '';
+  card.classList.remove('dragging-out');
+
+  if (dragging && bounds && bounds[2] > 0) {
+    const [wx, wy, ww, wh] = bounds;
+    const outside = e.screenX < wx || e.screenX > wx + ww || e.screenY < wy || e.screenY > wy + wh;
+    if (outside) {
+      const kind = card.dataset.kind;
+      const table = card.dataset.table || null;
+      const id = parseInt(card.dataset.id);
+      await window.pywebview.api.extract_note(kind, table, id, e.screenX, e.screenY);
+    }
+  }
+  _dragState = null;
+});
+
+// addMemo()로 새 카드가 생기면 그 카드에도 드래그를 걸어줘야 하므로,
+// 공통 렌더 함수를 감싸서 매번 다시 등록한다.
+const _origRenderPostitCard = renderPostitCard;
+renderPostitCard = function(c) {
+  const html = _origRenderPostitCard(c);
+  setTimeout(() => {
+    const el = document.querySelector(`.postit-card[data-kind="${c.kind}"][data-id="${c.id}"]`);
+    if (el) setupCardDrag(el);
+  }, 0);
+  return html;
+};
 </script>
 </body></html>
 """
@@ -1679,134 +1805,135 @@ def postit_placeholder():
     )
 
 
-POSTIT_WIDGET_HTML = """
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>잇다 포스트잇</title>
+POSTIT_NOTE_HTML = """
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>포스트잇</title>
 <style>
 @font-face { font-family: 'Pretendard'; font-weight: 700; font-display: swap; src: url('/fonts/Pretendard-Bold.woff2') format('woff2'); }
 @font-face { font-family: 'Pretendard'; font-weight: 500; font-display: swap; src: url('/fonts/Pretendard-Medium.woff2') format('woff2'); }
 * { box-sizing: border-box; }
 html, body { height: 100%; }
-body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; background: #F8F7FC;
-       display: flex; flex-direction: column; border-radius: 10px; overflow: hidden;
-       border: 1px solid #E7E3F6; user-select: none; }
-.header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px;
-          background: #EFECFB; flex-shrink: 0; cursor: move; }
-.header .title { font-size: 11.5px; font-weight: 800; color: #5B3FBF; pointer-events: none; }
-.header .btns { display: flex; gap: 2px; }
-.header button { border: none; background: none; color: #9691AB; cursor: pointer; font-size: 12.5px;
-                  padding: 2px 6px; border-radius: 5px; }
-.header button:hover { background: rgba(0,0,0,0.06); }
-.header .close:hover { color: #E0645E; }
-.list { flex: 1; overflow-y: auto; padding: 8px; user-select: text; }
-.list .postit-card { margin-bottom: 8px; }
-.empty { text-align: center; color: #B7B3CC; font-size: 12px; padding: 20px 8px; }
-.resize-handle { position: fixed; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
-                  background: linear-gradient(135deg, transparent 50%, rgba(91,63,191,0.35) 50%);
-                  border-radius: 0 0 10px 0; }
+body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; display: flex; flex-direction: column;
+       overflow: hidden; user-select: none; }
+.header { display: flex; align-items: center; justify-content: flex-end; padding: 4px 5px; gap: 1px;
+          background: rgba(0,0,0,0.05); flex-shrink: 0; cursor: move; }
+.header button { border: none; background: none; color: rgba(0,0,0,0.42); cursor: pointer; font-size: 12px;
+                  padding: 2px 7px; border-radius: 5px; line-height: 1.5; }
+.header button:hover { background: rgba(0,0,0,0.08); }
+.header .close:hover { color: #C0392B; background: rgba(192,57,43,0.14); }
+.body { flex: 1; padding: 6px; overflow-y: auto; user-select: text; }
+.resize-handle { position: fixed; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+                  background: linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.18) 50%); }
 """ + POSTIT_CARD_CSS + """
+.body .postit-card { box-shadow: none; height: 100%; transform: none; }
+.body .postit-card::after { display: none; }
+.body .postit-card .prow { opacity: 1; pointer-events: auto; }
 </style></head>
-<body>
+<body style="background:{{ card.color }};">
   <div class="header" id="dragHeader">
-    <span class="title">📌 잇다 포스트잇</span>
-    <div class="btns">
-      <button type="button" onclick="addMemo()" title="메모 추가">➕</button>
-      <button type="button" onclick="location.reload()" title="새로고침">⟳</button>
-      <button type="button" class="close" onclick="closeWidget()" title="닫기">✕</button>
-    </div>
+    <button type="button" onclick="addMemoNearby()" title="새 메모">➕</button>
+    <button type="button" onclick="minimizeNote()" title="최소화">–</button>
+    <button type="button" class="close" onclick="closeNote()" title="닫기">✕</button>
   </div>
-  <div class="list" id="postitGrid">
-    {% for c in cards %}
-    <div class="postit-card {{ 'done' if c.status == 'done' else '' }}" style="background:{{ c.color }};"
-         data-kind="{{ c.kind }}" data-table="{{ c.table or '' }}" data-id="{{ c.id }}">
-      <div class="ptag">{{ c.tag }}</div>
+  <div class="body">
+    <div class="postit-card {{ 'done' if card.status == 'done' else '' }}" style="background:{{ card.color }};"
+         data-kind="{{ card.kind }}" data-table="{{ card.table or '' }}" data-id="{{ card.id }}">
+      <div class="ptag">{{ card.tag }}</div>
       <div class="ptext" contenteditable="true"
-           onblur="saveCardContent('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)"
-           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ c.content }}</div>
-      {% if c.event_subtype %}<div class="psub">🗓 {{ c.event_subtype }}</div>{% endif %}
+           onblur="saveCardContent('{{ card.kind }}', {{ ('\\''+card.table+'\\'') if card.table else 'null' }}, {{ card.id }}, this)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ card.content }}</div>
+      {% if card.event_subtype %}<div class="psub">🗓 {{ card.event_subtype }}</div>{% endif %}
       <div class="prow">
         <div class="pcolors">
           {% for col in color_presets %}
-          <span class="pdot {{ 'active' if col == c.color else '' }}" style="background:{{ col }};"
-                onclick="setCardColor('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, '{{ col }}', this)"></span>
+          <span class="pdot {{ 'active' if col == card.color else '' }}" style="background:{{ col }};"
+                onclick="setCardColor('{{ card.kind }}', {{ ('\\''+card.table+'\\'') if card.table else 'null' }}, {{ card.id }}, '{{ col }}', this)"></span>
           {% endfor %}
         </div>
         <div class="pactions">
-          <input type="checkbox" {{ 'checked' if c.status == 'done' else '' }} title="완료"
-                 onchange="toggleCardStatus('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">
-          <button type="button" class="pdel" onclick="deleteCard('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">{{ '삭제' if c.kind == 'memo' else '해제' }}</button>
+          <input type="checkbox" {{ 'checked' if card.status == 'done' else '' }} title="완료"
+                 onchange="toggleCardStatus('{{ card.kind }}', {{ ('\\''+card.table+'\\'') if card.table else 'null' }}, {{ card.id }}, this)">
+          <button type="button" class="pdel" onclick="deleteThisNote()">{{ '삭제' if card.kind == 'memo' else '해제' }}</button>
         </div>
       </div>
     </div>
-    {% endfor %}
-    {% if cards|length == 0 %}
-    <div class="empty" id="postitEmpty">📌 카드가 없어요<br>➕로 메모를 추가해보세요</div>
-    {% endif %}
   </div>
-  <div class="resize-handle" id="resizeHandle" title="드래그해서 크기 조절"></div>
+  <div class="resize-handle" id="resizeHandle" title="크기 조절"></div>
 <script>
+const NOTE_KEY = "{{ card.kind }}:{{ card.table or '' }}:{{ card.id }}";
 """ + POSTIT_CARD_JS % "{{ color_presets|tojson }}" + """
-function closeWidget() {
-  if (window.pywebview) { window.pywebview.api.close_postit_widget(); }
+function closeNote() {
+  if (window.pywebview) window.pywebview.api.close_note(NOTE_KEY);
+}
+function minimizeNote() {
+  if (window.pywebview) window.pywebview.api.minimize_note(NOTE_KEY);
+}
+async function addMemoNearby() {
+  if (!window.pywebview) return;
+  const resp = await fetch('/api/memo/create', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content: '새 메모', color: POSTIT_COLORS[0]})
+  });
+  const data = await resp.json();
+  if (data.ok) {
+    window.pywebview.api.spawn_note_nearby(NOTE_KEY, 'memo', null, data.id);
+  }
+}
+async function deleteThisNote() {
+  const msg = "{{ '이 메모를 삭제할까요?' if card.kind == 'memo' else '고정을 해제할까요? (내 목록에는 남아있어요)' }}";
+  if (!confirm(msg)) return;
+  await fetch('/api/postit/delete', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({kind: '{{ card.kind }}', table: {{ ('\\''+card.table+'\\'') if card.table else 'null' }}, id: {{ card.id }}})
+  });
+  closeNote();
 }
 
-// pywebview 기본 드래그(easy_drag)가 마우스 포인터랑 창 위치가 어긋나는 문제가 있어서,
-// 헤더를 직접 마우스로 추적해서 델타만큼 정확히 옮기는 방식으로 대체함.
+// 드래그로 창 이동 (헤더 아무데나 잡고 끌기)
 (function setupDrag() {
   const header = document.getElementById('dragHeader');
   let dragging = false, startMouseX = 0, startMouseY = 0, startWinX = 0, startWinY = 0, pending = false;
-
   header.addEventListener('mousedown', async (e) => {
-    if (e.target.closest('button')) return;  // 헤더 안의 버튼 클릭은 드래그 아님
+    if (e.target.closest('button')) return;
     if (!window.pywebview) return;
     dragging = true;
-    startMouseX = e.screenX;
-    startMouseY = e.screenY;
-    const pos = await window.pywebview.api.get_widget_position();
-    startWinX = pos[0];
-    startWinY = pos[1];
+    startMouseX = e.screenX; startMouseY = e.screenY;
+    const pos = await window.pywebview.api.get_note_position(NOTE_KEY);
+    startWinX = pos[0]; startWinY = pos[1];
   });
-
   document.addEventListener('mousemove', (e) => {
     if (!dragging || pending) return;
     pending = true;
     requestAnimationFrame(() => {
       const dx = e.screenX - startMouseX;
       const dy = e.screenY - startMouseY;
-      window.pywebview.api.move_widget(startWinX + dx, startWinY + dy);
+      window.pywebview.api.move_note(NOTE_KEY, startWinX + dx, startWinY + dy);
       pending = false;
     });
   });
-
   document.addEventListener('mouseup', () => { dragging = false; });
 })();
 
-// frameless(테두리 없는) 창이라 OS가 기본 제공하는 크기조절 모서리가 안 보여서,
-// 우측 하단에 직접 만든 손잡이로 크기를 조절한다.
+// 우측 하단 손잡이로 크기 조절
 (function setupResize() {
   const handle = document.getElementById('resizeHandle');
   let resizing = false, startMouseX = 0, startMouseY = 0, startW = 0, startH = 0, pending = false;
-
   handle.addEventListener('mousedown', (e) => {
     if (!window.pywebview) return;
     resizing = true;
-    startMouseX = e.screenX;
-    startMouseY = e.screenY;
-    startW = window.innerWidth;
-    startH = window.innerHeight;
+    startMouseX = e.screenX; startMouseY = e.screenY;
+    startW = window.innerWidth; startH = window.innerHeight;
     e.preventDefault();
   });
-
   document.addEventListener('mousemove', (e) => {
     if (!resizing || pending) return;
     pending = true;
     requestAnimationFrame(() => {
       const dw = e.screenX - startMouseX;
       const dh = e.screenY - startMouseY;
-      window.pywebview.api.resize_widget(startW + dw, startH + dh);
+      window.pywebview.api.resize_note(NOTE_KEY, startW + dw, startH + dh);
       pending = false;
     });
   });
-
   document.addEventListener('mouseup', () => { resizing = false; });
 })();
 </script>
@@ -1814,13 +1941,211 @@ function closeWidget() {
 """
 
 
-@app.route("/postit/widget")
-def postit_widget():
+@app.route("/postit/note/<kind>/<table>/<int:item_id>")
+def postit_note(kind, table, item_id):
     from flask import render_template_string
-    cards = _fetch_postit_cards()
+    table_val = None if table == "none" else table
+    card = _fetch_single_card(kind, table_val, item_id)
+    if card is None:
+        return "항목을 찾을 수 없습니다 (이미 삭제됐을 수 있어요)", 404
     return render_template_string(
-        POSTIT_WIDGET_HTML, cards=cards, color_presets=POSTIT_COLOR_PRESETS,
+        POSTIT_NOTE_HTML, card=card, color_presets=POSTIT_COLOR_PRESETS,
     )
+
+
+CALENDAR_WIDGET_HTML = """
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>잇다 캘린더</title>
+<style>
+@font-face { font-family: 'Pretendard'; font-weight: 700; font-display: swap; src: url('/fonts/Pretendard-Bold.woff2') format('woff2'); }
+@font-face { font-family: 'Pretendard'; font-weight: 500; font-display: swap; src: url('/fonts/Pretendard-Medium.woff2') format('woff2'); }
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; font-family: "Pretendard","Malgun Gothic",sans-serif; background: #F8F7FC;
+       display: flex; flex-direction: column; overflow: hidden; border: 1px solid #E7E3F6; user-select: none; }
+.header { display: flex; align-items: center; justify-content: flex-end; padding: 5px 6px; gap: 1px;
+          background: #EFECFB; flex-shrink: 0; cursor: move; }
+.header button { border: none; background: none; color: #6E6A87; cursor: pointer; font-size: 12px;
+                  padding: 2px 7px; border-radius: 5px; }
+.header button:hover { background: rgba(0,0,0,0.06); }
+.header .close:hover { color: #C0392B; background: rgba(192,57,43,0.14); }
+.body { flex: 1; overflow-y: auto; padding: 10px; user-select: text; }
+.cal-head { font-size: 12.5px; font-weight: 800; margin-bottom: 8px; text-align: center; color: #2E2C42; }
+.cal-row { display: flex; gap: 2px; margin-bottom: 2px; }
+.cal-dow { flex: 1; text-align: center; font-size: 9px; color: #C2BEDA; font-weight: 700; }
+.cal-day { flex: 1; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+           font-size: 10.5px; border-radius: 6px; color: #6E6A87; position: relative; cursor: pointer;
+           text-decoration: none; }
+.cal-day.empty { visibility: hidden; cursor: default; }
+.cal-day.today { background: #5B3FBF; color: #fff; font-weight: 800; }
+.cal-day.selected:not(.today) { background: #E1D9FA; color: #5B3FBF; font-weight: 800; }
+.cal-day.has-event:not(.today):not(.selected) { background: #E1EAFB; font-weight: 700; color: #2358A8; }
+.cal-dot { position: absolute; bottom: 2px; width: 3px; height: 3px; border-radius: 50%; background: #8B5FE0; }
+.cal-day.today .cal-dot { background: #fff; }
+.day-list { margin-top: 12px; }
+.day-list-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.day-list-head span { font-size: 11.5px; font-weight: 700; color: #3A3652; }
+.day-add-btn { border: none; background: #EEE9FC; color: #7C5FE0; border-radius: 6px; padding: 2px 7px;
+                cursor: pointer; font-size: 11px; }
+.day-item { background: #fff; border-radius: 8px; padding: 7px 9px; margin-bottom: 6px; font-size: 11.5px;
+            display: flex; align-items: flex-start; gap: 6px; box-shadow: 0 1px 2px rgba(103,90,163,0.06); }
+.day-item input[type=checkbox] { width: 13px; height: 13px; margin-top: 2px; cursor: pointer; accent-color: #5B3FBF; flex-shrink: 0; }
+.day-item .txt { flex: 1; outline: none; word-break: break-word; }
+.day-item .txt.done { text-decoration: line-through; opacity: 0.5; }
+.day-item .del { border: none; background: none; color: #D9D5EA; cursor: pointer; font-size: 11px; flex-shrink: 0; }
+.day-item .del:hover { color: #E0645E; }
+.day-empty { color: #C2BEDA; font-size: 11px; text-align: center; padding: 10px; }
+.add-form { display: none; gap: 5px; margin-bottom: 8px; }
+.add-form.show { display: flex; }
+.add-form input { flex: 1; padding: 5px 7px; border-radius: 6px; border: 1px solid #E7E3F6; font-size: 11px; }
+.add-form button { border: none; background: #5B3FBF; color: #fff; border-radius: 6px; padding: 5px 9px;
+                    cursor: pointer; font-size: 11px; }
+.resize-handle { position: fixed; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+                  background: linear-gradient(135deg, transparent 50%, rgba(91,63,191,0.35) 50%); }
+</style></head>
+<body>
+  <div class="header" id="dragHeader">
+    <button type="button" onclick="toggleAddForm()" title="일정 추가">➕</button>
+    <button type="button" onclick="minimizeCal()" title="최소화">–</button>
+    <button type="button" class="close" onclick="closeCal()" title="닫기">✕</button>
+  </div>
+  <div class="body">
+    <div class="cal-head">{{ cal.year }}년 {{ cal.month }}월</div>
+    <div class="cal-row">
+      {% for dow in ['일','월','화','수','목','금','토'] %}<div class="cal-dow">{{ dow }}</div>{% endfor %}
+    </div>
+    {% for week in cal.weeks %}
+    <div class="cal-row">
+      {% for day in week %}
+      <a href="/postit/calendar?day={{ day }}" class="cal-day {{ 'empty' if day == 0 else '' }} {{ 'today' if day == cal.today else '' }} {{ 'selected' if day == cal.selected_day else '' }} {{ 'has-event' if day in cal.day_items else '' }}">
+        {% if day != 0 %}{{ day }}{% endif %}
+        {% if day in cal.day_items %}<span class="cal-dot"></span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+
+    <div class="day-list">
+      <div class="day-list-head"><span>{{ cal.month }}월 {{ cal.selected_day }}일</span></div>
+      <div class="add-form" id="addForm">
+        <input type="text" id="addInput" placeholder="새 일정...">
+        <button type="button" onclick="submitAdd()">추가</button>
+      </div>
+      {% if cal.selected_items|length == 0 %}
+      <div class="day-empty">일정이 없어요</div>
+      {% endif %}
+      {% for it in cal.selected_items %}
+      <div class="day-item" data-id="{{ it.id }}">
+        <input type="checkbox" onchange="toggleDone({{ it.id }}, this)">
+        <div class="txt" contenteditable="true" onblur="saveItem({{ it.id }}, this)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">{{ it.content }}</div>
+        <button type="button" class="del" onclick="deleteItem({{ it.id }}, this)">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="resize-handle" id="resizeHandle" title="크기 조절"></div>
+<script>
+const SELECTED_DAY = {{ cal.selected_day }};
+const SELECTED_MONTH = {{ cal.month }};
+
+function toggleAddForm() {
+  document.getElementById('addForm').classList.toggle('show');
+  document.getElementById('addInput').focus();
+}
+async function submitAdd() {
+  const input = document.getElementById('addInput');
+  const content = input.value.trim();
+  if (!content) return;
+  const eventSubtype = SELECTED_MONTH + '월 ' + SELECTED_DAY + '일';
+  const resp = await fetch('/api/calendar/create', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({content, event_subtype: eventSubtype})
+  });
+  const data = await resp.json();
+  if (data.ok) { location.reload(); } else { alert('추가 실패: ' + data.error); }
+}
+async function toggleDone(id, cb) {
+  await fetch(`/list/toggle/calendar/${id}`, {
+    method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'return_url=' + encodeURIComponent(location.pathname + location.search)
+  });
+  cb.closest('.day-item').querySelector('.txt').classList.toggle('done');
+}
+async function saveItem(id, el) {
+  const content = el.textContent.trim();
+  if (!content) { return; }
+  await fetch('/api/list/update', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({table: 'calendar', id, content})
+  });
+}
+async function deleteItem(id, btn) {
+  if (!confirm('이 일정을 삭제할까요?')) return;
+  await fetch(`/list/delete/calendar/${id}`, {
+    method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'return_url=' + encodeURIComponent(location.pathname + location.search)
+  });
+  btn.closest('.day-item').remove();
+}
+function closeCal() { if (window.pywebview) window.pywebview.api.close_calendar_widget(); }
+function minimizeCal() { if (window.pywebview) window.pywebview.api.minimize_calendar_widget(); }
+
+(function setupDrag() {
+  const header = document.getElementById('dragHeader');
+  let dragging = false, startMouseX = 0, startMouseY = 0, startWinX = 0, startWinY = 0, pending = false;
+  header.addEventListener('mousedown', async (e) => {
+    if (e.target.closest('button')) return;
+    if (!window.pywebview) return;
+    dragging = true;
+    startMouseX = e.screenX; startMouseY = e.screenY;
+    const pos = await window.pywebview.api.get_calendar_widget_position();
+    startWinX = pos[0]; startWinY = pos[1];
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging || pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      window.pywebview.api.move_calendar_widget(startWinX + (e.screenX - startMouseX), startWinY + (e.screenY - startMouseY));
+      pending = false;
+    });
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+})();
+
+(function setupResize() {
+  const handle = document.getElementById('resizeHandle');
+  let resizing = false, startMouseX = 0, startMouseY = 0, startW = 0, startH = 0, pending = false;
+  handle.addEventListener('mousedown', (e) => {
+    if (!window.pywebview) return;
+    resizing = true;
+    startMouseX = e.screenX; startMouseY = e.screenY;
+    startW = window.innerWidth; startH = window.innerHeight;
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!resizing || pending) return;
+    pending = true;
+    requestAnimationFrame(() => {
+      window.pywebview.api.resize_calendar_widget(startW + (e.screenX - startMouseX), startH + (e.screenY - startMouseY));
+      pending = false;
+    });
+  });
+  document.addEventListener('mouseup', () => { resizing = false; });
+})();
+</script>
+</body></html>
+"""
+
+
+@app.route("/postit/calendar")
+def postit_calendar():
+    from flask import render_template_string
+    try:
+        selected_day = int(request.args.get("day", ""))
+    except (TypeError, ValueError):
+        selected_day = None
+    cal = _build_calendar_widget_data(selected_day)
+    return render_template_string(CALENDAR_WIDGET_HTML, cal=cal)
 
 
 @app.route("/api/postit/toggle_status", methods=["POST"])
@@ -1937,6 +2262,29 @@ def api_memo_create():
     return jsonify({"ok": True, "id": new_id})
 
 
+@app.route("/api/calendar/create", methods=["POST"])
+def api_calendar_create():
+    """캘린더 위젯에서 특정 날짜에 바로 일정을 추가할 때 쓴다."""
+    data = request.get_json(force=True, silent=True) or {}
+    content = (data.get("content") or "").strip()
+    event_subtype = (data.get("event_subtype") or "").strip()
+    if not content:
+        return jsonify({"ok": False, "error": "내용을 입력해주세요"}), 400
+
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO calendar (source, event_id, sender, sender_dept, content, event_subtype, "
+        "created_utc, status, pinned) VALUES ('manual', ?, NULL, NULL, ?, ?, ?, 'pending', 0)",
+        (str(uuid.uuid4()), content, event_subtype or None, now),
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": new_id})
+
+
 @app.route("/list/toggle/<table>/<int:item_id>", methods=["POST"])
 def list_toggle(table, item_id):
     return_url = request.form.get("return_url") or "/list"
@@ -1997,7 +2345,6 @@ def api_list_update():
     table = data.get("table")
     item_id = data.get("id")
     content = (data.get("content") or "").strip()
-    event_subtype = data.get("event_subtype")
 
     if table not in LIST_TABLES:
         return jsonify({"ok": False, "error": "잘못된 카테고리입니다"}), 400
@@ -2008,10 +2355,14 @@ def api_list_update():
 
     conn = get_conn()
     cur = conn.cursor()
-    if table == "calendar":
+    if table == "calendar" and "event_subtype" in data:
+        # event_subtype 키가 요청에 아예 없으면(예: 캘린더 위젯에서 텍스트만 수정한 경우)
+        # 기존 날짜 정보를 건드리지 않는다 - 예전엔 무조건 덮어써서 내용만 고쳤는데
+        # 날짜가 같이 사라지는 버그가 있었음.
+        event_subtype = (data.get("event_subtype") or "").strip() or None
         cur.execute(
             "UPDATE calendar SET content=?, event_subtype=? WHERE id=?",
-            (content, (event_subtype or "").strip() or None, item_id),
+            (content, event_subtype, item_id),
         )
     else:
         cur.execute(f"UPDATE {table} SET content=? WHERE id=?", (content, item_id))
