@@ -54,6 +54,10 @@ def _resource_dir() -> str:
     return os.path.dirname(os.path.abspath(__file__))
 
 
+_shared_state = {"window": None}  # main()이 창을 만든 뒤 여기에 넣어두면, _run_flask 안에서
+                                    # 등록된 라우트가 나중에 이걸 읽어서 창을 보여줄 수 있음
+
+
 def _run_flask(base_dir: str, port: int):
     import itda_review_app as review_app
 
@@ -77,6 +81,19 @@ def _run_flask(base_dir: str, port: int):
     # 앱을 처음 실행할 때(빈 assistant.db) 테이블이 하나도 없어서 "제안 검토" 등에서
     # 500 에러가 나던 문제 수정 - 여기서 전체 스키마를 미리 만들어둔다.
     review_app.init_db_schema()
+
+    # 두 번째 인스턴스가 나중에 실행되면 "창 좀 보여줘"라고 여기로 요청을 보낸다
+    # (트레이에 숨어있을 때 실수로 다시 실행해도 창만 다시 보여주고 끝나게).
+    # 주의: 이 라우트는 반드시 app.run() 호출 "전에", 같은 스레드에서 등록해야 한다.
+    # 예전엔 이걸 main() 쪽(다른 스레드)에서 서버가 이미 돌고 있는 도중에 동적으로
+    # 추가했었는데, 그게 Flask/Werkzeug 내부 라우팅 테이블을 다른 스레드에서 건드리는
+    # 셈이라 스레드 안전성 문제가 있었고, "뭘 눌러도 응답없음"으로 이어진 걸로 보인다.
+    @review_app.app.route("/__focus_window", methods=["POST"])
+    def __focus_window():
+        w = _shared_state.get("window")
+        if w is not None:
+            w.show()
+        return "ok"
 
     # debug=False, use_reloader=False 필수 - 안 그러면 스레드/패키징 환경에서 오작동함
     review_app.app.run(host="127.0.0.1", port=port, debug=False, use_reloader=False, threaded=True)
@@ -374,15 +391,7 @@ def main():
         js_api=api,
     )
     api.main_window = window  # quit_app()이 나중에 이 창을 종료시킬 수 있도록
-
-    # 나중에 두 번째 인스턴스가 실행되면 "창 좀 보여줘"라고 여기로 요청을 보낸다
-    # (트레이에 숨어있을 때 실수로 다시 실행해도 창만 다시 보여주고 끝나게)
-    import itda_review_app as review_app
-
-    @review_app.app.route("/__focus_window", methods=["POST"])
-    def __focus_window():
-        window.show()
-        return "ok"
+    _shared_state["window"] = window  # _run_flask 안의 /__focus_window 라우트가 읽어감
 
     if _tray_enabled(base_dir):
         tray_ok = _setup_tray(window, base_dir, api)
