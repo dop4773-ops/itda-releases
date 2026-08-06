@@ -25,6 +25,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import uuid
 
 from flask import Flask, request, redirect, jsonify
@@ -39,7 +40,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.7.1"
 
 
 def _resource_dir() -> str:
@@ -76,7 +77,9 @@ PROFILE_NAME = "사용자"
 PROFILE_DEPT = "잇다 사용 중"
 UPDATE_REPO = ""  # "owner/repo" 형식, GitHub 릴리스로 업데이트 확인할 때 사용
 AUTO_CHECK_UPDATE = True  # 앱 시작할 때 자동으로 업데이트 확인할지
-TRAY_ENABLED = True  # 작업표시줄 트레이 상주 (itda_app.py가 시작 시점에 이 값을 config에서 직접 읽음)
+TRAY_ENABLED = False  # 작업표시줄 트레이 상주 - pywebview와 충돌해서 "응답없음"을 유발하는
+                       # 것으로 실사용자 테스트에서 확인돼서, 기본값을 꺼짐으로 바꿈.
+                       # 설정에서 켤 수는 있지만 이 문제 때문에 실험적 기능으로 표시함.
 POSTIT_ENABLED = True  # 포스트잇 기능
 _UPDATE_STATUS = {
     "state": "unknown",   # unknown/ok/newer/fail
@@ -100,6 +103,31 @@ def _log_debug(msg: str):
             f.write(f"[{datetime.datetime.now().isoformat()}] {msg}\n")
     except Exception:
         pass
+
+
+# "응답없음" 문제의 정확한 원인(어느 요청이 얼마나 오래 걸리는지)을 다음에 재현될 때
+# 바로 알 수 있도록, 모든 요청의 처리 시간을 기록해둔다. 0.5초 넘게 걸린 요청만
+# 로그에 남겨서(전부 남기면 로그가 너무 커지니) 실제 "느려지는 지점"만 보이게 함.
+import time as _time_module
+
+
+@app.before_request
+def _log_request_start():
+    request._itda_start_time = _time_module.time()
+
+
+@app.after_request
+def _log_request_timing(response):
+    try:
+        start = getattr(request, "_itda_start_time", None)
+        if start is not None:
+            elapsed = _time_module.time() - start
+            if elapsed > 0.5:  # 0.5초 넘게 걸린 것만 기록 (응답없음 진단용)
+                _log_debug(f"⚠️ 느린 요청: {request.method} {request.path} -> {elapsed:.2f}초 걸림 "
+                           f"(스레드: {threading.current_thread().name})")
+    except Exception:
+        pass
+    return response
 
 
 def _load_config() -> dict:
@@ -158,7 +186,7 @@ def _apply_config_globals(cfg: dict):
         PROFILE_NAME = cfg["profile_name"]
     if cfg.get("profile_dept"):
         PROFILE_DEPT = cfg["profile_dept"]
-    TRAY_ENABLED = bool(cfg.get("tray_enabled", True))
+    TRAY_ENABLED = bool(cfg.get("tray_enabled", False))
     POSTIT_ENABLED = bool(cfg.get("postit_enabled", True))
     AUTO_CHECK_UPDATE = bool(cfg.get("auto_check_update", True))
 
@@ -181,11 +209,11 @@ def _get_llm():
 def get_conn():
     # timeout/busy_timeout이 예전엔 30초였는데, 창이 여러 개(메인+캘린더 위젯+포스트잇들)
     # 동시에 뜨면서 같은 DB 파일을 건드리다가 아주 잠깐이라도 충돌하면 그 창이 최대 30초간
-    # "응답없음" 상태로 완전히 멈춰버리는 문제가 있었다. 5초로 대폭 줄여서, 설사 충돌이
-    # 나도 사용자가 체감하는 멈춤 시간을 훨씬 짧게 만든다.
-    conn = sqlite3.connect(DB_PATH, timeout=5)
+    # "응답없음" 상태로 완전히 멈춰버리는 문제가 있었다. 5초로 줄였다가, 여전히 문제가
+    # 있어서 2초로 한 번 더 줄였다 - 그래도 안 풀리면 DB 잠금 경합이 원인이 아니라는 뜻.
+    conn = sqlite3.connect(DB_PATH, timeout=2)
     conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=5000;")
+    conn.execute("PRAGMA busy_timeout=2000;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -1664,7 +1692,8 @@ function checkEmptyState() {
 POSTIT_HTML = """
 <!doctype html><html lang="ko"><head><meta charset="utf-8"><title>잇다 - 포스트잇</title>
 <style>{{ shared_css|safe }}
-  .postit-toolbar { margin-bottom: 10px; display: flex; gap: 10px; }
+  .postit-toolbar { margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+  .toolbar-divider { width: 1px; height: 22px; background: #E7E3F6; }
   .float-btn { padding: 10px 18px; border: none; border-radius: 10px; background: linear-gradient(90deg,#A78BFA,#93C5FD);
                color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
   .add-memo-btn { padding: 10px 18px; border: 1px dashed #C9BFF0; border-radius: 10px; background: #fff;
@@ -1675,7 +1704,7 @@ POSTIT_HTML = """
   .postit-empty .emoji { font-size: 36px; margin-bottom: 10px; }
   .postit-empty p { color: #9691AB; font-size: 13px; line-height: 1.6; }
   .postit-empty a { color: #8B5FE0; font-weight: 600; }
-  .postit-card { position: relative; }
+  .postit-card { position: relative; cursor: grab; }
   .pextract { position: absolute; top: 8px; right: 8px; border: none; background: rgba(255,255,255,0.7);
               border-radius: 6px; padding: 3px 6px; font-size: 11px; cursor: pointer; opacity: 0;
               transition: opacity .15s; }
@@ -1688,10 +1717,11 @@ POSTIT_HTML = """
   <div class="sub">"내 목록"에서 📌로 고정한 항목 + 직접 작성한 메모가 여기 모여요</div>
 
   <div class="postit-toolbar">
-    <button type="button" class="float-btn" onclick="openCalendarWidget()">📅 캘린더 꺼내기</button>
     <button type="button" class="add-memo-btn" onclick="addMemo()">➕ 메모 추가</button>
+    <span class="toolbar-divider"></span>
+    <button type="button" class="float-btn" onclick="openCalendarWidget()">📅 캘린더 위젯 열기 (전체 일정 달력)</button>
   </div>
-  <div class="drag-hint">💡 카드에 마우스를 올리면 나오는 🖥️ 버튼을 누르면 그 카드만 바탕화면에 따로 떨어져 나와요</div>
+  <div class="drag-hint">💡 카드를 드래그해서 창 밖에 놓거나, 마우스를 올렸을 때 나오는 🖥️ 버튼을 누르면 그 카드 하나만 바탕화면에 따로 떨어져 나와요</div>
 
   <div class="postit-empty" id="postitEmpty" style="{{ 'display:none;' if cards|length > 0 else '' }}">
     <div class="emoji">📌</div>
@@ -1702,7 +1732,7 @@ POSTIT_HTML = """
     {% for c in cards %}
     <div class="postit-card {{ 'done' if c.status == 'done' else '' }}" style="background:{{ c.color }};"
          data-kind="{{ c.kind }}" data-table="{{ c.table or '' }}" data-id="{{ c.id }}">
-      <button type="button" class="pextract" title="바탕화면으로 꺼내기"
+      <button type="button" class="pextract" title="바탕화면으로 꺼내기 (드래그도 가능해요)"
               onclick="extractCard('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">🖥️</button>
       <div class="ptag">{{ c.tag }}</div>
       <div class="ptext" contenteditable="true"
@@ -1740,23 +1770,80 @@ async function openCalendarWidget() {
   }
 }
 
-// 카드를 바탕화면으로 꺼낸다 - 예전엔 드래그로 창 밖에 놓으면 꺼내지는 방식이었는데,
-// 마우스를 움직일 때마다 계속 호출이 발생하는 구조라 불안정했다(응답없음 유발 의심).
-// 버튼 클릭 한 번 = API 호출 한 번, 으로 훨씬 단순하고 안전하게 바꿈.
+// 카드를 바탕화면으로 꺼내는 두 가지 방법: (1) 버튼 클릭 (2) 드래그해서 창 밖에 놓기.
+// 드래그 도중에는 API를 호출하지 않고(화면 이동은 CSS transform만 사용), 마우스를
+// 놓는 "그 순간"에만 API를 한 번 호출하므로 연속 호출로 인한 부담이 없다.
 async function extractCard(kind, table, id, btn) {
   if (!window.pywebview) {
     alert('바탕화면으로 꺼내기는 잇다 앱(데스크톱 프로그램)에서만 사용할 수 있어요.');
     return;
   }
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
   try {
     await window.pywebview.api.extract_note(kind, table, id, 300, 300);
   } catch (e) {
     alert('꺼내는 중 오류가 발생했습니다: ' + e);
   } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 }
+
+let _dragState = null;
+
+function setupCardDrag(cardEl) {
+  cardEl.addEventListener('mousedown', async (e) => {
+    if (e.target.closest('button, input, .ptext, .pdot')) return;  // 버튼/입력/편집/색상점은 드래그 아님
+    if (!window.pywebview) return;
+    const bounds = await window.pywebview.api.get_main_window_bounds();
+    _dragState = { card: cardEl, startX: e.screenX, startY: e.screenY, bounds, dragging: false };
+  });
+}
+document.querySelectorAll('.postit-card').forEach(setupCardDrag);
+
+document.addEventListener('mousemove', (e) => {
+  if (!_dragState) return;
+  const dx = e.screenX - _dragState.startX;
+  const dy = e.screenY - _dragState.startY;
+  if (!_dragState.dragging && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+    _dragState.dragging = true;
+  }
+  if (_dragState.dragging) {
+    // 드래그 중엔 화면 표시만 CSS로 바꾸고, API는 절대 호출하지 않음 (마우스를 놓을 때 딱 한 번만 호출)
+    _dragState.card.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
+    _dragState.card.style.zIndex = 999;
+  }
+});
+
+document.addEventListener('mouseup', async (e) => {
+  if (!_dragState) return;
+  const { card, dragging, bounds } = _dragState;
+  card.style.transform = '';
+  card.style.zIndex = '';
+
+  if (dragging && bounds && bounds[2] > 0) {
+    const [wx, wy, ww, wh] = bounds;
+    const outside = e.screenX < wx || e.screenX > wx + ww || e.screenY < wy || e.screenY > wy + wh;
+    if (outside) {
+      const kind = card.dataset.kind;
+      const table = card.dataset.table || null;
+      const id = parseInt(card.dataset.id);
+      await extractCard(kind, table, id, null);
+    }
+  }
+  _dragState = null;
+});
+
+// addMemo()로 새 카드가 생기면 그 카드에도 드래그를 걸어줘야 하므로,
+// 공통 렌더 함수를 감싸서 매번 다시 등록한다.
+const _origRenderPostitCard = renderPostitCard;
+renderPostitCard = function(c) {
+  const html = _origRenderPostitCard(c);
+  setTimeout(() => {
+    const el = document.querySelector(`.postit-card[data-kind="${c.kind}"][data-id="${c.id}"]`);
+    if (el) setupCardDrag(el);
+  }, 0);
+  return html;
+};
 </script>
 </body></html>
 """
@@ -2031,13 +2118,43 @@ async function submitAdd() {
   const input = document.getElementById('addInput');
   const content = input.value.trim();
   if (!content) return;
-  const eventSubtype = SELECTED_MONTH + '월 ' + SELECTED_DAY + '일';
-  const resp = await fetch('/api/calendar/create', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({content, event_subtype: eventSubtype})
-  });
-  const data = await resp.json();
-  if (data.ok) { location.reload(); } else { alert('추가 실패: ' + data.error); }
+  const btn = input.nextElementSibling;
+  btn.disabled = true;
+  try {
+    const eventSubtype = SELECTED_MONTH + '월 ' + SELECTED_DAY + '일';
+    const resp = await fetch('/api/calendar/create', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({content, event_subtype: eventSubtype})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      // 페이지 전체를 다시 불러오는 대신(프레임없는 항상위 창에서 이게 불안정한 원인일 수
+      // 있어서), 방금 추가한 항목만 화면에 바로 끼워넣는다.
+      const emptyMsg = document.querySelector('.day-empty');
+      if (emptyMsg) emptyMsg.remove();
+      const div = document.createElement('div');
+      div.className = 'day-item';
+      div.dataset.id = data.id;
+      div.innerHTML = `
+        <input type="checkbox" onchange="toggleDone(${data.id}, this)">
+        <div class="txt" contenteditable="true" onblur="saveItem(${data.id}, this)"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"></div>
+        <button type="button" class="del" onclick="deleteItem(${data.id}, this)">✕</button>
+      `;
+      div.querySelector('.txt').textContent = content;
+      document.querySelector('.day-list').appendChild(div);
+      input.value = '';
+      document.getElementById('addForm').classList.remove('show');
+      // 날짜 칸에 점 표시가 없었다면 새로고침 없이는 못 그려주니, 이건 다음에 창을
+      // 새로 열거나 날짜를 이동할 때 자연스럽게 반영됨 (일부러 reload 안 함)
+    } else {
+      alert('추가 실패: ' + data.error);
+    }
+  } catch (e) {
+    alert('추가 중 오류가 발생했습니다: ' + e);
+  } finally {
+    btn.disabled = false;
+  }
 }
 async function toggleDone(id, cb) {
   await fetch(`/list/toggle/calendar/${id}`, {
@@ -2859,7 +2976,7 @@ SETTINGS_HTML = """
       <h2>위젯</h2>
       <label class="check-row">
         <input type="checkbox" name="tray_enabled" {{ 'checked' if tray_enabled else '' }}>
-        <span>작업표시줄 트레이에 상주 (창을 닫아도 계속 실행, 완전 종료는 트레이 아이콘 우클릭)</span>
+        <span>⚠️ 작업표시줄 트레이에 상주 (실험적 기능 - 일부 환경에서 "응답없음" 문제가 있어서 기본은 꺼짐이에요. 켜시면 문제 생길 수 있으니 참고해주세요)</span>
       </label>
       <label class="check-row">
         <input type="checkbox" name="postit_enabled" {{ 'checked' if postit_enabled else '' }}>

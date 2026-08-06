@@ -388,17 +388,17 @@ def _update_lock_path(base_dir: str) -> str:
 
 
 def _tray_enabled(base_dir: str) -> bool:
-    """설정 화면(위젯 카드)에서 끄면 트레이 아이콘 없이 평범하게 닫히는 창으로 동작한다.
-    기본값은 켜짐(True)."""
+    """설정 화면(위젯 카드)에서 켤 수 있다. 기본값은 꺼짐(False) - pywebview와
+    충돌해서 "응답없음"을 유발하는 문제가 실사용자 테스트에서 확인됐기 때문."""
     config_path = os.path.join(base_dir, "itda_config.json")
     if not os.path.exists(config_path):
-        return True
+        return False
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        return bool(cfg.get("tray_enabled", True))
+        return bool(cfg.get("tray_enabled", False))
     except Exception:
-        return True
+        return False
 
 
 def _setup_tray(window, base_dir: str, api: "Api") -> bool:
