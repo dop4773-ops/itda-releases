@@ -40,7 +40,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.7.1"
+APP_VERSION = "1.7.3"
 
 
 def _resource_dir() -> str:
@@ -76,7 +76,9 @@ _LLM_TEST_STATUS = {"ok": None, "message": "아직 연결 테스트를 안 했�
 PROFILE_NAME = "사용자"
 PROFILE_DEPT = "잇다 사용 중"
 UPDATE_REPO = ""  # "owner/repo" 형식, GitHub 릴리스로 업데이트 확인할 때 사용
-AUTO_CHECK_UPDATE = True  # 앱 시작할 때 자동으로 업데이트 확인할지
+AUTO_CHECK_UPDATE = False  # 앱 시작할 때 자동으로 업데이트 확인할지 - 병원 네트워크가
+                            # GitHub 접속을 막고 있으면 시작할 때마다 이 확인이 오래
+                            # 걸리다가 앱 전체가 멈춘 것처럼 보일 수 있어서 기본은 꺼짐
 TRAY_ENABLED = False  # 작업표시줄 트레이 상주 - pywebview와 충돌해서 "응답없음"을 유발하는
                        # 것으로 실사용자 테스트에서 확인돼서, 기본값을 꺼짐으로 바꿈.
                        # 설정에서 켤 수는 있지만 이 문제 때문에 실험적 기능으로 표시함.
@@ -188,7 +190,7 @@ def _apply_config_globals(cfg: dict):
         PROFILE_DEPT = cfg["profile_dept"]
     TRAY_ENABLED = bool(cfg.get("tray_enabled", False))
     POSTIT_ENABLED = bool(cfg.get("postit_enabled", True))
-    AUTO_CHECK_UPDATE = bool(cfg.get("auto_check_update", True))
+    AUTO_CHECK_UPDATE = bool(cfg.get("auto_check_update", False))
 
 _LLM_CACHE = {"llm": None, "grammar": None, "model_path": None}
 
@@ -3070,7 +3072,10 @@ async function startUpdate() {
     alert('다운로드 링크를 찾을 수 없어요. 업데이트 확인을 다시 눌러보세요.');
     return;
   }
-  if (!confirm(`v${_latestUpdateData.latest_version}으로 업데이트할까요?\\n앱이 자동으로 닫혔다가 새 버전으로 다시 열려요.`)) {
+  if (!confirm(`v${_latestUpdateData.latest_version}으로 업데이트할까요?\\n\\n` +
+               `⚠️ 설치 중에 Windows 보안 경고("Windows에서 PC를 보호했습니다" 또는 파란 방패 아이콘)가 뜰 수 있어요.\\n` +
+               `이건 새 프로그램이라 아직 다운로드 "평판"이 없어서 뜨는 정상적인 경고예요 - 뜨면 "추가 정보" → "실행"을 눌러주세요.\\n\\n` +
+               `앱이 자동으로 닫혔다가 새 버전으로 다시 열려요.`)) {
     return;
   }
 
@@ -3093,7 +3098,10 @@ async function startUpdate() {
     clearInterval(progressTimer);
     if (result.ok) {
       btn.textContent = '설치 중... 잠시 후 앱이 자동으로 다시 열려요';
-      alert('업데이트를 설치할게요.\\n\\n앱이 지금 닫히고, 설치 진행 창이 잠깐 보였다가,\\n완료되면 자동으로 다시 열려요.\\n(30초~1분 정도 걸릴 수 있어요, 너무 급하게 다시 실행하지 말아주세요)');
+      alert('업데이트를 설치할게요.\\n\\n앱이 지금 닫히고, 설치 진행 창이 잠깐 보였다가,\\n완료되면 자동으로 다시 열려요.\\n(30초~1분 정도 걸릴 수 있어요)\\n\\n' +
+            '⚠️ 도중에 파란 방패 아이콘의 "Windows에서 PC를 보호했습니다" 창이 뜨면,\\n' +
+            '"추가 정보" 클릭 → "실행" 버튼을 눌러주셔야 설치가 계속 진행돼요.\\n' +
+            '이 창을 못 보고 지나치면 설치가 멈춘 것처럼 보일 수 있어요, 작업표시줄을 확인해주세요.');
       window.pywebview.api.quit_app();
     } else {
       alert('업데이트 실패: ' + result.error);
@@ -3272,24 +3280,24 @@ def settings():
     return render_template_string(SETTINGS_HTML, **_settings_context(message=message))
 
 
-@app.route("/settings/check_update", methods=["POST"])
-def settings_check_update():
+def _perform_update_check(repo: str):
+    """실제 GitHub 릴리스 확인 로직 - Flask request 객체에 의존하지 않는 독립 함수로
+    분리해뒀다. 설정 화면의 '업데이트 확인' 버튼(Flask 라우트)과, 시작 시 자동 확인
+    (백그라운드 스레드)이 둘 다 이 함수를 직접 호출한다.
+    예전엔 백그라운드 스레드가 로컬 Flask 서버에 HTTP로 다시 요청을 보내는 우회
+    구조였는데, 이게 Flask의 스레드 풀/요청 처리에 불필요한 부담을 줄 수 있어서
+    (병원망처럼 GitHub 접속이 느리거나 막힌 환경에서 특히) 직접 호출로 바꿨다."""
     global UPDATE_REPO
-    data = request.get_json(force=True, silent=True) or {}
-    repo = (data.get("repo") or "").strip()
     UPDATE_REPO = repo
-
-    # 저장소 입력값은 즉시 설정 파일에도 반영 (다른 항목은 안 건드림)
     _save_all_config()
 
-    # 매번 새로 확인하는 거니 이전 결과(릴리스노트/다운로드링크 등)는 초기화
     _UPDATE_STATUS.update({"latest_version": None, "release_notes": None,
                             "download_url": None, "release_url": None})
 
     if not repo:
         _UPDATE_STATUS["state"] = "unknown"
         _UPDATE_STATUS["message"] = "GitHub 저장소를 입력하지 않았습니다."
-        return jsonify(_UPDATE_STATUS)
+        return _UPDATE_STATUS
 
     try:
         import urllib.request
@@ -3329,7 +3337,15 @@ def settings_check_update():
         _UPDATE_STATUS["state"] = "fail"
         _UPDATE_STATUS["message"] = f"업데이트 확인 실패: {e}"
 
-    return jsonify(_UPDATE_STATUS)
+    return _UPDATE_STATUS
+
+
+@app.route("/settings/check_update", methods=["POST"])
+def settings_check_update():
+    data = request.get_json(force=True, silent=True) or {}
+    repo = (data.get("repo") or "").strip()
+    result = _perform_update_check(repo)
+    return jsonify(result)
 
 
 @app.route("/settings/test_model", methods=["POST"])

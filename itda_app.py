@@ -502,7 +502,12 @@ def _try_focus_existing_instance(port: int) -> bool:
 def _maybe_check_update_on_start(base_dir: str, port: int):
     """"시작 시 자동으로 업데이트 확인" 설정이 켜져있으면, 창이 뜨고 나서 잠깐 뒤에
     백그라운드에서 조용히 한 번 확인한다. 실패해도(네트워크 없음 등) 앱 시작에는
-    전혀 영향 안 주도록 전부 조용히 무시한다."""
+    전혀 영향 안 주도록 전부 조용히 무시한다.
+
+    예전엔 로컬 Flask 서버에 HTTP로 다시 요청을 보내는 우회 구조였는데(자기 자신을
+    호출), 이게 병원 네트워크처럼 GitHub 접속이 막혀있거나 느린 환경에서 Flask의
+    스레드 자원을 붙들고 있다가 앱 전체가 먹통처럼 보이는 문제와 관련 있을 수 있어서
+    review_app의 체크 함수를 직접 호출하는 방식으로 바꿨다 (HTTP 왕복 자체를 없앰)."""
     time.sleep(2.0)  # Flask/창이 완전히 안정된 뒤에 시도
     config_path = os.path.join(base_dir, "itda_config.json")
     if not os.path.exists(config_path):
@@ -510,20 +515,15 @@ def _maybe_check_update_on_start(base_dir: str, port: int):
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
-        if not cfg.get("auto_check_update", True):
+        if not cfg.get("auto_check_update", False):
             return
         repo = (cfg.get("update_repo") or "").strip()
         if not repo:
             return
 
-        import urllib.request
-        import json as _json
-        body = _json.dumps({"repo": repo}).encode("utf-8")
-        req = urllib.request.Request(
-            f"http://127.0.0.1:{port}/settings/check_update", data=body,
-            headers={"Content-Type": "application/json"}, method="POST",
-        )
-        urllib.request.urlopen(req, timeout=10)
+        import itda_review_app as review_app
+        review_app.CONFIG_PATH = config_path
+        review_app._perform_update_check(repo)
     except Exception:
         pass  # 조용히 실패 - 시작 시 자동 확인은 "되면 좋고" 기능이라 앱 실행을 막으면 안 됨
 
