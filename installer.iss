@@ -10,7 +10,7 @@
 
 #define MyAppName "잇다"
 #define MyAppNameEng "Itda"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.7.0"
 #define MyAppPublisher "잇다 프로젝트"
 #define MyAppExeName "잇다.exe"
 

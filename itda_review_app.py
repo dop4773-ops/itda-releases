@@ -16,7 +16,7 @@ suggestions 테이블(review_status='pending')을 브라우저에서 검토하�
 
 주의:
     itda_llm_stage3.py 배치가 백그라운드에서 동시에 assistant.db에 쓰고 있어도
-    안전하게 동작하도록 WAL 모드 + busy_timeout(30초)을 사용한다.
+    안전하게 동작하도록 WAL 모드 + busy_timeout(5초)을 사용한다.
 """
 import argparse
 import datetime
@@ -39,7 +39,7 @@ if sys.platform == "win32":
 
 app = Flask(__name__)
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.7.0"
 
 
 def _resource_dir() -> str:
@@ -179,9 +179,13 @@ def _get_llm():
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    # timeout/busy_timeout이 예전엔 30초였는데, 창이 여러 개(메인+캘린더 위젯+포스트잇들)
+    # 동시에 뜨면서 같은 DB 파일을 건드리다가 아주 잠깐이라도 충돌하면 그 창이 최대 30초간
+    # "응답없음" 상태로 완전히 멈춰버리는 문제가 있었다. 5초로 대폭 줄여서, 설사 충돌이
+    # 나도 사용자가 체감하는 멈춤 시간을 훨씬 짧게 만든다.
+    conn = sqlite3.connect(DB_PATH, timeout=5)
     conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA busy_timeout=30000;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -1671,8 +1675,12 @@ POSTIT_HTML = """
   .postit-empty .emoji { font-size: 36px; margin-bottom: 10px; }
   .postit-empty p { color: #9691AB; font-size: 13px; line-height: 1.6; }
   .postit-empty a { color: #8B5FE0; font-weight: 600; }
-  .postit-card { cursor: grab; }
-  .postit-card.dragging-out { cursor: grabbing; box-shadow: 4px 10px 22px rgba(0,0,0,0.28); }
+  .postit-card { position: relative; }
+  .pextract { position: absolute; top: 8px; right: 8px; border: none; background: rgba(255,255,255,0.7);
+              border-radius: 6px; padding: 3px 6px; font-size: 11px; cursor: pointer; opacity: 0;
+              transition: opacity .15s; }
+  .postit-card:hover .pextract { opacity: 1; }
+  .pextract:hover { background: rgba(255,255,255,0.95); }
 """ + POSTIT_CARD_CSS + """
 </style></head><body><div class="app-shell">{{ sidebar|safe }}
 <main class="content"><div class="content-inner">
@@ -1683,7 +1691,7 @@ POSTIT_HTML = """
     <button type="button" class="float-btn" onclick="openCalendarWidget()">📅 캘린더 꺼내기</button>
     <button type="button" class="add-memo-btn" onclick="addMemo()">➕ 메모 추가</button>
   </div>
-  <div class="drag-hint">💡 카드를 잡고 창 밖으로 드래그하면 그 카드만 바탕화면에 따로 떨어져 나와요</div>
+  <div class="drag-hint">💡 카드에 마우스를 올리면 나오는 🖥️ 버튼을 누르면 그 카드만 바탕화면에 따로 떨어져 나와요</div>
 
   <div class="postit-empty" id="postitEmpty" style="{{ 'display:none;' if cards|length > 0 else '' }}">
     <div class="emoji">📌</div>
@@ -1694,6 +1702,8 @@ POSTIT_HTML = """
     {% for c in cards %}
     <div class="postit-card {{ 'done' if c.status == 'done' else '' }}" style="background:{{ c.color }};"
          data-kind="{{ c.kind }}" data-table="{{ c.table or '' }}" data-id="{{ c.id }}">
+      <button type="button" class="pextract" title="바탕화면으로 꺼내기"
+              onclick="extractCard('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)">🖥️</button>
       <div class="ptag">{{ c.tag }}</div>
       <div class="ptext" contenteditable="true"
            onblur="saveCardContent('{{ c.kind }}', {{ ('\\''+c.table+'\\'') if c.table else 'null' }}, {{ c.id }}, this)"
@@ -1730,66 +1740,23 @@ async function openCalendarWidget() {
   }
 }
 
-// 카드를 창 밖으로 드래그해서 놓으면, 그 카드 하나만 보여주는 작은 창을
-// 그 위치에 새로 띄운다 (진짜 포스트잇을 떼어내는 느낌).
-let _dragState = null;
-
-function setupCardDrag(cardEl) {
-  cardEl.addEventListener('mousedown', async (e) => {
-    if (e.target.closest('button, input, .ptext')) return;  // 버튼/입력/텍스트편집 중엔 드래그 안 함
-    if (!window.pywebview) return;
-    const bounds = await window.pywebview.api.get_main_window_bounds();
-    _dragState = { card: cardEl, startX: e.screenX, startY: e.screenY, bounds, dragging: false };
-  });
+// 카드를 바탕화면으로 꺼낸다 - 예전엔 드래그로 창 밖에 놓으면 꺼내지는 방식이었는데,
+// 마우스를 움직일 때마다 계속 호출이 발생하는 구조라 불안정했다(응답없음 유발 의심).
+// 버튼 클릭 한 번 = API 호출 한 번, 으로 훨씬 단순하고 안전하게 바꿈.
+async function extractCard(kind, table, id, btn) {
+  if (!window.pywebview) {
+    alert('바탕화면으로 꺼내기는 잇다 앱(데스크톱 프로그램)에서만 사용할 수 있어요.');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await window.pywebview.api.extract_note(kind, table, id, 300, 300);
+  } catch (e) {
+    alert('꺼내는 중 오류가 발생했습니다: ' + e);
+  } finally {
+    btn.disabled = false;
+  }
 }
-document.querySelectorAll('.postit-card').forEach(setupCardDrag);
-
-document.addEventListener('mousemove', (e) => {
-  if (!_dragState) return;
-  const dx = e.screenX - _dragState.startX;
-  const dy = e.screenY - _dragState.startY;
-  if (!_dragState.dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-    _dragState.dragging = true;
-    _dragState.card.classList.add('dragging-out');
-  }
-  if (_dragState.dragging) {
-    _dragState.card.style.transform = `translate(${dx}px, ${dy}px) scale(1.05)`;
-    _dragState.card.style.zIndex = 999;
-    _dragState.card.style.position = 'relative';
-  }
-});
-
-document.addEventListener('mouseup', async (e) => {
-  if (!_dragState) return;
-  const { card, dragging, bounds } = _dragState;
-  card.style.transform = '';
-  card.style.zIndex = '';
-  card.classList.remove('dragging-out');
-
-  if (dragging && bounds && bounds[2] > 0) {
-    const [wx, wy, ww, wh] = bounds;
-    const outside = e.screenX < wx || e.screenX > wx + ww || e.screenY < wy || e.screenY > wy + wh;
-    if (outside) {
-      const kind = card.dataset.kind;
-      const table = card.dataset.table || null;
-      const id = parseInt(card.dataset.id);
-      await window.pywebview.api.extract_note(kind, table, id, e.screenX, e.screenY);
-    }
-  }
-  _dragState = null;
-});
-
-// addMemo()로 새 카드가 생기면 그 카드에도 드래그를 걸어줘야 하므로,
-// 공통 렌더 함수를 감싸서 매번 다시 등록한다.
-const _origRenderPostitCard = renderPostitCard;
-renderPostitCard = function(c) {
-  const html = _origRenderPostitCard(c);
-  setTimeout(() => {
-    const el = document.querySelector(`.postit-card[data-kind="${c.kind}"][data-id="${c.id}"]`);
-    if (el) setupCardDrag(el);
-  }, 0);
-  return html;
-};
 </script>
 </body></html>
 """
@@ -1900,8 +1867,12 @@ async function deleteThisNote() {
     const pos = await window.pywebview.api.get_note_position(NOTE_KEY);
     startWinX = pos[0]; startWinY = pos[1];
   });
+  let lastMoveCall = 0;
   document.addEventListener('mousemove', (e) => {
     if (!dragging || pending) return;
+    const now = performance.now();
+    if (now - lastMoveCall < 50) return;  // 초당 최대 20번으로 제한 (API 호출 폭주 방지)
+    lastMoveCall = now;
     pending = true;
     requestAnimationFrame(() => {
       const dx = e.screenX - startMouseX;
@@ -1924,8 +1895,12 @@ async function deleteThisNote() {
     startW = window.innerWidth; startH = window.innerHeight;
     e.preventDefault();
   });
+  let lastResizeCall = 0;
   document.addEventListener('mousemove', (e) => {
     if (!resizing || pending) return;
+    const now = performance.now();
+    if (now - lastResizeCall < 50) return;
+    lastResizeCall = now;
     pending = true;
     requestAnimationFrame(() => {
       const dw = e.screenX - startMouseX;
@@ -2101,8 +2076,12 @@ function minimizeCal() { if (window.pywebview) window.pywebview.api.minimize_cal
     const pos = await window.pywebview.api.get_calendar_widget_position();
     startWinX = pos[0]; startWinY = pos[1];
   });
+  let lastMoveCall = 0;
   document.addEventListener('mousemove', (e) => {
     if (!dragging || pending) return;
+    const now = performance.now();
+    if (now - lastMoveCall < 50) return;
+    lastMoveCall = now;
     pending = true;
     requestAnimationFrame(() => {
       window.pywebview.api.move_calendar_widget(startWinX + (e.screenX - startMouseX), startWinY + (e.screenY - startMouseY));
@@ -2122,8 +2101,12 @@ function minimizeCal() { if (window.pywebview) window.pywebview.api.minimize_cal
     startW = window.innerWidth; startH = window.innerHeight;
     e.preventDefault();
   });
+  let lastResizeCall = 0;
   document.addEventListener('mousemove', (e) => {
     if (!resizing || pending) return;
+    const now = performance.now();
+    if (now - lastResizeCall < 50) return;
+    lastResizeCall = now;
     pending = true;
     requestAnimationFrame(() => {
       window.pywebview.api.resize_calendar_widget(startW + (e.screenX - startMouseX), startH + (e.screenY - startMouseY));
