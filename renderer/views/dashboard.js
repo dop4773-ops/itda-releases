@@ -72,25 +72,25 @@ export async function mount(root) {
         </div>
 
         <div class="summary-grid summary-grid-5">
-          <div class="summary-card">
-            <div class="top"><span class="dot" style="background:var(--cat-meeting)"></span>오늘 할 일</div>
+          <div class="summary-card tone-purple">
+            <div class="top"><span class="dot" style="background:var(--tone-purple-fg)"></span>오늘 할 일</div>
             <div class="num" id="d-todoCount">-</div>
             <div id="d-todoSub" style="font-size:11.5px;color:var(--text-faint);"></div>
           </div>
-          <div class="summary-card">
-            <div class="top"><span class="dot" style="background:var(--cat-counsel)"></span>오늘 일정</div>
+          <div class="summary-card tone-green">
+            <div class="top"><span class="dot" style="background:var(--tone-green-fg)"></span>오늘 일정</div>
             <div class="num" id="d-eventCount">-</div>
           </div>
-          <div class="summary-card">
-            <div class="top"><span class="dot" style="background:var(--cat-edu)"></span>메모</div>
+          <div class="summary-card tone-yellow">
+            <div class="top"><span class="dot" style="background:var(--tone-yellow-fg)"></span>메모</div>
             <div class="num" id="d-memoCount">-</div>
           </div>
-          <div class="summary-card">
-            <div class="top"><span class="dot" style="background:var(--cat-outpatient)"></span>포스트잇</div>
+          <div class="summary-card tone-pink">
+            <div class="top"><span class="dot" style="background:var(--tone-pink-fg)"></span>포스트잇</div>
             <div class="num" id="d-postitCount">-</div>
           </div>
-          <div class="summary-card">
-            <div class="top"><span class="dot" style="background:var(--danger)"></span>알림</div>
+          <div class="summary-card tone-blue">
+            <div class="top"><span class="dot" style="background:var(--tone-blue-fg)"></span>알림</div>
             <div class="num" id="d-notifCount">-</div>
           </div>
         </div>

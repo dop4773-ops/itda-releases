@@ -17,6 +17,19 @@
   --danger-soft:#FDEEEE;
   --danger-border:#F7D4D5;
 
+  /* ---- 대시보드 요약카드 전용 장식 팔레트 (의미 없음 — 카드를 구분해 보이게 하는 색감용,
+     위 브랜드/시맨틱 5색과는 별개. 카테고리 고정 팔레트처럼 다른 의미를 갖지 않는다) ---- */
+  --tone-purple-bg:linear-gradient(135deg,#EEE9FE,#F7F5FF);
+  --tone-purple-fg:#7C5CFC;
+  --tone-green-bg:linear-gradient(135deg,#DCFCE9,#F0FDF6);
+  --tone-green-fg:#1FA971;
+  --tone-yellow-bg:linear-gradient(135deg,#FEF3C7,#FFFBEB);
+  --tone-yellow-fg:#D97706;
+  --tone-pink-bg:linear-gradient(135deg,#FCE7F3,#FFF1F8);
+  --tone-pink-fg:#DB2777;
+  --tone-blue-bg:linear-gradient(135deg,#DBEAFE,#F0F7FF);
+  --tone-blue-fg:#2563EB;
+
   /* ---- 카테고리 고정 팔레트 (schema/itda_schema_v1.sql 시드값과 반드시 일치) ---- */
   --cat-meeting:#6C8CF5;   /* 회의·업무 */
   --cat-counsel:#4FB897;   /* 상담 */
@@ -61,6 +74,17 @@ html[data-theme="dark"]{
   --danger-border:#5A2E32;
 
   --shadow:0 2px 6px rgba(0,0,0,.25),0 8px 20px rgba(0,0,0,.18);
+
+  --tone-purple-bg:linear-gradient(135deg,#2A2447,#241F3D);
+  --tone-purple-fg:#B4A3FF;
+  --tone-green-bg:linear-gradient(135deg,#173229,#132A22);
+  --tone-green-fg:#5FE0A6;
+  --tone-yellow-bg:linear-gradient(135deg,#3A2E14,#332810);
+  --tone-yellow-fg:#F0B54A;
+  --tone-pink-bg:linear-gradient(135deg,#3A1E2C,#331A26);
+  --tone-pink-fg:#F281B8;
+  --tone-blue-bg:linear-gradient(135deg,#1B2A47,#16233C);
+  --tone-blue-fg:#7EABFF;
 }
 
 
@@ -178,6 +202,18 @@ html, body{height:100%;}
 .summary-card .top{display:flex;align-items:center;gap:8px;color:var(--text-soft);font-size:var(--fs-page-sub);margin-bottom:10px;}
 .summary-card .dot{width:8px;height:8px;border-radius:2px;}
 .summary-card .num{font-size:26px;font-weight:700;}
+/* 대시보드 요약카드 색감 — tone-* 클래스가 있으면 흰 카드 대신 파스텔 그라디언트 배경 사용 */
+.summary-card[class*="tone-"]{border-color:transparent;}
+.summary-card.tone-purple{background:var(--tone-purple-bg);}
+.summary-card.tone-purple .num{color:var(--tone-purple-fg);}
+.summary-card.tone-green{background:var(--tone-green-bg);}
+.summary-card.tone-green .num{color:var(--tone-green-fg);}
+.summary-card.tone-yellow{background:var(--tone-yellow-bg);}
+.summary-card.tone-yellow .num{color:var(--tone-yellow-fg);}
+.summary-card.tone-pink{background:var(--tone-pink-bg);}
+.summary-card.tone-pink .num{color:var(--tone-pink-fg);}
+.summary-card.tone-blue{background:var(--tone-blue-bg);}
+.summary-card.tone-blue .num{color:var(--tone-blue-fg);}
 
 /* ================= 콘텐츠 그리드 / 패널 ================= */
 .content-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:14px;}
@@ -530,6 +566,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-grid.empty{display:flex;flex-direction:column;align-items:center;gap:14px;}
 .sticky-grid.empty .new-sticky-card{width:220px;}
 .sticky-card{
+  height:236px; /* 카드마다 내용 길이가 달라 들쭉날쭉하던 것을 고정 높이로 통일 — 넘치는 내용은 card-content가 스크롤 */
   border-radius:var(--radius-lg);padding:14px;min-width:0;
   box-shadow:0 2px 6px rgba(16,24,40,.08);display:flex;flex-direction:column;gap:8px;
   transition:transform .15s ease, box-shadow .15s ease;
@@ -540,7 +577,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .pin-btn.pinned{color:var(--brand);}
 .sticky-card input.card-title{background:transparent;border:none;outline:none;font-weight:600;font-size:13px;width:100%;font-family:inherit;color:var(--text);}
 .sticky-card input.card-title::placeholder{color:var(--text-faint);font-weight:400;}
-.sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:var(--text);min-height:64px;flex:1;line-height:1.5;overflow-wrap:break-word;}
+.sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:var(--text);flex:1;line-height:1.5;overflow-wrap:break-word;overflow-y:auto;min-height:0;}
 .sticky-card .card-content:empty:before{content:attr(data-placeholder);color:rgba(0,0,0,.35);}
 .sticky-card .card-content b,.sticky-card .card-content strong{font-weight:700;}
 .rich-toolbar-mini{gap:1px;padding:2px 0 4px;}
@@ -567,7 +604,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .color-swatch{width:14px;height:14px;border-radius:5px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
 .sticky-card .color-swatch.selected{border-color:var(--text);}
 .new-sticky-card{
-  border:1.5px dashed var(--border);border-radius:var(--radius-md);min-height:120px;
+  border:1.5px dashed var(--border);border-radius:var(--radius-md);height:236px; /* .sticky-card와 높이 통일 */
   display:flex;align-items:center;justify-content:center;color:var(--text-faint);cursor:pointer;
   font-size:var(--fs-body);
 }
