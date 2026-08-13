@@ -31,10 +31,16 @@ function initUpdater(app, ipcMain, mainWindow) {
   // 개발 모드에서는 electron-updater를 아예 로드하지 않는다.
   // (패키징된 앱이 아니면 업데이트 메타데이터 URL 자체가 없어서 계속 에러만 남기 때문)
   if (!app.isPackaged) {
-    ipcMain.handle('updater:checkNow', () => ({
-      status: 'dev-mode',
-      message: '개발 모드에서는 업데이트 확인을 지원하지 않아요. 패키징된 빌드에서만 동작합니다.',
-    }));
+    ipcMain.handle('updater:checkNow', () => {
+      const status = {
+        status: 'dev-mode',
+        message: '개발 모드에서는 업데이트 확인을 지원하지 않아요. 패키징된 빌드에서만 동작합니다.',
+      };
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('updater:status', status);
+      }
+      return status;
+    });
     ipcMain.handle('updater:downloadUpdate', () => ({ status: 'dev-mode' }));
     ipcMain.handle('updater:quitAndInstall', () => ({ status: 'dev-mode' }));
     return;
