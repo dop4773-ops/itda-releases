@@ -266,9 +266,11 @@ export function bindChecklistEnterKey(editableEl) {
   });
 }
 
-// http(s):// 또는 www.으로 시작하는 URL을 찾는 패턴. 문장 끝 구두점(.,)이나 닫는 괄호가
-// URL에 딸려 들어가 링크가 깨지는 걸 막기 위해 끝에서 흔한 구두점은 링크에서 제외한다.
-const URL_PATTERN = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+// http(s):// 또는 www.으로 시작하는 URL, 그리고 윈도우 파일 경로(드라이브 문자 C:\... 또는
+// 네트워크 공유 \\서버\공유\...)를 찾는 패턴. 병원 PC가 전부 윈도우라 이 두 형태만 잡으면 충분하다.
+// 문장 끝 구두점(.,)이나 닫는 괄호가 URL/경로에 딸려 들어가 링크가 깨지는 걸 막기 위해
+// 끝에서 흔한 구두점은 링크에서 제외한다.
+const URL_PATTERN = /(https?:\/\/[^\s<]+|www\.[^\s<]+|[A-Za-z]:\\[^\s<]+|\\\\[^\s<]+)/gi;
 const TRAILING_PUNCTUATION = /[.,!?;:)\]]+$/;
 
 /**
