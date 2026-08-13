@@ -1,4 +1,15 @@
 import { escapeHtml } from './ui-utils.js';
+import { TABS as SETTINGS_TABS } from '../views/settings.js';
+
+// 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
+// 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
+// keywords는 그 탭 안에 있는 세부 설정 이름 — 사용자가 "배율"을 검색해도 "화면" 탭이 걸리게 하기 위함.
+const SETTINGS_TAB_KEYWORDS = {
+  display: '배율 다크모드 테마 화면크기',
+  security: '잠금 비밀번호 PIN',
+  data: '백업 복원 내보내기 가져오기',
+  update: '버전 업데이트확인',
+};
 
 // Obsidian의 Command Palette를 참고한 "빠른 실행" 메뉴 (문서 9번).
 // 기존 단축키(Ctrl/Cmd+K = 빠른입력, OS 전역 Ctrl/Cmd+Alt+I = 어디서든 빠른입력)와
@@ -44,6 +55,13 @@ function buildCommands({ openQuickCapture }) {
     },
     { id: 'dashboard', icon: HOME_ICON, label: '대시보드 열기', run: () => goToThen('#/dashboard') },
     { id: 'settings', icon: GEAR_ICON, label: '설정 열기', run: () => goToThen('#/settings') },
+    ...SETTINGS_TABS.map((t) => ({
+      id: `settings-${t.id}`,
+      icon: GEAR_ICON,
+      label: `설정 - ${t.label}`,
+      keywords: SETTINGS_TAB_KEYWORDS[t.id] || '',
+      run: () => goToThen('#/settings', () => document.querySelector(`.settings-tab[data-tab="${t.id}"]`)?.click()),
+    })),
   ];
 }
 
@@ -82,7 +100,7 @@ export function initCommandPalette({ openQuickCapture }) {
 
   function filterCommands(keyword) {
     const q = keyword.trim().toLowerCase();
-    filtered = q ? commands.filter((c) => c.label.toLowerCase().includes(q)) : commands;
+    filtered = q ? commands.filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q)) : commands;
     activeIndex = 0;
     render();
   }
