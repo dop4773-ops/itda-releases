@@ -1,0 +1,119 @@
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('path');
+const { initDb } = require('./db');
+const registerIpcHandlers = require('./ipc');
+const { initUpdater } = require('./updater');
+const { initGlobalShortcut } = require('./global-shortcut');
+const { initTray } = require('./tray');
+const { attachExternalLinkHandler } = require('./shared/external-links');
+
+let mainWindow;
+let db;
+app.isQuittingItda = false; // 트레이 메뉴의 "완전히 종료"를 눌렀을 때만 true — 그 전까진 창을 닫아도 트레이에 남음
+
+// 병원 PC에서 아이콘을 실수로 여러 번 클릭해도 같은 assistant.db를 여러 창이 동시에 열지 않도록
+// 단일 인스턴스로 강제한다. 두 번째 실행은 즉시 종료되고, 기존 창이 있으면 앞으로 가져온다.
+const gotLock = app.requestSingleInstanceLock();
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 700,
+    backgroundColor: '#F5F6F8',
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'),
+      contextIsolation: true, // renderer는 절대 Node API에 직접 접근하지 않음
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  attachExternalLinkHandler(mainWindow); // 메모/포스트잇 자동 하이퍼링크 클릭 시 OS 기본 브라우저로 열기
+
+  // renderer 프로세스가 죽거나(크래시) 응답 없음 상태가 되어도 앱 전체가 조용히
+  // 먹통되지 않도록 최소한 콘솔에 남기고, 필요하면 재로드할 수 있게 로그를 남긴다.
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.error('[itda] renderer 프로세스 종료:', details.reason);
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    console.error('[itda] renderer 응답 없음 (unresponsive)');
+  });
+
+  // 트레이 상주: "닫기(X)"를 눌러도 앱이 완전히 종료되지 않고 트레이에 남아있는다.
+  // 위젯(포스트잇 등)이 열려있는 상태에서 실수로 메인 창을 닫아 다 같이 꺼지는 일을 막기 위함.
+  // 트레이 메뉴의 "완전히 종료"를 눌렀을 때(app.isQuittingItda === true)만 진짜로 닫는다.
+  mainWindow.on('close', (event) => {
+    if (!app.isQuittingItda) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
+  // 개발 중 디버깅용 (배포 빌드에서는 주석 처리)
+  // mainWindow.webContents.openDevTools();
+}
+
+function showMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  } else {
+    createWindow();
+  }
+}
+
+if (!gotLock) {
+  // 이미 다른 인스턴스가 떠 있음 — 이 인스턴스는 아무 창도 열지 않고 즉시 종료
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    showMainWindow();
+  });
+
+  app.whenReady().then(() => {
+    try {
+      db = initDb();
+    } catch (err) {
+      // DB 초기화 실패는 앱을 켤 수 없는 치명적 상황 — 조용히 죽지 않고
+      // 사용자에게 알린 뒤 종료한다 (병원 PC에서 원인 파악이 가능하도록)
+      console.error('[itda] 데이터베이스 초기화 실패:', err);
+      dialog.showErrorBox(
+        '잇다를 시작할 수 없어요',
+        `데이터베이스를 여는 중 오류가 발생했습니다.\n\n${err.message}\n\n` +
+          `병원 PC라면 check_windows_env.ps1로 환경을 먼저 점검해주세요.`
+      );
+      app.quit();
+      return;
+    }
+
+    registerIpcHandlers(ipcMain, db, () => mainWindow);
+    createWindow();
+    initUpdater(app, ipcMain, mainWindow); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
+    initGlobalShortcut(app, () => mainWindow); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
+    initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
+    // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).
+    // 위치/크기는 여전히 기억되지만(widget_bounds:*), "다시 켜기"는 사용자가 직접 해야 함.
+
+    app.on('activate', () => {
+      showMainWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (db) db.close();
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
+
+// 예상 못한 예외로 앱 전체가 아무 설명 없이 죽는 상황을 방지 —
+// 최소한 로그를 남기고, 가능하면 계속 실행되도록 한다.
+process.on('uncaughtException', (err) => {
+  console.error('[itda] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[itda] unhandledRejection:', reason);
+});

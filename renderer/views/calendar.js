@@ -1,0 +1,765 @@
+import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
+import { mountLinksWidget } from '../shared/links-ui.js';
+import { widgetLaunchButtonHtml, bindWidgetLaunchButton, WIDGET_ICON } from '../shared/widget-launch-button.js';
+import { registerEscClose } from '../shared/esc-close.js';
+import { attachContextMenu } from '../shared/context-menu.js';
+import {
+  WEEKDAY_LABELS,
+  dateKey as toKey,
+  parseDateKey as parseKey,
+  addDays,
+  addMonths,
+  startOfWeek,
+  isSameDay,
+  monthGridDates,
+  minutesInDay,
+} from '../shared/date-utils.js';
+
+const CAL_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
+const CHEVRON_LEFT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>`;
+const CHEVRON_RIGHT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>`;
+const CLOSE_ICON = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+const SMALL_TRASH_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
+
+const HOUR_START = 6;
+const HOUR_END = 22; // 06:00 ~ 22:00 그리드에 표시
+const ROW_HEIGHT = 44;
+const pad = (n) => String(n).padStart(2, '0');
+
+// 아래 4개(periodLabel/queryRange/groupByDateKey/buildMonthGridHtml/buildTimeGridHtml)는
+// 대시보드 우측 캘린더 위젯(dashboard.js)도 동일한 렌더링 로직을 재사용하도록 export한다.
+export function periodLabel(view, anchor) {
+  if (view === 'month') return `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월`;
+  if (view === 'week') {
+    const start = startOfWeek(anchor);
+    const end = addDays(start, 6);
+    return start.getMonth() === end.getMonth()
+      ? `${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getDate()}일`
+      : `${start.getMonth() + 1}월 ${start.getDate()}일 - ${end.getMonth() + 1}월 ${end.getDate()}일`;
+  }
+  return `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월 ${anchor.getDate()}일 (${WEEKDAY_LABELS[anchor.getDay()]})`;
+}
+
+export function queryRange(view, anchor) {
+  if (view === 'month') {
+    const dates = monthGridDates(anchor);
+    return { fromDate: toKey(dates[0]), toDate: toKey(dates[41]) };
+  }
+  if (view === 'week') {
+    const start = startOfWeek(anchor);
+    return { fromDate: toKey(start), toDate: toKey(addDays(start, 6)) };
+  }
+  return { fromDate: toKey(anchor), toDate: toKey(anchor) };
+}
+
+export function groupByDateKey(events) {
+  const map = new Map();
+  const addToDay = (key, e) => {
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(e);
+  };
+
+  events.forEach((e) => {
+    // 하루종일 일정(휴가 등)이 여러 날에 걸쳐있으면, 시작일에만 표시되던 예전 버그를 고쳐서
+    // start_at~end_at 사이 모든 날짜에 표시되게 한다. 시간이 정해진 일정은 기존처럼 시작일에만.
+    if (e.all_day && e.start_at && e.end_at) {
+      const startDate = (e.start_at || '').slice(0, 10);
+      const endDate = (e.end_at || '').slice(0, 10);
+      let cursor = new Date(startDate + 'T00:00:00');
+      const last = new Date(endDate + 'T00:00:00');
+      // 혹시라도 end가 start보다 앞서는 이상 데이터가 들어와도 무한루프에 빠지지 않도록 방어
+      let guard = 0;
+      while (cursor <= last && guard < 366) {
+        addToDay(toKey(cursor), e);
+        cursor.setDate(cursor.getDate() + 1);
+        guard += 1;
+      }
+    } else {
+      addToDay((e.start_at || '').slice(0, 10), e);
+    }
+  });
+  return map;
+}
+
+// 순수 HTML 빌더 — 이벤트 바인딩 없이 마크업만 반환 (달력 화면 + 대시보드 위젯이 공유)
+// compact:true면 대시보드 사이드 패널용 — pill을 늘어놓지 않고 "점 + 개수"만 표시해서
+// 하루에 일정이 몇 개든 셀 높이가 항상 일정하게 유지된다(월 전체 높이가 안정적).
+export function buildMonthGridHtml(anchor, byDate, { compact = false } = {}) {
+  const today = new Date();
+  const dates = monthGridDates(anchor);
+  const weekdayHeaders = WEEKDAY_LABELS.map((w) => `<div class="month-weekday-header">${w}</div>`).join('');
+
+  const cells = dates
+    .map((d) => {
+      const key = toKey(d);
+      const dayEvents = (byDate.get(key) || []).slice().sort((a, b) => (a.start_at < b.start_at ? -1 : 1));
+      const isOtherMonth = d.getMonth() !== anchor.getMonth();
+      const isToday = isSameDay(d, today);
+
+      if (compact) {
+        const indicator =
+          dayEvents.length > 0
+            ? `<div class="month-compact-indicator" title="${dayEvents.length}개 일정"><span class="month-compact-dot"></span>${dayEvents.length}</div>`
+            : '';
+        return `
+        <div class="month-cell month-cell-compact ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${key}">
+          <span class="date-num">${d.getDate()}</span>
+          ${indicator}
+        </div>`;
+      }
+
+      const visible = dayEvents.slice(0, 3);
+      const overflow = dayEvents.length - visible.length;
+      return `
+      <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${key}">
+        <span class="date-num">${d.getDate()}</span>
+        ${visible
+          .map(
+            (e) =>
+              `<div class="month-event-pill ${e.source === 'google' ? 'is-google' : ''}" style="background:${e.source === 'google' ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${e.source === 'google' ? '#fff' : e.text_color || '#000'}" data-source="${e.source || 'local'}">${escapeHtml(e.title)}</div>`
+          )
+          .join('')}
+        ${overflow > 0 ? `<div class="month-more">+${overflow}개 더보기</div>` : ''}
+      </div>`;
+    })
+    .join('');
+
+  return `<div class="month-grid ${compact ? 'month-grid-compact' : ''}">${weekdayHeaders}${cells}</div>`;
+}
+
+// 대시보드 사이드 패널 전용 — 상세 시간대 그리드 대신, 일정이 몇 개든 항상 일정한
+// 높이를 유지하는 "간단 목록" 뷰. 하루에 일정이 많으면(구글 캘린더 동기화 등) 몇 개만
+// 보여주고 "+N개 더보기"로 접었다 펼 수 있게 해서 카드 비율이 깨지지 않게 한다.
+export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 5 } = {}) {
+  const today = new Date();
+  const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
+
+  const rowHtml = (e) => {
+    const isGoogle = e.source === 'google';
+    const timeLabel = e.all_day ? '종일' : (e.start_at || '').slice(11, 16);
+    return `
+      <div class="agenda-row ${isGoogle ? 'is-google' : ''}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
+        <span class="agenda-dot" style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'}"></span>
+        <span class="agenda-time">${timeLabel}</span>
+        <span class="agenda-title">${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}</span>
+      </div>`;
+  };
+
+  const dayBlocks = days
+    .map((d) => {
+      const key = toKey(d);
+      const dayEvents = (byDate.get(key) || []).slice().sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''));
+      const dayLabel = dayCount === 7 ? `<div class="agenda-day-label ${isSameDay(d, today) ? 'is-today' : ''}">${WEEKDAY_LABELS[d.getDay()]} ${d.getDate()}</div>` : '';
+
+      if (dayEvents.length === 0) {
+        return `<div class="agenda-day-block">${dayLabel}<div class="agenda-empty">일정이 없어요</div></div>`;
+      }
+
+      const visible = dayEvents.slice(0, maxVisible).map(rowHtml).join('');
+      const overflowEvents = dayEvents.slice(maxVisible);
+      const overflowHtml =
+        overflowEvents.length > 0
+          ? `<div class="agenda-hidden-rows">${overflowEvents.map(rowHtml).join('')}</div>
+             <button class="agenda-more" data-key="${key}" data-label="+${overflowEvents.length}개 더보기">+${overflowEvents.length}개 더보기</button>`
+          : '';
+
+      return `<div class="agenda-day-block">${dayLabel}${visible}${overflowHtml}</div>`;
+    })
+    .join('');
+
+  return `<div class="compact-agenda ${dayCount === 7 ? 'is-week' : ''}">${dayBlocks}</div>`;
+}
+
+export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true } = {}) {
+  const today = new Date();
+  const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
+  const hourCount = HOUR_END - HOUR_START;
+  const totalHeight = hourCount * ROW_HEIGHT;
+
+  const dayHeaders = days
+    .map((d) => `<div class="time-day-header ${isSameDay(d, today) ? 'is-today' : ''}"><span class="dow">${WEEKDAY_LABELS[d.getDay()]}</span><span>${d.getDate()}</span></div>`)
+    .join('');
+
+  const hourLabels = Array.from({ length: hourCount }, (_, i) => `<div class="time-hour-label" style="height:${ROW_HEIGHT}px;">${pad(HOUR_START + i)}:00</div>`).join('');
+
+  // 하루종일 일정은 시간 그리드 안에 채워 넣지 않고, 상단에 고정된 "종일" 행에 따로 쌓는다.
+  // 여러 개면 그 행이 세로로 늘어나고, 시간이 정해진 일정만 아래 시간대 그리드에 표시된다.
+  const maxAllDayCount = Math.max(0, ...days.map((d) => (byDate.get(toKey(d)) || []).filter((e) => e.all_day).length));
+  const alldayRowCells = days
+    .map((d) => {
+      const key = toKey(d);
+      const allDayEvents = (byDate.get(key) || []).filter((e) => e.all_day);
+      const bars = allDayEvents
+        .map((e) => {
+          const isGoogle = e.source === 'google';
+          return `
+          <div class="allday-bar ${isGoogle ? 'is-google' : ''}" style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
+            ${deletable && !isGoogle ? `<button class="event-del" data-action="delete" data-id="${e.id}">${CLOSE_ICON}</button>` : ''}
+            <span>${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}</span>
+          </div>`;
+        })
+        .join('');
+      return `<div class="allday-cell ${isSameDay(d, today) ? 'is-today-col' : ''}">${bars}</div>`;
+    })
+    .join('');
+
+  // 같은 날 시간대가 겹치는(또는 최소 높이 20px 강제 때문에 살짝 겹치는) 일정들을
+  // 옆으로 나란히 배치하기 위한 컬럼 계산. 지금까지는 전부 full-width(left:3px;right:3px)로
+  // 겹쳐 그려서, 겹치는 구간에서는 나중에 그려진(=화면에 더 위로 쌓이는) 블록만 클릭되고
+  // 나머지는 그 밑에 깔려 클릭이 안 먹는 문제가 있었다 — 이를 고치기 위한 그리디 컬럼 배정.
+  function assignOverlapColumns(events) {
+    const sorted = [...events].sort((a, b) => a._startMin - b._startMin || a._endMin - b._endMin);
+    const clusters = [];
+    let current = [];
+    let clusterEnd = -Infinity;
+    for (const e of sorted) {
+      if (current.length && e._startMin >= clusterEnd) {
+        clusters.push(current);
+        current = [];
+        clusterEnd = -Infinity;
+      }
+      current.push(e);
+      clusterEnd = Math.max(clusterEnd, e._endMin);
+    }
+    if (current.length) clusters.push(current);
+
+    clusters.forEach((cluster) => {
+      const columns = []; // 각 컬럼에 배정된 이벤트들의 마지막 종료시각만 추적
+      cluster.forEach((e) => {
+        let placed = false;
+        for (let i = 0; i < columns.length; i++) {
+          if (columns[i] <= e._startMin) {
+            columns[i] = e._endMin;
+            e._col = i;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          e._col = columns.length;
+          columns.push(e._endMin);
+        }
+      });
+      cluster.forEach((e) => {
+        e._totalCols = columns.length;
+      });
+    });
+    return events;
+  }
+
+  const dayColumns = days
+    .map((d) => {
+      const key = toKey(d);
+      const dayEvents = (byDate.get(key) || []).filter((e) => !e.all_day); // 시간이 정해진 일정만
+      const withMinutes = dayEvents.map((e) => ({
+        ...e,
+        _startMin: Math.max(minutesInDay(e.start_at), HOUR_START * 60),
+        _endMin: Math.min(minutesInDay(e.end_at), HOUR_END * 60),
+      }));
+      assignOverlapColumns(withMinutes);
+      const blocks = withMinutes
+        .map((e) => {
+          const pxPerMin = ROW_HEIGHT / 60;
+          const top = (e._startMin - HOUR_START * 60) * pxPerMin;
+          const height = Math.max(20, (e._endMin - e._startMin) * pxPerMin);
+          const isGoogle = e.source === 'google';
+          const colWidth = 100 / e._totalCols;
+          const leftPct = e._col * colWidth;
+          const horizontalStyle =
+            e._totalCols > 1
+              ? `left:calc(${leftPct}% + 2px);width:calc(${colWidth}% - 4px);`
+              : `left:3px;right:3px;`;
+          return `
+          <div class="time-event-block ${isGoogle ? 'is-google' : ''}" style="top:${top}px;height:${height}px;${horizontalStyle}background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
+            ${deletable && !isGoogle ? `<button class="event-del" data-action="delete" data-id="${e.id}">${CLOSE_ICON}</button>` : ''}
+            <b>${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}</b>
+            ${height > 30 ? `<span>${(e.start_at || '').slice(11, 16)}${e.location ? ' · ' + escapeHtml(e.location) : ''}</span>` : ''}
+          </div>`;
+        })
+        .join('');
+      return `<div class="time-day-container ${isSameDay(d, today) ? 'is-today-col' : ''}" style="height:${totalHeight}px;">${blocks}</div>`;
+    })
+    .join('');
+
+  return `
+    <div class="time-grid">
+      <div class="time-header-row" style="grid-template-columns:48px repeat(${dayCount},1fr);">
+        <div class="time-corner"></div>
+        ${dayHeaders}
+      </div>
+      ${
+        maxAllDayCount > 0
+          ? `<div class="allday-row" style="grid-template-columns:48px repeat(${dayCount},1fr);">
+               <div class="time-corner allday-corner">종일</div>
+               ${alldayRowCells}
+             </div>`
+          : ''
+      }
+      <div class="time-body-scroll">
+        <div class="time-body-grid" style="grid-template-columns:48px repeat(${dayCount},1fr);">
+          <div style="grid-column:1;">${hourLabels}</div>
+          <div style="grid-column:2 / span ${dayCount};display:grid;grid-template-columns:repeat(${dayCount},1fr);">${dayColumns}</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+export async function mount(root) {
+  root.innerHTML = `
+    <div class="page-head">
+      <div class="page-head-title">
+        <div class="page-head-icon">${CAL_ICON}</div>
+        <div><h1>일정</h1><p>월/주/일 단위로 일정을 확인하고 관리하세요.</p></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${widgetLaunchButtonHtml('c-scheduleWidgetBtn', '오늘 일정 위젯 열기')}
+        ${widgetLaunchButtonHtml('c-gcalWidgetBtn', '구글 캘린더 위젯 열기')}
+        <button class="btn" id="c-openAdd">+ 새 일정</button>
+      </div>
+    </div>
+
+    <div class="cal-toolbar">
+      <div class="cal-nav">
+        <button class="btn-icon" id="c-prev">${CHEVRON_LEFT}</button>
+        <span class="cal-period-label" id="c-periodLabel"></span>
+        <button class="btn-icon" id="c-next">${CHEVRON_RIGHT}</button>
+        <button class="btn-secondary" id="c-today">오늘</button>
+        <button class="btn-icon" id="c-miniToggle" title="미니 캘린더 보기">${CAL_ICON}</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-view="month">월</button>
+        <button class="tab" data-view="week">주</button>
+        <button class="tab" data-view="day">일</button>
+      </div>
+    </div>
+
+    <div class="mini-month" id="c-miniMonth" style="display:none;"></div>
+
+    <div id="c-gridArea"><div class="empty">불러오는 중…</div></div>
+    <div class="cal-legend" id="c-legend"></div>
+
+    <div class="modal-overlay" id="c-modalOverlay">
+      <div class="modal-card">
+        <h3 id="c-modalTitle">새 일정</h3>
+        <input type="hidden" id="c-editId" />
+        <div class="form-row"><input type="text" id="c-title" class="input" style="flex:1;" placeholder="일정 제목" /></div>
+        <div class="form-row">
+          <select id="c-category" class="select" style="flex:1;"></select>
+          <input type="text" id="c-location" class="input" placeholder="장소" style="flex:1;" />
+        </div>
+        <div class="form-row">
+          <label class="checkbox-row"><input type="checkbox" id="c-allDay" /> 하루종일</label>
+        </div>
+        <div class="form-row">
+          <input type="datetime-local" id="c-start" class="input" style="flex:1;" />
+          <input type="datetime-local" id="c-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
+        </div>
+        <div class="form-row">
+          <textarea id="c-memo" class="input" rows="3" style="flex:1;resize:vertical;" placeholder="내용 (선택)"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="c-cancelAdd">취소</button>
+          <button class="btn" id="c-submitAdd">추가</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="c-detailOverlay">
+      <div class="modal-card">
+        <div class="panel-head">
+          <span class="panel-eyebrow">일정 상세</span>
+          <button class="btn-icon" id="cd-close" title="닫기">${CLOSE_ICON}</button>
+        </div>
+        <h3 id="cd-title" style="display:flex;align-items:center;gap:8px;"></h3>
+        <input type="hidden" id="cd-detailId" />
+        <div class="cd-meta-row" id="cd-time"></div>
+        <div class="cd-meta-row" id="cd-location"></div>
+        <div class="cd-meta-row" id="cd-memo" style="white-space:pre-wrap;"></div>
+
+        <label class="panel-section-label">🔗 연결된 항목</label>
+        <div id="cd-links"></div>
+
+        <div class="modal-actions">
+          <button class="btn-secondary panel-delete-btn" id="cd-delete">${SMALL_TRASH_ICON} 삭제</button>
+          <button class="btn-secondary" id="cd-openWidget" title="바탕화면에 작은 창으로 띄워요">${WIDGET_ICON} 위젯으로 보기</button>
+          <button class="btn" id="cd-edit">수정</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const $ = (id) => root.querySelector('#' + id);
+  let categories = [];
+  let currentView = 'month';
+  let anchor = new Date();
+  anchor.setHours(0, 0, 0, 0);
+  let busy = false;
+  let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
+  let miniOpen = false;
+
+  // ---------- 카테고리 (셀렉트 + 범례) ----------
+  async function loadCategories() {
+    try {
+      categories = await window.itda.categories.list();
+      $('c-category').innerHTML =
+        `<option value="">카테고리 없음</option>` +
+        categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+      $('c-legend').innerHTML = categories
+        .map((c) => `<div class="item"><span class="dot" style="background:${c.color_hex}"></span>${escapeHtml(c.name)}</div>`)
+        .join('');
+    } catch (e) {
+      errorToast(e, '카테고리를 불러오지 못했어요');
+    }
+  }
+
+  // ---------- 데이터 로드 + 렌더 ----------
+  async function load() {
+    $('c-periodLabel').textContent = periodLabel(currentView, anchor);
+    const gridArea = $('c-gridArea');
+    let localEvents = [];
+    let googleEvents = [];
+    try {
+      const { fromDate, toDate } = queryRange(currentView, anchor);
+      // 구글 캘린더는 읽기전용 캐시 테이블 조회일 뿐이라 연결 안 되어 있어도 그냥 빈 배열이 옴(에러 아님)
+      const [localResult, googleResult] = await Promise.allSettled([
+        window.itda.events.range({ fromDate, toDate }),
+        window.itda.googleCalendar.range({ fromDate, toDate }),
+      ]);
+      if (localResult.status === 'fulfilled') localEvents = localResult.value;
+      else throw localResult.reason;
+      if (googleResult.status === 'fulfilled') googleEvents = googleResult.value;
+      // 구글 쪽만 실패하는 경우(예: IPC 자체가 없는 구버전)는 조용히 무시 — 로컬 일정은 정상 표시되어야 하므로
+    } catch (e) {
+      errorToast(e, '일정을 불러오지 못했어요');
+      gridArea.innerHTML = emptyStateBlock({ title: '일정을 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
+      return;
+    }
+
+    currentEvents = localEvents;
+    const merged = [
+      ...localEvents.map((e) => ({ ...e, source: 'local' })),
+      ...googleEvents.map((e) => ({ ...e, source: 'google' })),
+    ];
+    const byDate = groupByDateKey(merged);
+    if (currentView === 'month') renderMonth(gridArea, byDate);
+    else renderTimeGrid(gridArea, byDate, currentView === 'week' ? 7 : 1);
+  }
+
+  function renderMonth(container, byDate) {
+    container.innerHTML = buildMonthGridHtml(anchor, byDate);
+
+    container.querySelectorAll('.month-cell').forEach((cell) => {
+      cell.addEventListener('click', () => {
+        anchor = parseKey(cell.dataset.date);
+        currentView = 'day';
+        root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
+        load();
+      });
+    });
+  }
+
+  function renderTimeGrid(container, byDate, dayCount) {
+    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true });
+
+    container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        try {
+          await window.itda.events.delete(Number(btn.dataset.id));
+          toast('휴지통으로 이동했어요');
+          load();
+        } catch (e) {
+          errorToast(e, '삭제하지 못했어요');
+        }
+      });
+    });
+
+    container.querySelectorAll('.time-event-block,.allday-bar').forEach((block) => {
+      block.addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-action="delete"]')) return;
+        if (block.dataset.source === 'google') return; // 구글 일정은 읽기전용 — 로컬 상세모달(삭제/연결) 대상 아님
+        const evt = currentEvents.find((e) => e.id === Number(block.dataset.id));
+        if (evt) openDetail(evt);
+      });
+    });
+
+    // 드래그로 바탕화면에 꺼내는 기능은 (그리드 안 손잡이가 너무 작고 잘 안 먹는다는 피드백으로)
+    // 여기서는 제공하지 않는다 — 대신 상세 모달의 "위젯으로 보기" 버튼(openDetail 참고)으로 대체.
+
+    // 우클릭 컨텍스트 메뉴 (연결/위젯으로 보기/삭제) — 구글 일정은 읽기전용이라 대상 아님
+    container.querySelectorAll('.time-event-block,.allday-bar').forEach((block) => {
+      if (block.dataset.source === 'google') return;
+      attachContextMenu(
+        block,
+        () => ({ type: 'event', id: Number(block.dataset.id) }),
+        {
+          onDeleted: (item) => {
+            if ($('c-detailOverlay').classList.contains('open') && Number($('cd-detailId').value) === item.id) closeDetail();
+            load();
+          },
+        }
+      );
+    });
+  }
+
+  // ---------- 일정 상세 모달 (연결된 항목 포함) ----------
+  function openDetail(evt) {
+    const cat = categories.find((c) => c.id === evt.category_id);
+    $('cd-title').innerHTML = `${cat ? `<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${cat.color_hex};display:inline-block;"></span>` : ''}${escapeHtml(evt.title)}`;
+    const start = (evt.start_at || '').replace(' ', ' ');
+    const end = (evt.end_at || '').slice(11, 16);
+    $('cd-time').textContent = evt.all_day ? `${start.slice(0, 10)} · 하루종일` : `${start.slice(0, 16)} ~ ${end}`;
+    $('cd-location').textContent = evt.location ? `📍 ${evt.location}` : '';
+    $('cd-memo').textContent = evt.memo ? evt.memo : '';
+    $('cd-detailId').value = evt.id;
+    $('cd-edit').style.display = evt.source === 'google' ? 'none' : ''; // 구글 일정은 읽기전용
+    $('cd-openWidget').style.display = evt.source === 'google' ? 'none' : ''; // 구글 일정은 위젯으로 못 꺼냄(읽기전용 캐시라 별도 항목 위젯 대상 아님)
+    $('c-detailOverlay').classList.add('open');
+    mountLinksWidget($('cd-links'), { type: 'event', id: evt.id });
+  }
+  function closeDetail() {
+    $('c-detailOverlay').classList.remove('open');
+    $('cd-links').innerHTML = '';
+  }
+  $('cd-edit').addEventListener('click', () => {
+    const id = Number($('cd-detailId').value);
+    const evt = currentEvents.find((e) => e.id === id);
+    if (!evt) return;
+    closeDetail();
+    openModal(evt);
+  });
+  $('cd-close').addEventListener('click', closeDetail);
+  $('cd-openWidget').addEventListener('click', async () => {
+    const id = Number($('cd-detailId').value);
+    try {
+      await window.itda.itemWidget.open({ type: 'event', id });
+      toast('위젯으로 열었어요');
+    } catch (e) {
+      errorToast(e, '위젯을 열지 못했어요');
+    }
+  });
+  $('c-detailOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'c-detailOverlay') closeDetail();
+  });
+  $('cd-delete').addEventListener('click', async () => {
+    const id = Number($('cd-detailId').value);
+    try {
+      await window.itda.events.delete(id);
+      toast('휴지통으로 이동했어요');
+      closeDetail();
+      await load();
+    } catch (e) {
+      errorToast(e, '삭제하지 못했어요');
+    }
+  });
+
+  // ---------- 미니 캘린더 (툴바의 달력 아이콘으로 열고 닫음) ----------
+  // 현재 뷰(월/주/일)와 무관하게 anchor가 속한 "월" 기준으로 그려서, 주/일 뷰에서도 빠르게 다른 날짜로 점프할 수 있게 한다.
+  async function loadMiniMonth() {
+    const el = $('c-miniMonth');
+    try {
+      const { fromDate, toDate } = queryRange('month', anchor);
+      const events = await window.itda.events.range({ fromDate, toDate });
+      const byDate = groupByDateKey(events);
+      el.innerHTML = buildMonthGridHtml(anchor, byDate, { compact: true });
+      el.querySelectorAll('.month-cell').forEach((cell) => {
+        cell.addEventListener('click', () => {
+          anchor = parseKey(cell.dataset.date);
+          currentView = 'day';
+          root.querySelectorAll('.cal-toolbar .tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
+          closeMini();
+          load();
+        });
+      });
+    } catch (e) {
+      errorToast(e, '미니 캘린더를 불러오지 못했어요');
+    }
+  }
+
+  function closeMini() {
+    miniOpen = false;
+    $('c-miniMonth').style.display = 'none';
+  }
+
+  $('c-miniToggle').addEventListener('click', async () => {
+    miniOpen = !miniOpen;
+    $('c-miniMonth').style.display = miniOpen ? 'block' : 'none';
+    if (miniOpen) await loadMiniMonth();
+  });
+
+  // ---------- 네비게이션 ----------
+  function step(dir) {
+    if (currentView === 'month') anchor = addMonths(anchor, dir);
+    else if (currentView === 'week') anchor = addDays(anchor, dir * 7);
+    else anchor = addDays(anchor, dir);
+    load();
+    if (miniOpen) loadMiniMonth();
+  }
+
+  $('c-prev').addEventListener('click', () => step(-1));
+  $('c-next').addEventListener('click', () => step(1));
+  $('c-today').addEventListener('click', () => {
+    anchor = new Date();
+    anchor.setHours(0, 0, 0, 0);
+    load();
+    if (miniOpen) loadMiniMonth();
+  });
+
+  root.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      root.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentView = tab.dataset.view;
+      load();
+    });
+  });
+
+  // ---------- 일정 추가/수정 모달 (동일한 폼을 재사용) ----------
+  // evt가 있으면 "수정" 모드(값 미리 채움 + events:update 호출), 없으면 "추가" 모드.
+  function openModal(evt) {
+    const isEdit = !!evt;
+    $('c-modalTitle').textContent = isEdit ? '일정 수정' : '새 일정';
+    $('c-submitAdd').textContent = isEdit ? '저장' : '추가';
+    $('c-editId').value = isEdit ? evt.id : '';
+
+    $('c-title').value = isEdit ? evt.title || '' : '';
+    $('c-category').value = isEdit && evt.category_id ? String(evt.category_id) : '';
+    $('c-location').value = isEdit ? evt.location || '' : '';
+    $('c-memo').value = isEdit ? evt.memo || '' : '';
+
+    const isAllDay = isEdit ? !!evt.all_day : false;
+    $('c-allDay').checked = isAllDay;
+    $('c-start').type = isAllDay ? 'date' : 'datetime-local';
+    $('c-start').value = isEdit ? (isAllDay ? (evt.start_at || '').slice(0, 10) : (evt.start_at || '').slice(0, 16).replace(' ', 'T')) : '';
+    $('c-end').style.display = isAllDay ? 'none' : '';
+    $('c-end').value = isEdit && !isAllDay ? (evt.end_at || '').slice(0, 16).replace(' ', 'T') : '';
+
+    $('c-modalOverlay').classList.add('open');
+    $('c-title').focus();
+  }
+  function closeModal() {
+    $('c-modalOverlay').classList.remove('open');
+    $('c-modalTitle').textContent = '새 일정';
+    $('c-submitAdd').textContent = '추가';
+    $('c-editId').value = '';
+    $('c-title').value = '';
+    $('c-location').value = '';
+    $('c-memo').value = '';
+    $('c-allDay').checked = false;
+    $('c-start').type = 'datetime-local';
+    $('c-start').value = '';
+    $('c-end').value = '';
+    $('c-end').style.display = '';
+  }
+
+  // 하루종일 체크 시: 시작 입력을 날짜만 받도록 바꾸고, 종료 시각 입력은 숨김
+  // (하루종일 이벤트는 종료 시각 자체가 의미 없으므로 입력을 안 받는다)
+  $('c-allDay').addEventListener('change', (e) => {
+    const isAllDay = e.target.checked;
+    $('c-start').type = isAllDay ? 'date' : 'datetime-local';
+    $('c-start').value = '';
+    $('c-end').style.display = isAllDay ? 'none' : '';
+    $('c-end').value = '';
+  });
+
+  $('c-openAdd').addEventListener('click', () => openModal());
+  $('c-cancelAdd').addEventListener('click', closeModal);
+  $('c-modalOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'c-modalOverlay') closeModal();
+  });
+
+  $('c-submitAdd').addEventListener('click', async () => {
+    if (busy) return;
+    const editId = $('c-editId').value ? Number($('c-editId').value) : null;
+    const title = $('c-title').value.trim();
+    const isAllDay = $('c-allDay').checked;
+    const startRaw = $('c-start').value;
+    const endRaw = $('c-end').value; // 비워둬도 됨 — 서버가 자동으로 채워준다(events.ipc.js)
+
+    if (!title || !startRaw) {
+      toast(isAllDay ? '제목과 날짜를 입력해주세요.' : '제목과 시작 시각을 입력해주세요.');
+      return;
+    }
+    // 종료 시각을 직접 입력한 경우에만 시작보다 늦은지 검사 (비워두면 서버가 기본값을 계산하므로 검사 불필요)
+    if (!isAllDay && endRaw && startRaw >= endRaw) {
+      toast('종료 시각이 시작 시각보다 늦어야 해요.');
+      return;
+    }
+
+    busy = true;
+    $('c-submitAdd').disabled = true;
+    try {
+      const categoryId = $('c-category').value ? Number($('c-category').value) : null;
+      const location = $('c-location').value.trim() || null;
+      const memo = $('c-memo').value.trim() || null;
+      // 하루종일이면 날짜(YYYY-MM-DD)만 있으므로 'T00:00'을 붙여 datetime 형태로 맞춘다
+      const startAt = isAllDay ? `${startRaw} 00:00:00` : startRaw.replace('T', ' ');
+      const endAt = !isAllDay && endRaw ? endRaw.replace('T', ' ') : null; // null이면 서버가 자동 계산
+      if (editId) {
+        await window.itda.events.update({
+          id: editId,
+          title,
+          categoryId,
+          location,
+          startAt,
+          endAt: endAt ?? (isAllDay ? `${startRaw} 23:59:59` : undefined),
+          allDay: isAllDay,
+          memo,
+        });
+        toast('일정을 수정했어요');
+      } else {
+        await window.itda.events.add({
+          title,
+          categoryId,
+          location,
+          startAt,
+          endAt,
+          allDay: isAllDay,
+          memo,
+        });
+      }
+      closeModal();
+      await load();
+    } catch (e) {
+      errorToast(e, editId ? '일정을 수정하지 못했어요' : '일정을 추가하지 못했어요');
+    } finally {
+      busy = false;
+      $('c-submitAdd').disabled = false;
+    }
+  });
+
+  bindWidgetLaunchButton(root, 'c-scheduleWidgetBtn', 'today-schedule');
+  bindWidgetLaunchButton(root, 'c-gcalWidgetBtn', 'google-calendar-mini');
+  const unsubscribeEsc = registerEscClose(
+    () => $('c-detailOverlay').classList.contains('open') || $('c-modalOverlay').classList.contains('open'),
+    () => {
+      if ($('c-detailOverlay').classList.contains('open')) closeDetail();
+      else closeModal();
+    }
+  );
+  // 상세 모달이 열려있을 때 Delete/Backspace로 바로 삭제 (입력창에 포커스가 있으면 텍스트 편집을 방해하지 않도록 제외)
+  function handleDeleteKey(e) {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (!$('c-detailOverlay').classList.contains('open')) return;
+    if (e.target.closest?.('input,textarea,[contenteditable="true"]')) return;
+    e.preventDefault();
+    $('cd-delete').click();
+  }
+  document.addEventListener('keydown', handleDeleteKey);
+
+  await loadCategories();
+  await load();
+
+  const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
+  const offDataChanged = window.itda.onDataChanged(({ entity }) => {
+    if (entity !== 'event') return;
+    if (isUserTyping()) return;
+    debouncedLoad();
+  });
+
+  return () => {
+    unsubscribeEsc();
+    document.removeEventListener('keydown', handleDeleteKey);
+    offDataChanged?.();
+  };
+}

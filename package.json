@@ -1,0 +1,47 @@
+{
+  "name": "itda",
+  "version": "0.1.0",
+  "description": "잇다 - 병원 업무자를 위한 개인 업무 관리 데스크톱 Workspace",
+  "main": "main/main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node node_modules/electron/cli.js .",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/postinstall-electron-fix.js",
+    "build:win": "electron-builder --win nsis",
+    "release:win": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.6.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.itda.app",
+    "productName": "잇다",
+    "files": [
+      "main/**/*",
+      "renderer/**/*",
+      "preload.js",
+      "schema/**/*"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "dop4773-ops",
+      "repo": "itda-releases"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

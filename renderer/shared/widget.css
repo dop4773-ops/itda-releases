@@ -1,0 +1,283 @@
+/* Pretendard Variable — styles.css와 동일한 이유로 위젯 창(별도 페이지)에도 로컬 번들 폰트 적용 */
+@font-face{
+  font-family:"Pretendard Variable";
+  src:url("./fonts/PretendardVariable.woff2") format("woff2-variations"), url("./fonts/PretendardVariable.woff2") format("woff2");
+  font-weight:45 920;
+  font-style:normal;
+  font-display:swap;
+}
+
+html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Pretendard Variable", -apple-system, BlinkMacSystemFont, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+  width: 100vw;
+  height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.widget-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  -webkit-app-region: drag; /* 카드 배경을 드래그하면 창이 이동한다 */
+}
+
+.widget-titlebar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-bottom: 4px;
+  -webkit-app-region: drag;
+}
+
+/* 평소엔 숨겨져 있다가 카드에 마우스를 올리면 나타나는 컨트롤(핀/최소화/닫기) */
+.widget-controls-hover { opacity: 0; transition: opacity .15s; }
+.widget-card:hover .widget-controls-hover { opacity: 1; }
+
+.widget-btn {
+  -webkit-app-region: no-drag; /* 버튼 자체는 드래그 대상에서 제외해야 클릭이 먹힌다 */
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.55);
+  padding: 0;
+}
+.widget-btn:hover { background: rgba(0, 0, 0, 0.16); }
+.widget-btn.active { color: #b8860b; background: rgba(0, 0, 0, 0.14); }
+
+.widget-textarea {
+  -webkit-app-region: no-drag;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: none;
+  background: transparent;
+  resize: none;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(0, 0, 0, 0.82);
+  font-family: inherit;
+}
+.widget-textarea::placeholder { color: rgba(0, 0, 0, 0.35); }
+.widget-textarea[contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(0, 0, 0, 0.35); }
+.widget-textarea b, .widget-textarea strong { font-weight: 700; }
+.widget-textarea .mc-item{display:flex;align-items:flex-start;gap:5px;margin:2px 0;}
+.widget-textarea .mc-item input[type="checkbox"]{margin-top:2px;flex-shrink:0;cursor:pointer;}
+.widget-textarea .mc-item .mc-text{flex:1;min-width:0;word-break:break-word;white-space:pre-wrap;}
+.widget-textarea .mc-item.mc-item-done{color:rgba(0,0,0,.4);text-decoration:line-through;}
+.widget-textarea a{color:#2255cc;text-decoration:underline;cursor:pointer;}
+
+.widget-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  background: #EEE;
+  border-radius: 10px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%) translateY(6px);
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.2s;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ================= 보드형 위젯 공용 (오늘일정/할일/포스트잇/메모/구글캘린더/Inbox/D-DAY) ================= */
+:root {
+  --bw-bg: rgba(255, 255, 255, 0.94);
+  --bw-text: #1F2430;
+  --bw-soft: #6B7280;
+  --bw-faint: #A3A9B5;
+  --bw-border: rgba(0, 0, 0, 0.07);
+}
+
+.board-widget {
+  width: 100%;
+  height: 100%;
+  background: var(--bw-bg);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+
+.board-widget-titlebar { -webkit-app-region: drag; } /* 헤더를 드래그해서 창을 옮김 */
+
+.board-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bw-text);
+}
+.board-widget-header-right { display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
+
+/* 보드형 위젯의 최소화/닫기도 평소엔 숨어있다가 카드에 마우스를 올리면 나타남 */
+.board-widget-controls { display: flex; align-items: center; gap: 2px; opacity: 0; transition: opacity .15s; -webkit-app-region: no-drag; }
+.board-widget:hover .board-widget-controls { opacity: 1; }
+.bw-control-btn { width: 18px; height: 18px; border: none; border-radius: 5px; background: rgba(0,0,0,.06); color: var(--bw-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+.bw-control-btn:hover { background: rgba(0,0,0,.12); }
+.bw-date { font-size: 11px; color: var(--bw-faint); font-weight: 500; }
+
+.bw-icon-btn {
+  -webkit-app-region: no-drag;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--bw-soft);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bw-icon-btn:hover { background: rgba(0, 0, 0, 0.1); }
+
+.bw-inline-add { padding: 4px 0 6px; }
+.bw-inline-add input {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  outline: none;
+  color: var(--bw-text);
+}
+
+.board-widget-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 14px;
+  -webkit-app-region: no-drag;
+}
+
+.board-widget-footer {
+  -webkit-app-region: no-drag;
+  padding: 8px 14px;
+  font-size: 10.5px;
+  color: var(--bw-faint);
+  border-top: 1px solid var(--bw-border);
+  cursor: pointer;
+  text-align: right;
+}
+.board-widget-footer:hover { color: var(--bw-soft); }
+
+.bw-empty { padding: 20px 0; text-align: center; font-size: 11.5px; color: var(--bw-faint); }
+
+/* 오늘 일정 — 타임라인 */
+.bw-timeline-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bw-border); }
+.bw-timeline-row:last-child { border-bottom: none; }
+.bw-timeline-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+.bw-timeline-time { font-size: 10.5px; color: var(--bw-faint); width: 34px; flex-shrink: 0; padding-top: 1px; }
+.bw-timeline-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bw-timeline-main b { font-size: 12px; color: var(--bw-text); font-weight: 600; }
+.bw-timeline-main em { font-size: 10px; color: var(--bw-faint); font-style: normal; }
+
+/* 오늘 할 일 — 체크리스트 */
+.bw-check-row { display: flex; align-items: center; gap: 7px; padding: 6px 0; border-bottom: 1px solid var(--bw-border); font-size: 12px; color: var(--bw-text); cursor: pointer; }
+.bw-check-row:last-child { border-bottom: none; }
+.bw-check-row input { width: 13px; height: 13px; accent-color: #6C8CF5; flex-shrink: 0; }
+.bw-check-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bw-check-row.done span { color: var(--bw-faint); text-decoration: line-through; }
+.bw-check-row em { font-size: 9.5px; color: var(--bw-faint); font-style: normal; flex-shrink: 0; }
+
+/* 포스트잇 — 미니 그리드 */
+.bw-postit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 0 10px; }
+.bw-postit-tile { border-radius: 8px; padding: 8px; min-height: 56px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.bw-postit-tile-content { font-size: 10.5px; line-height: 1.4; color: rgba(0,0,0,.75); word-break: break-word; }
+
+/* 빠른 메모 */
+.bw-memo-row { padding: 7px 0; border-bottom: 1px solid var(--bw-border); }
+.bw-memo-row:last-child { border-bottom: none; }
+.bw-memo-row-head { display: flex; justify-content: space-between; gap: 6px; }
+.bw-memo-row-head b { font-size: 12px; color: var(--bw-text); font-weight: 600; }
+.bw-memo-row-head span { font-size: 9.5px; color: var(--bw-faint); flex-shrink: 0; }
+.bw-memo-row-snippet { font-size: 10.5px; color: var(--bw-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 받은 업무 (Inbox) */
+.bw-inbox-row { display: flex; align-items: center; gap: 7px; padding: 6px 0; border-bottom: 1px solid var(--bw-border); }
+.bw-inbox-row:last-child { border-bottom: none; }
+.bw-dot { width: 5px; height: 5px; border-radius: 50%; background: #6C8CF5; flex-shrink: 0; }
+.bw-inbox-text { flex: 1; min-width: 0; font-size: 12px; color: var(--bw-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bw-inbox-row em { font-size: 9.5px; color: var(--bw-faint); font-style: normal; flex-shrink: 0; }
+
+/* D-DAY */
+.bw-dday-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--bw-border); gap: 8px; }
+.bw-dday-row:last-child { border-bottom: none; }
+.bw-dday-row div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.bw-dday-row b { font-size: 12px; color: var(--bw-text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bw-dday-row span { font-size: 9.5px; color: var(--bw-faint); }
+.bw-dday-row em { font-size: 11px; color: #D9713C; font-weight: 700; font-style: normal; flex-shrink: 0; }
+
+/* 구글 캘린더 미니 — calendar.js의 buildMonthGridHtml()이 만드는 마크업을 그대로 쓰되,
+   styles.css(메인 앱)에만 있던 .month-grid류 클래스를 위젯 전용 색상변수로 여기에 복제.
+   공간이 좁아서 날짜 숫자/오늘 표시만 보여주고 이벤트 pill과 "+N개 더보기"는 숨긴다. */
+.bw-mini-cal { padding: 4px 0 10px; }
+.bw-mini-cal .month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bw-border);
+  gap: 1px;
+}
+.bw-mini-cal .month-cell {
+  background: var(--bw-bg);
+  height: 26px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bw-mini-cal .month-cell.other-month { opacity: 0.35; }
+.bw-mini-cal .month-cell .date-num {
+  font-size: 10px;
+  color: var(--bw-soft);
+  font-weight: 600;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bw-mini-cal .month-cell.is-today .date-num { background: #6C8CF5; color: #fff; }
+.bw-mini-cal .month-event-pill,
+.bw-mini-cal .month-more { display: none; } /* 공간이 좁아 숫자/오늘 표시만, 개별 일정 pill은 생략 */
