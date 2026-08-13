@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
+import { attachContextMenu } from '../shared/context-menu.js';
 
 const INBOX_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>`;
 const CHECK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>`;
@@ -65,7 +66,7 @@ export async function mount(root) {
       .map((i) =>
         currentTab === 'unprocessed'
           ? `
-        <div class="list-row">
+        <div class="list-row" data-id="${i.id}">
           <div class="row-icon">${INBOX_ICON}</div>
           <div class="main">
             <b>${escapeHtml(i.content)}</b>
@@ -77,7 +78,7 @@ export async function mount(root) {
           </div>
         </div>`
           : `
-        <div class="list-row">
+        <div class="list-row" data-id="${i.id}">
           <div class="row-icon processed">${CHECK_ICON}</div>
           <div class="main">
             <b>${escapeHtml(i.content)}</b>
@@ -105,6 +106,10 @@ export async function mount(root) {
           btn.disabled = false;
         }
       });
+    });
+
+    listEl.querySelectorAll('.list-row').forEach((row) => {
+      attachContextMenu(row, () => ({ type: 'inbox', id: Number(row.dataset.id) }), { linkOnly: true });
     });
 
     listEl.querySelectorAll('[data-action="delete"]').forEach((btn) => {

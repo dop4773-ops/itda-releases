@@ -1,14 +1,15 @@
 import { escapeHtml, errorToast, toast, isUserTyping, debounce } from './ui-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
 
-export const LINK_TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇' };
-export const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit' };
-export const TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌' };
+export const LINK_TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
+export const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
+export const TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
 const TYPE_ICON = {
   todo: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
   event: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
   memo: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`,
   postit: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>`,
+  inbox: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>`,
 };
 const SMALL_X_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const PLUS_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
@@ -38,6 +39,7 @@ async function fetchCandidates(type) {
   }
   if (type === 'memo') return (await window.itda.memos.list({})).map((m) => ({ id: m.id, label: plainLabel(m.title || m.content) }));
   if (type === 'postit') return (await window.itda.postits.list()).map((p) => ({ id: p.id, label: plainLabel(p.title || p.content) }));
+  if (type === 'inbox') return (await window.itda.inbox.list({ onlyUnprocessed: false })).map((i) => ({ id: i.id, label: plainLabel(i.content) }));
   return [];
 }
 
@@ -253,7 +255,7 @@ export async function mountLinksWidget(container, self) {
       offDataChanged?.();
       return;
     }
-    if (!['link', 'todo', 'event', 'memo', 'postit'].includes(entity)) return;
+    if (!['link', 'todo', 'event', 'memo', 'postit', 'inbox'].includes(entity)) return;
     if (isUserTyping()) return;
     debouncedLoad();
   });

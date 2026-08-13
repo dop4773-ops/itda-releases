@@ -8,6 +8,8 @@ const PREVIEW_QUERIES = {
   // (여기서 짧게 자르면 "<span style=...>" 같은 태그만 남고 실제 글자가 하나도 안 남을 수 있음)
   memo: `SELECT id, coalesce(title, substr(content,1,300)) AS label, deleted_at FROM memos WHERE id = ?`,
   postit: `SELECT id, coalesce(title, substr(content,1,300)) AS label, deleted_at FROM postits WHERE id = ?`,
+  // inbox_items엔 소프트 삭제(deleted_at)가 없어서 항상 NULL로 맞춰 반환 — 다른 타입과 동일한 모양 유지
+  inbox: `SELECT id, substr(content,1,300) AS label, NULL AS deleted_at FROM inbox_items WHERE id = ?`,
 };
 
 // 사용자가 입력한 검색어를 FTS5 MATCH 문법에 안전하게 넣기 위한 변환.

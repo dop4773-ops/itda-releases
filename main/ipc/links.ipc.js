@@ -1,7 +1,7 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 
-const VALID_TYPES = ['todo', 'event', 'memo', 'postit'];
+const VALID_TYPES = ['todo', 'event', 'memo', 'postit', 'inbox'];
 
 function assertValidType(type) {
   if (!VALID_TYPES.includes(type)) throw new Error(`연결할 수 없는 항목 타입입니다: ${type}`);

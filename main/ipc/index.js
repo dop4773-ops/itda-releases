@@ -45,7 +45,8 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerMemoAttachmentsIpc(ipcMain, repos);
   registerAuthIpc(ipcMain, repos);
 
-  registerInboxIpc(ipcMain, repos);
+  const { deleteLinksFor } = registerLinksIpc(ipcMain, repos);
+  registerInboxIpc(ipcMain, repos, { deleteLinksFor }); // inbox는 하드 삭제라, 삭제 시 걸려있던 연결도 여기서 직접 정리
   registerCategoriesIpc(ipcMain, repos);
   registerTodosIpc(ipcMain, repos);
   registerEventsIpc(ipcMain, repos);
@@ -56,7 +57,6 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerGoogleCalendarIpc(ipcMain, repos);
   registerDataIpc(ipcMain, repos, db); // 백업/복원은 repos가 아니라 db 원본이 필요해서 따로 넘김
   registerWidgetsIpc(ipcMain, repos, getMainWindow);
-  const { deleteLinksFor } = registerLinksIpc(ipcMain, repos);
   registerTrashIpc(ipcMain, repos, { deleteLinksFor, closeWidgetIfOpen, closeItemWidgetIfOpen });
 }
 

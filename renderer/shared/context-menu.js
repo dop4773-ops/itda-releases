@@ -71,6 +71,12 @@ function openMenu(x, y, item, opts) {
   ensureOutsideHandlers();
   closeMenu();
 
+  // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"만 있는 축소 메뉴
+  if (opts.linkOnly) {
+    openLinkPopover(x, y, item);
+    return;
+  }
+
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.innerHTML = `

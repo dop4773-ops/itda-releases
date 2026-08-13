@@ -2,7 +2,7 @@ const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 
 // inbox_items는 deleted_at 컬럼이 없음 → inbox:delete는 하드 삭제(설계상 의도)
-module.exports = function registerInboxIpc(ipcMain, repos) {
+module.exports = function registerInboxIpc(ipcMain, repos, { deleteLinksFor } = {}) {
   const { inbox } = repos;
 
   ipcMain.handle('inbox:add', (event, content) => {
@@ -27,7 +27,9 @@ module.exports = function registerInboxIpc(ipcMain, repos) {
 
   ipcMain.handle('inbox:delete', (event, id) => {
     inbox.remove(id);
+    deleteLinksFor?.('inbox', id); // 하드 삭제라 trash:permanentlyDelete를 안 거치므로 여기서 직접 정리
     broadcastDataChanged('inbox', id);
+    broadcastDataChanged('link');
     return { id };
   });
 };
