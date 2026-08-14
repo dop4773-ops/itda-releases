@@ -19,7 +19,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${SEARCH_ICON}</div>
+        <div class="page-head-icon tone-blue">${SEARCH_ICON}</div>
         <div><h1>검색</h1><p>Todo, 일정, 메모, 포스트잇, Inbox 전체를 한 번에 검색합니다.</p></div>
       </div>
     </div>

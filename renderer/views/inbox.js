@@ -12,7 +12,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${INBOX_ICON}</div>
+        <div class="page-head-icon tone-blue">${INBOX_ICON}</div>
         <div>
           <h1>Inbox</h1>
           <p>생각나는 대로 적어두세요. 자동 분류는 하지 않아요 — 정리는 나중에 직접.</p>

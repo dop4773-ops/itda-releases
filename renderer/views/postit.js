@@ -19,7 +19,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${POSTIT_ICON}</div>
+        <div class="page-head-icon tone-pink">${POSTIT_ICON}</div>
         <div><h1>포스트잇</h1><p>중요한 내용을 자유로운 색상으로 붙여두세요.</p></div>
       </div>
       ${widgetLaunchButtonHtml('p-widgetBtn', '포스트잇 위젯 열기')}

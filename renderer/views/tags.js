@@ -13,7 +13,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${TAG_ICON}</div>
+        <div class="page-head-icon tone-purple">${TAG_ICON}</div>
         <div><h1>태그</h1><p>색상 관리는 물론, 태그를 눌러 Todo·일정·메모·포스트잇 전체에서 관련 항목을 한번에 찾아보세요.</p></div>
       </div>
     </div>

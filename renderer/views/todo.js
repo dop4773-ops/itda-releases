@@ -30,7 +30,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${TODO_ICON}</div>
+        <div class="page-head-icon tone-purple">${TODO_ICON}</div>
         <div><h1>Todo</h1><p>할 일을 추가하고 카테고리·마감일로 관리하세요.</p></div>
       </div>
       <div class="view-toggle" id="t-viewToggle">

@@ -308,7 +308,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${CAL_ICON}</div>
+        <div class="page-head-icon tone-green">${CAL_ICON}</div>
         <div><h1>일정</h1><p>월/주/일 단위로 일정을 확인하고 관리하세요.</p></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">

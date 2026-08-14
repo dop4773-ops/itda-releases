@@ -57,7 +57,7 @@ export async function mount(root) {
 
       <div class="notes-detail" id="m-detail">
         <div class="notes-detail-empty" id="m-detailEmpty">
-          <div class="page-head-icon" style="margin:0 auto 10px;">${MEMO_ICON}</div>
+          <div class="page-head-icon tone-yellow" style="margin:0 auto 10px;">${MEMO_ICON}</div>
           메모를 선택하거나 새로 만들어보세요
         </div>
       </div>
@@ -168,7 +168,7 @@ export async function mount(root) {
     if (!memo) {
       detailEl.innerHTML = `
         <div class="notes-detail-empty" id="m-detailEmpty">
-          <div class="page-head-icon" style="margin:0 auto 10px;">${MEMO_ICON}</div>
+          <div class="page-head-icon tone-yellow" style="margin:0 auto 10px;">${MEMO_ICON}</div>
           메모를 선택하거나 새로 만들어보세요
         </div>`;
       return;

@@ -147,6 +147,13 @@ html, body{height:100%;}
 .nav-item svg{flex-shrink:0;}
 .nav-item:hover{background:var(--bg);}
 .nav-item.active{background:var(--brand-soft);color:var(--brand);font-weight:600;}
+/* 활성 상태일 때만 화면별 톤 색상 — 평소(비활성)엔 전부 회색이라 사이드바가 알록달록해
+   보이지 않고, 지금 어느 화면에 있는지만 그 화면 고유 색으로 눈에 띄게 표시된다. */
+.nav-item.tone-purple.active{background:var(--tone-purple-bg);color:var(--tone-purple-fg);}
+.nav-item.tone-green.active{background:var(--tone-green-bg);color:var(--tone-green-fg);}
+.nav-item.tone-yellow.active{background:var(--tone-yellow-bg);color:var(--tone-yellow-fg);}
+.nav-item.tone-pink.active{background:var(--tone-pink-bg);color:var(--tone-pink-fg);}
+.nav-item.tone-blue.active{background:var(--tone-blue-bg);color:var(--tone-blue-fg);}
 .nav-divider{height:1px;background:var(--border);margin:12px 4px;}
 .nav-section{margin-top:auto;}
 
@@ -193,6 +200,13 @@ html, body{height:100%;}
 .page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
 .page-head-title{display:flex;align-items:center;gap:12px;}
 .page-head-icon{width:36px;height:36px;border-radius:var(--radius-sm);background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+/* 화면 헤더 아이콘도 대시보드 카드와 같은 tone 팔레트로 — 화면마다 고유한 색감을 주되
+   과하지 않게(아이콘 박스 하나만) 적용. summary-card와 토큰을 공유해서 대시보드와 톤이 맞는다. */
+.page-head-icon.tone-purple{background:var(--tone-purple-bg);color:var(--tone-purple-fg);}
+.page-head-icon.tone-green{background:var(--tone-green-bg);color:var(--tone-green-fg);}
+.page-head-icon.tone-yellow{background:var(--tone-yellow-bg);color:var(--tone-yellow-fg);}
+.page-head-icon.tone-pink{background:var(--tone-pink-bg);color:var(--tone-pink-fg);}
+.page-head-icon.tone-blue{background:var(--tone-blue-bg);color:var(--tone-blue-fg);}
 .page-head h1{font-size:var(--fs-page-title);font-weight:600;}
 .page-head p{margin:4px 0 0;color:var(--text-soft);font-size:var(--fs-page-sub);}
 
