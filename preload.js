@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('itda', {
     setStatus: (payload) => ipcRenderer.invoke('todos:setStatus', payload),
     toggleFavorite: (id) => ipcRenderer.invoke('todos:toggleFavorite', id),
     delete: (id) => ipcRenderer.invoke('todos:delete', id),
+    setRecurrence: (payload) => ipcRenderer.invoke('todos:setRecurrence', payload),
+    deleteSeries: (payload) => ipcRenderer.invoke('todos:deleteSeries', payload),
   },
   todoSubtasks: {
     list: (todoId) => ipcRenderer.invoke('todoSubtasks:list', todoId),
@@ -40,6 +42,7 @@ contextBridge.exposeInMainWorld('itda', {
     add: (payload) => ipcRenderer.invoke('events:add', payload),
     update: (payload) => ipcRenderer.invoke('events:update', payload),
     delete: (id) => ipcRenderer.invoke('events:delete', id),
+    deleteSeries: (payload) => ipcRenderer.invoke('events:deleteSeries', payload),
   },
   memos: {
     recent: (limit) => ipcRenderer.invoke('memos:recent', limit),

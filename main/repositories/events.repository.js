@@ -35,14 +35,58 @@ module.exports = function createEventsRepository(db) {
         .get(id);
     },
 
-    insert({ title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo }) {
+    insert({ title, categoryId, location, startAt, endAt, allDay, recurrenceRule, recurrenceParentId, memo }) {
       const info = db
         .prepare(
-          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, memo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(title, categoryId ?? null, location ?? null, startAt, endAt, allDay ? 1 : 0, recurrenceRule ?? null, memo ?? null);
+        .run(
+          title,
+          categoryId ?? null,
+          location ?? null,
+          startAt,
+          endAt,
+          allDay ? 1 : 0,
+          recurrenceRule ?? null,
+          recurrenceParentId ?? null,
+          memo ?? null
+        );
       return { id: info.lastInsertRowid };
+    },
+
+    // 반복 생성 — 부모의 시작~종료 "시간 간격"은 유지한 채 날짜만 각 발생일로 옮긴다.
+    insertSeries(parent, occurrenceDates) {
+      const durationMs = new Date(parent.end_at.replace(' ', 'T')).getTime() - new Date(parent.start_at.replace(' ', 'T')).getTime();
+      const timePart = parent.start_at.slice(10); // ' HH:MM:SS'
+      const stmt = db.prepare(
+        `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const pad = (n) => String(n).padStart(2, '0');
+      const insertMany = db.transaction((dates) => {
+        for (const date of dates) {
+          const startAt = `${date}${timePart}`;
+          const start = new Date(startAt.replace(' ', 'T'));
+          const end = new Date(start.getTime() + durationMs);
+          const endAtStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}:${pad(end.getSeconds())}`;
+          stmt.run(parent.title, parent.category_id, parent.location, startAt, endAtStr, parent.all_day, parent.recurrence_rule, parent.id, parent.memo);
+        }
+      });
+      insertMany(occurrenceDates);
+    },
+
+    listSeriesFrom(id, fromDate) {
+      const self = db.prepare('SELECT id, recurrence_parent_id, start_at FROM events WHERE id = ?').get(id);
+      if (!self) return [];
+      const parentId = self.recurrence_parent_id ?? self.id;
+      const clauses = ['(id = ? OR recurrence_parent_id = ?)', 'deleted_at IS NULL'];
+      const params = [parentId, parentId];
+      if (fromDate) {
+        clauses.push('date(start_at) >= date(?)');
+        params.push(fromDate);
+      }
+      return db.prepare(`SELECT id FROM events WHERE ${clauses.join(' AND ')}`).all(...params);
     },
 
     update({ id, title, categoryId, location, startAt, endAt, allDay, memo }) {

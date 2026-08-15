@@ -3,6 +3,8 @@ import { mountLinksWidget } from '../shared/links-ui.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton, WIDGET_ICON } from '../shared/widget-launch-button.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { attachDateQuickChips } from '../shared/date-quick-chips.js';
+import { confirmSeriesScope } from '../shared/series-scope.js';
 import {
   WEEKDAY_LABELS,
   dateKey as toKey,
@@ -354,6 +356,17 @@ export async function mount(root) {
           <input type="datetime-local" id="c-start" class="input" style="flex:1;" />
           <input type="datetime-local" id="c-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
         </div>
+        <div class="form-row" id="c-recurrenceRow">
+          <label style="font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:6px;">
+            반복
+            <select id="c-recurrence" class="select">
+              <option value="">안 함</option>
+              <option value="daily">매일</option>
+              <option value="weekly">매주 같은 요일</option>
+              <option value="monthly">매월 같은 날짜</option>
+            </select>
+          </label>
+        </div>
         <div class="form-row">
           <textarea id="c-memo" class="input" rows="3" style="flex:1;resize:vertical;" placeholder="내용 (선택)"></textarea>
         </div>
@@ -395,6 +408,7 @@ export async function mount(root) {
   anchor.setHours(0, 0, 0, 0);
   let busy = false;
   let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
+  let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
   let miniOpen = false;
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
@@ -512,6 +526,7 @@ export async function mount(root) {
     $('cd-location').textContent = evt.location ? `📍 ${evt.location}` : '';
     $('cd-memo').textContent = evt.memo ? evt.memo : '';
     $('cd-detailId').value = evt.id;
+    detailIsRecurring = !!(evt.recurrence_rule || evt.recurrence_parent_id);
     $('cd-edit').style.display = evt.source === 'google' ? 'none' : ''; // 구글 일정은 읽기전용
     $('cd-openWidget').style.display = evt.source === 'google' ? 'none' : ''; // 구글 일정은 위젯으로 못 꺼냄(읽기전용 캐시라 별도 항목 위젯 대상 아님)
     $('c-detailOverlay').classList.add('open');
@@ -543,9 +558,16 @@ export async function mount(root) {
   });
   $('cd-delete').addEventListener('click', async () => {
     const id = Number($('cd-detailId').value);
+    let scope = 'this';
+    if (detailIsRecurring) {
+      const picked = await confirmSeriesScope($('cd-delete'));
+      if (!picked) return; // 취소
+      scope = picked;
+    }
     try {
-      await window.itda.events.delete(id);
-      toast('휴지통으로 이동했어요');
+      if (scope === 'following') await window.itda.events.deleteSeries({ id, scope: 'following' });
+      else await window.itda.events.delete(id);
+      toast(scope === 'following' ? '이후 반복 일정을 모두 휴지통으로 옮겼어요' : '휴지통으로 이동했어요');
       closeDetail();
       await load();
     } catch (e) {
@@ -634,6 +656,10 @@ export async function mount(root) {
     $('c-end').style.display = isAllDay ? 'none' : '';
     $('c-end').value = isEdit && !isAllDay ? (evt.end_at || '').slice(0, 16).replace(' ', 'T') : '';
 
+    // 반복은 "새로 만들 때"만 지정 가능 — 이미 있는 시리즈의 반복 패턴을 바꾸는 건 지원 안 함(간단한 반복 기능의 한계)
+    $('c-recurrenceRow').style.display = isEdit ? 'none' : '';
+    $('c-recurrence').value = '';
+
     $('c-modalOverlay').classList.add('open');
     $('c-title').focus();
   }
@@ -661,6 +687,8 @@ export async function mount(root) {
     $('c-end').style.display = isAllDay ? 'none' : '';
     $('c-end').value = '';
   });
+
+  attachDateQuickChips($('c-start')); // 시작 일시 옆에 오늘/내일/이번 주/다음 주 퀵칩 — c-start는 열고 닫아도 DOM이 그대로라 한 번만 붙이면 됨
 
   $('c-openAdd').addEventListener('click', () => openModal());
   $('c-cancelAdd').addEventListener('click', closeModal);
@@ -716,6 +744,7 @@ export async function mount(root) {
           endAt,
           allDay: isAllDay,
           memo,
+          recurrenceRule: $('c-recurrence').value || null,
         });
       }
       closeModal();

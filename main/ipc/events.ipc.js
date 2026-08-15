@@ -1,5 +1,6 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
+const { generateOccurrenceDates } = require('../shared/recurrence');
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -58,6 +59,15 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
         recurrenceRule,
         memo,
       });
+
+      // 반복 지정 시: 방금 만든 걸 부모로 삼아 앞으로 180일치 발생일을 실제 행으로 미리 채워둔다
+      if (recurrenceRule) {
+        const occurrences = generateOccurrenceDates(startAt, recurrenceRule);
+        if (occurrences.length) {
+          events.insertSeries(events.getById(result.id), occurrences);
+        }
+      }
+
       broadcastDataChanged('event', result.id);
       return result;
     }
@@ -87,5 +97,16 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
     events.softDelete(id);
     broadcastDataChanged('event', id);
     return { id };
+  });
+
+  // 반복 일정 삭제: scope='this'는 이 항목 하나만(events:delete와 동일), 'following'은
+  // 이 항목의 날짜부터 그 시리즈의 나머지 전부(자기 자신 포함)를 함께 소프트삭제한다.
+  ipcMain.handle('events:deleteSeries', (event, { id, scope }) => {
+    const ev = events.getById(id);
+    if (!ev) throw new Error('일정을 찾을 수 없습니다.');
+    const targets = scope === 'following' ? events.listSeriesFrom(id, ev.start_at.slice(0, 10)) : [{ id }];
+    targets.forEach((t) => events.softDelete(t.id));
+    broadcastDataChanged('event');
+    return { count: targets.length };
   });
 };

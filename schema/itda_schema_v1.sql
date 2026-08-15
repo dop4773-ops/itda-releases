@@ -60,6 +60,8 @@ CREATE TABLE todos (
   is_favorite      INTEGER NOT NULL DEFAULT 0,    -- 중요 표시(별표)
   completed_at     TEXT,
   source_inbox_id  INTEGER REFERENCES inbox_items(id) ON DELETE SET NULL,
+  recurrence_rule       TEXT,        -- 'daily'|'weekly'|'monthly', 반복 없으면 NULL (RRULE 표준 아님 — 3가지 단순 패턴만)
+  recurrence_parent_id  INTEGER REFERENCES todos(id) ON DELETE CASCADE,
   created_at       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at       TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   deleted_at       TEXT                            -- NULL이 아니면 휴지통
@@ -120,7 +122,7 @@ CREATE TABLE events (
   start_at              TEXT NOT NULL,   -- ISO datetime 'YYYY-MM-DD HH:MM'
   end_at                TEXT NOT NULL,
   all_day               INTEGER NOT NULL DEFAULT 0,
-  recurrence_rule       TEXT,            -- RRULE 문자열, 반복 없으면 NULL
+  recurrence_rule       TEXT,            -- 'daily'|'weekly'|'monthly', 반복 없으면 NULL (RRULE 표준 아님 — 3가지 단순 패턴만)
   recurrence_parent_id  INTEGER REFERENCES events(id) ON DELETE CASCADE,
   memo                  TEXT,
   created_at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),

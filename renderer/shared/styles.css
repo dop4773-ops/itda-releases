@@ -712,6 +712,17 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 }
 .ctx-menu-item:hover{background:var(--brand-soft);color:var(--brand);}
 .ctx-menu-item.ctx-menu-danger:hover{background:var(--danger-soft);color:var(--danger);}
+.ctx-menu-divider{height:1px;background:var(--divider);margin:4px 2px;}
+
+/* ================= 날짜 퀵칩 (오늘/내일/이번 주/다음 주/날짜 선택) ================= */
+/* width:100%로 강제 — .form-row(가로 flex) 안에서도 항상 새 줄로 내려가고,
+   상세패널의 <label>(세로 flex) 안에서도 그냥 컨테이너 너비를 그대로 채움 */
+.date-quick-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;width:100%;}
+.date-quick-chip{
+  border:1px solid var(--border);background:var(--bg);color:var(--text-soft);
+  border-radius:var(--radius-pill);padding:2px 8px;font-size:10.5px;cursor:pointer;
+}
+.date-quick-chip:hover{background:var(--brand-soft);color:var(--brand);border-color:transparent;}
 .ctx-link-popover{
   position:fixed;z-index:200;width:280px;max-height:340px;overflow-y:auto;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
@@ -734,6 +745,15 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .color-picker-customInput{width:26px;height:26px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;}
 .color-picker-customInput::-webkit-color-swatch-wrapper{padding:3px;}
 .color-picker-customInput::-webkit-color-swatch{border:1px solid rgba(0,0,0,.15);border-radius:4px;}
+
+/* ================= 반복 항목 삭제 시 "이 항목만 / 이후 전부" 선택 팝오버 ================= */
+.series-scope-pop{
+  position:fixed;z-index:200;width:200px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:6px;
+}
+.series-scope-title{font-size:11.5px;color:var(--text-faint);margin-bottom:2px;}
+.series-scope-pop button{width:100%;text-align:center;}
 
 /* ================= "@검색" 빠른 연결 — 메모/포스트잇 본문에서 @입력시 뜨는 팝업 + 삽입된 연결 칩 ================= */
 .mention-popup{

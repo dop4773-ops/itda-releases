@@ -72,14 +72,54 @@ module.exports = function createTodosRepository(db) {
         .get(id);
     },
 
-    insert({ title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId }) {
+    insert({ title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, recurrenceParentId }) {
       const info = db
         .prepare(
-          `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, source_inbox_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, source_inbox_id, recurrence_rule, recurrence_parent_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(title, memo ?? null, categoryId ?? null, dueDate ?? null, dueTime ?? null, priority ?? 2, sourceInboxId ?? null);
+        .run(
+          title,
+          memo ?? null,
+          categoryId ?? null,
+          dueDate ?? null,
+          dueTime ?? null,
+          priority ?? 2,
+          sourceInboxId ?? null,
+          recurrenceRule ?? null,
+          recurrenceParentId ?? null
+        );
       return { id: info.lastInsertRowid };
+    },
+
+    // 반복 생성 시 부모 하나 만든 뒤 이 메서드로 나머지 발생일들을 한 번에 채워넣는다.
+    // 부모의 제목/카테고리/시간/우선순위는 그대로 복사하고 날짜만 다르게.
+    insertSeries(parent, occurrenceDates) {
+      const stmt = db.prepare(
+        `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, recurrence_rule, recurrence_parent_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+      const insertMany = db.transaction((dates) => {
+        for (const date of dates) {
+          stmt.run(parent.title, parent.memo, parent.category_id, date, parent.due_time, parent.priority, parent.recurrence_rule, parent.id);
+        }
+      });
+      insertMany(occurrenceDates);
+    },
+
+    // scope 처리(this/following)용 — id가 부모든 자식이든 그 반복 시리즈 전체를 찾는다.
+    // fromDate를 주면 그 날짜 이상인 것만(자기 자신 포함), 안 주면 시리즈 전체.
+    listSeriesFrom(id, fromDate) {
+      const self = db.prepare('SELECT id, recurrence_parent_id, due_date FROM todos WHERE id = ?').get(id);
+      if (!self) return [];
+      const parentId = self.recurrence_parent_id ?? self.id;
+      const clauses = ['(id = ? OR recurrence_parent_id = ?)', 'deleted_at IS NULL'];
+      const params = [parentId, parentId];
+      if (fromDate) {
+        clauses.push('due_date >= ?');
+        params.push(fromDate);
+      }
+      return db.prepare(`SELECT id FROM todos WHERE ${clauses.join(' AND ')}`).all(...params);
     },
 
     update({ id, title, memo, categoryId, dueDate, dueTime, priority }) {
@@ -108,6 +148,10 @@ module.exports = function createTodosRepository(db) {
 
     setFavorite(id, isFavorite) {
       db.prepare('UPDATE todos SET is_favorite = ? WHERE id = ?').run(isFavorite ? 1 : 0, id);
+    },
+
+    setRecurrenceRule(id, rule) {
+      db.prepare('UPDATE todos SET recurrence_rule = ? WHERE id = ?').run(rule, id);
     },
 
     softDelete(id) {

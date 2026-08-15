@@ -4,8 +4,11 @@ import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget
 import { registerEscClose } from '../shared/esc-close.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { attachDateQuickChips } from '../shared/date-quick-chips.js';
+import { confirmSeriesScope } from '../shared/series-scope.js';
 
 const TODO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`;
+const RECURRENCE_LABEL = { daily: '매일', weekly: '매주', monthly: '매월' };
 const TRASH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 const STAR_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`;
 const STAR_OUTLINE_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>`;
@@ -228,15 +231,25 @@ export async function mount(root) {
       attachDragOut(handle, () => ({ type: 'todo', id: Number(handle.dataset.dragId) }));
     });
 
-    // 우클릭 컨텍스트 메뉴 (연결/위젯으로 보기/삭제)
+    // 우클릭 컨텍스트 메뉴 (기한없는 Todo는 빠른 날짜 액션도 추가 / 연결/위젯으로 보기/삭제)
     container.querySelectorAll('.todo-card,.kanban-card').forEach((card) => {
       attachContextMenu(
         card,
-        () => ({ type: 'todo', id: Number(card.dataset.id) }),
+        () => {
+          const id = Number(card.dataset.id);
+          const t = allTodos.find((x) => x.id === id);
+          return { type: 'todo', id, dueDate: t?.due_date || null };
+        },
         {
           onDeleted: (item) => {
             if (selectedTodoId === item.id) closePanel();
             refresh();
+          },
+          onPickDate: async (item) => {
+            await openPanel(item.id);
+            const dueInput = $('tp-due');
+            if (dueInput?.showPicker) dueInput.showPicker();
+            else dueInput?.focus();
           },
         }
       );
@@ -351,6 +364,20 @@ export async function mount(root) {
             <option value="done" ${todo.status === 'done' ? 'selected' : ''}>완료</option>
           </select>
         </label>
+        <label>반복
+          ${
+            todo.recurrence_parent_id
+              ? `<div class="badge badge-neutral" style="align-self:flex-start;">${RECURRENCE_LABEL[todo.recurrence_rule] || '반복'} 시리즈의 일부</div>`
+              : todo.recurrence_rule
+                ? `<div class="badge badge-neutral" style="align-self:flex-start;">${RECURRENCE_LABEL[todo.recurrence_rule]} (원본)</div>`
+                : `<select id="tp-recurrence" class="select" ${todo.due_date ? '' : 'disabled title="먼저 마감일을 정해주세요"'}>
+                <option value="">안 함</option>
+                <option value="daily">매일</option>
+                <option value="weekly">매주 같은 요일</option>
+                <option value="monthly">매월 같은 날짜</option>
+              </select>`
+          }
+        </label>
       </div>
 
       <label class="panel-section-label">설명</label>
@@ -405,6 +432,24 @@ export async function mount(root) {
     $('tp-due').addEventListener('change', (e) => {
       saveField({ dueDate: e.target.value || null });
     });
+    attachDateQuickChips($('tp-due'));
+
+    const recurrenceSelect = $('tp-recurrence');
+    if (recurrenceSelect) {
+      recurrenceSelect.addEventListener('change', async () => {
+        const rule = recurrenceSelect.value;
+        if (!rule) return; // "안 함"으로 되돌리는 건 아직 지원 안 함(반복 켜는 것만)
+        try {
+          await window.itda.todos.setRecurrence({ id: todo.id, rule });
+          toast(`${RECURRENCE_LABEL[rule]} 반복으로 설정했어요`);
+          await openPanel(todo.id); // 부모 상태가 바뀌었으니 패널을 다시 그려서 "반복 중" 배지로 바꿈
+          await refresh();
+        } catch (e) {
+          errorToast(e, '반복을 설정하지 못했어요');
+          recurrenceSelect.value = '';
+        }
+      });
+    }
     $('tp-priority').addEventListener('change', (e) => {
       saveField({ priority: Number(e.target.value) });
     });
@@ -461,9 +506,17 @@ export async function mount(root) {
     });
 
     $('tp-delete').addEventListener('click', async () => {
+      const isRecurring = !!(todo.recurrence_rule || todo.recurrence_parent_id);
+      let scope = 'this';
+      if (isRecurring) {
+        const picked = await confirmSeriesScope($('tp-delete'));
+        if (!picked) return; // 취소
+        scope = picked;
+      }
       try {
-        await window.itda.todos.delete(todo.id);
-        toast('휴지통으로 이동했어요');
+        if (scope === 'following') await window.itda.todos.deleteSeries({ id: todo.id, scope: 'following' });
+        else await window.itda.todos.delete(todo.id);
+        toast(scope === 'following' ? '이후 반복 항목을 모두 휴지통으로 옮겼어요' : '휴지통으로 이동했어요');
         closePanel();
         await refresh();
       } catch (e) {

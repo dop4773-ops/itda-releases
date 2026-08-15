@@ -1,5 +1,6 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
+const { generateOccurrenceDates } = require('../shared/recurrence');
 
 // todos는 soft delete(deleted_at) 대상 → 삭제는 실제로는 UPDATE
 module.exports = function registerTodosIpc(ipcMain, repos) {
@@ -20,11 +21,30 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     return todo;
   });
 
-  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId }) => {
+  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule }) => {
     assertNonEmpty(title, '할 일 제목을 입력해주세요.');
-    const result = todos.insert({ title: title.trim(), memo, categoryId, dueDate, dueTime, priority, sourceInboxId });
+    if (recurrenceRule) assertNonEmpty(dueDate, '반복하려면 마감일이 필요해요.');
+    const result = todos.insert({ title: title.trim(), memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule });
+    if (recurrenceRule) {
+      const occurrences = generateOccurrenceDates(dueDate, recurrenceRule);
+      if (occurrences.length) todos.insertSeries(todos.getById(result.id), occurrences);
+    }
     broadcastDataChanged('todo', result.id);
     return result;
+  });
+
+  // 이미 만들어진(반복 없는) Todo에 나중에 반복을 거는 용도 — 상세 패널에서 "반복" 선택 시 호출.
+  // 이미 시리즈의 일부인 항목엔 다시 걸 수 없게 막는다(중첩 반복 방지, 간단한 반복 기능의 한계로 감안).
+  ipcMain.handle('todos:setRecurrence', (event, { id, rule }) => {
+    const todo = todos.getById(id);
+    if (!todo) throw new Error('할 일을 찾을 수 없습니다.');
+    if (todo.recurrence_parent_id) throw new Error('이미 반복 시리즈에 속한 항목이라 다시 반복을 걸 수 없어요.');
+    assertNonEmpty(todo.due_date, '반복하려면 먼저 마감일을 정해주세요.');
+    todos.setRecurrenceRule(id, rule);
+    const occurrences = generateOccurrenceDates(todo.due_date, rule);
+    if (occurrences.length) todos.insertSeries(todos.getById(id), occurrences);
+    broadcastDataChanged('todo', id);
+    return { id };
   });
 
   ipcMain.handle('todos:update', (event, { id, title, memo, categoryId, dueDate, dueTime, priority }) => {
@@ -77,6 +97,17 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     todos.softDelete(id);
     broadcastDataChanged('todo', id);
     return { id };
+  });
+
+  // 반복 Todo 삭제: scope='this'는 이 항목 하나만(todos:delete와 동일), 'following'은
+  // 이 항목의 마감일부터 그 시리즈의 나머지 전부(자기 자신 포함)를 함께 소프트삭제한다.
+  ipcMain.handle('todos:deleteSeries', (event, { id, scope }) => {
+    const todo = todos.getById(id);
+    if (!todo) throw new Error('할 일을 찾을 수 없습니다.');
+    const targets = scope === 'following' ? todos.listSeriesFrom(id, todo.due_date) : [{ id }];
+    targets.forEach((t) => todos.softDelete(t.id));
+    broadcastDataChanged('todo');
+    return { count: targets.length };
   });
 
   // ---------- 하위 할 일(체크리스트) ----------

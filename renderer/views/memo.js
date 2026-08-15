@@ -1,6 +1,7 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
+import { bindHashtagAutoTag } from '../shared/hashtag.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import { sanitizeRichHtml, stripHtmlToPlainText, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
@@ -237,6 +238,14 @@ export async function mount(root) {
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);
     bindMentionAutocomplete(bodyEl, { type: 'memo', id: memo.id }); // "@검색"으로 빠르게 다른 항목과 연결
+    bindHashtagAutoTag(bodyEl, async (categoryId) => {
+      try {
+        await window.itda.memos.update({ id: memo.id, categoryId });
+        memo.category_id = categoryId;
+      } catch (e) {
+        errorToast(e, '태그를 저장하지 못했어요');
+      }
+    });
 
     $('m-boldBtn').addEventListener('click', () => {
       toggleBold(bodyEl);

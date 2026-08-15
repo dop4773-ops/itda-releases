@@ -51,6 +51,12 @@ function runLightweightMigrations(db) {
     db.exec(`ALTER TABLE todos ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0`);
     console.log('[itda] 마이그레이션: todos.is_favorite 컬럼 추가');
   }
+  if (!hasColumn('todos', 'recurrence_rule')) {
+    // events는 스키마 v1부터 반복 컬럼이 있었지만 todos는 없었음 — 간단 반복(매일/매주/매월) 기능 추가하며 뒤늦게 추가
+    db.exec(`ALTER TABLE todos ADD COLUMN recurrence_rule TEXT`);
+    db.exec(`ALTER TABLE todos ADD COLUMN recurrence_parent_id INTEGER REFERENCES todos(id) ON DELETE CASCADE`);
+    console.log('[itda] 마이그레이션: todos.recurrence_rule/recurrence_parent_id 컬럼 추가');
+  }
   if (!hasColumn('categories', 'text_color')) {
     // 캘린더 일정 블록의 글자색. 기본은 검정(대부분의 파스텔 카테고리색 배경에서 더 잘 읽힘) —
     // 어두운 색 배경을 쓰는 카테고리는 사용자가 흰색으로 바꿀 수 있게.

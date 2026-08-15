@@ -2,6 +2,7 @@ import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserT
 import { STICKY_COLORS, stickyRotation } from '../shared/theme.js';
 import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
+import { bindHashtagAutoTag } from '../shared/hashtag.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import { sanitizeRichHtml, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
@@ -142,6 +143,15 @@ export async function mount(root) {
       bindChecklistToggle(contentArea, scheduleSave);
       bindChecklistEnterKey(contentArea);
       bindMentionAutocomplete(contentArea, { type: 'postit', id }); // "@검색"으로 빠르게 다른 항목과 연결
+      bindHashtagAutoTag(contentArea, async (categoryId) => {
+        try {
+          await window.itda.postits.update({ id, categoryId });
+          const select = card.querySelector('.cat-select-mini');
+          if (select) select.value = String(categoryId); // 새 카테고리라 옵션이 아직 없으면 곧 category 브로드캐스트로 load()가 다시 돌면서 맞춰짐
+        } catch (e) {
+          errorToast(e, '태그를 저장하지 못했어요');
+        }
+      });
 
       card.querySelector('[data-action="bold"]').addEventListener('click', () => {
         toggleBold(contentArea);
@@ -241,7 +251,8 @@ export async function mount(root) {
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
-    if (entity !== 'postit') return;
+    // category도 듣는 이유: 해시태그로 새 카테고리가 방금 생겼으면 태그 드롭다운 옵션 목록도 새로고침해야 함
+    if (entity !== 'postit' && entity !== 'category') return;
     if (isUserTyping()) return; // 지금 어떤 포스트잇 본문을 타이핑 중이면 커서가 끊기지 않게 미룸
     debouncedLoad();
   });

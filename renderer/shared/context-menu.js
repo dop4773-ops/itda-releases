@@ -1,5 +1,6 @@
 import { toast, errorToast } from './ui-utils.js';
 import { mountLinksWidget } from './links-ui.js';
+import { todayStr, dateKey, addDays } from './date-utils.js';
 
 // 항목 타입별 삭제(소프트삭제) API. links-ui.js의 LINK_TYPE_LABEL과 동일한 타입 키를 쓴다.
 const DELETE_API = {
@@ -77,15 +78,62 @@ function openMenu(x, y, item, opts) {
     return;
   }
 
+  // 기한 없는 Todo 전용 빠른 액션 — item.dueDate는 todo.js가 getItem()에서 채워서 넘겨준다.
+  // 이미 기한이 있는 Todo는 상세 패널에서 직접 바꾸면 되니 여기서는 굳이 안 보여줌.
+  const isDatelessTodo = item.type === 'todo' && !item.dueDate;
+  const quickDateItems = isDatelessTodo
+    ? `
+    <button class="ctx-menu-item" data-action="due-today">📅 오늘 할 일로 표시</button>
+    <button class="ctx-menu-item" data-action="due-tomorrow">➡️ 내일로 미루기</button>
+    <button class="ctx-menu-item" data-action="due-pick">🗓 날짜 지정</button>
+    <button class="ctx-menu-item" data-action="complete">✅ 완료</button>
+    <div class="ctx-menu-divider"></div>`
+    : '';
+
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.innerHTML = `
+    ${quickDateItems}
     <button class="ctx-menu-item" data-action="link">🔗 연결</button>
     <button class="ctx-menu-item" data-action="widget">🗗 위젯으로 보기</button>
     <button class="ctx-menu-item ctx-menu-danger" data-action="delete">🗑 삭제</button>
   `;
   activeEl = menu;
   const pos = placeAt(menu, x, y);
+
+  if (isDatelessTodo) {
+    menu.querySelector('[data-action="due-today"]').addEventListener('click', async () => {
+      closeMenu();
+      try {
+        await window.itda.todos.update({ id: item.id, dueDate: todayStr() });
+        toast('오늘 할 일로 표시했어요');
+      } catch (e) {
+        errorToast(e, '변경하지 못했어요');
+      }
+    });
+    menu.querySelector('[data-action="due-tomorrow"]').addEventListener('click', async () => {
+      closeMenu();
+      try {
+        await window.itda.todos.update({ id: item.id, dueDate: dateKey(addDays(new Date(), 1)) });
+        toast('내일로 미뤘어요');
+      } catch (e) {
+        errorToast(e, '변경하지 못했어요');
+      }
+    });
+    menu.querySelector('[data-action="due-pick"]').addEventListener('click', () => {
+      closeMenu();
+      opts.onPickDate?.(item); // 실제 날짜 입력 UI는 todo.js의 상세 패널을 그대로 재사용(중복 구현 안 함)
+    });
+    menu.querySelector('[data-action="complete"]').addEventListener('click', async () => {
+      closeMenu();
+      try {
+        await window.itda.todos.toggle(item.id);
+        toast('완료 처리했어요');
+      } catch (e) {
+        errorToast(e, '완료 처리하지 못했어요');
+      }
+    });
+  }
 
   menu.querySelector('[data-action="link"]').addEventListener('click', () => {
     openLinkPopover(pos.left, pos.top, item);
