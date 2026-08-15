@@ -1,5 +1,7 @@
-import { escapeHtml } from './ui-utils.js';
+import { escapeHtml, debounce } from './ui-utils.js';
 import { TABS as SETTINGS_TABS } from '../views/settings.js';
+import { TAG_ICON } from '../views/tags.js';
+import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
 
 // 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
@@ -65,13 +67,69 @@ function buildCommands({ openQuickCapture }) {
   ];
 }
 
+// 태그(카테고리)를 눌러서 이동한 뒤, settings.js 안에 이미 있는 "이 태그의 항목 보기" 버튼을
+// 그대로 클릭해서 연다 — tags.js 내부 openBrowse()를 새로 export하지 않고, 커맨드 팔레트도
+// goToThen처럼 "화면으로 이동한 뒤 이미 있는 버튼을 클릭" 패턴을 그대로 재사용한다.
+function buildTagCommand(category) {
+  return {
+    id: `tag-${category.id}`,
+    icon: `<span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${category.color_hex};"></span>`,
+    label: `# ${category.name}`,
+    keywords: '태그',
+    run: () =>
+      goToThen('#/settings', () => {
+        document.querySelector('.settings-tab[data-tab="tags"]')?.click();
+        document.querySelector(`#tags-panelRoot .list-row[data-id="${category.id}"] [data-action="browse"]`)?.click();
+      }),
+  };
+}
+
+// 실제 항목(Todo/일정/메모/포스트잇/Inbox)을 검색어로 바로 찾아서, 목록 화면이 아니라
+// 그 항목의 상세(위젯)로 바로 연다 — "디테일하게 접근"의 핵심. inbox는 낱개 위젯이 없어서
+// Inbox 목록 화면으로만 이동한다.
+function buildItemCommand(row) {
+  const label = plainLabel(row.title || row.content);
+  const emoji = TYPE_EMOJI[row.entity_type] || '';
+  return {
+    id: `item-${row.entity_type}-${row.entity_id}`,
+    icon: `<span>${emoji}</span>`,
+    label,
+    run: () => {
+      if (row.entity_type === 'inbox') {
+        location.hash = '#/inbox';
+        return;
+      }
+      if (row.entity_type === 'postit') {
+        window.itda.postitWidget.open(row.entity_id);
+        return;
+      }
+      goToThen(TYPE_ROUTE[row.entity_type], () => window.itda.itemWidget.open({ type: row.entity_type, id: row.entity_id }));
+    },
+  };
+}
+
 export function initCommandPalette({ openQuickCapture }) {
-  const commands = buildCommands({ openQuickCapture });
+  const staticCommands = buildCommands({ openQuickCapture });
+  let tagCommands = [];
   let overlay = null;
   let listEl = null;
   let inputEl = null;
-  let filtered = commands;
+  let filtered = staticCommands;
   let activeIndex = 0;
+  let searchGeneration = 0; // 빠르게 타이핑할 때 늦게 도착한 옛 검색 결과가 최신 결과를 덮어쓰는 것 방지
+
+  async function refreshTagCommands() {
+    try {
+      const categories = await window.itda.categories.list();
+      tagCommands = categories.map(buildTagCommand);
+    } catch (e) {
+      tagCommands = [];
+    }
+  }
+
+  function allStaticCommands() {
+    return [...staticCommands, ...tagCommands];
+  }
 
   function render() {
     listEl.innerHTML = filtered.length
@@ -98,11 +156,28 @@ export function initCommandPalette({ openQuickCapture }) {
     });
   }
 
-  function filterCommands(keyword) {
-    const q = keyword.trim().toLowerCase();
-    filtered = q ? commands.filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q)) : commands;
+  const debouncedItemSearch = debounce(async (keyword, generation) => {
+    let rows = [];
+    try {
+      rows = await window.itda.search.query(keyword);
+    } catch (e) {
+      rows = [];
+    }
+    if (generation !== searchGeneration) return; // 그 사이 입력이 더 바뀌었으면 이 결과는 버림
+    const itemMatches = rows.slice(0, 8).map(buildItemCommand);
+    filtered = [...itemMatches, ...filtered];
     activeIndex = 0;
     render();
+  }, 150);
+
+  function filterCommands(keyword) {
+    searchGeneration += 1;
+    const q = keyword.trim().toLowerCase();
+    const all = allStaticCommands();
+    filtered = q ? all.filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q)) : all;
+    activeIndex = 0;
+    render();
+    if (q.length >= 2) debouncedItemSearch(q, searchGeneration);
   }
 
   function run(index) {
@@ -159,12 +234,18 @@ export function initCommandPalette({ openQuickCapture }) {
 
   function open() {
     ensureBuilt();
-    filtered = commands;
+    filtered = allStaticCommands(); // 태그 새로고침 전엔 일단 지금까지 캐시된 걸로 즉시 보여주고
     activeIndex = 0;
     inputEl.value = '';
     render();
     overlay.classList.add('open');
     setTimeout(() => inputEl.focus(), 30);
+    refreshTagCommands().then(() => {
+      if (overlay.classList.contains('open') && !inputEl.value.trim()) {
+        filtered = allStaticCommands(); // 열려있는 동안 새로 불러온 태그 목록으로 갱신(검색 중이 아닐 때만)
+        render();
+      }
+    });
   }
 
   function close() {

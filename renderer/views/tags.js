@@ -1,7 +1,7 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
 
-const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
+export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
 
@@ -9,16 +9,14 @@ const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
 const BROWSE_TYPE_ORDER = ['todo', 'event', 'memo', 'postit'];
 const BROWSE_TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌' };
 
-export async function mount(root) {
+// 설정 화면(renderer/views/settings.js) 안의 "태그" 탭에 마운트된다 — 예전엔 독립된
+// #/tags 화면이었지만, 자주 안 쓰는 관리 화면이라 설정 하위로 옮겨달라는 요청 반영.
+// root는 settings.js가 이미 만들어둔 .settings-panel[data-panel="tags"] 엘리먼트라
+// 여기선 page-head 없이 panel-head 컨벤션만 맞추면 된다.
+export async function mountTagsPanel(root) {
   root.innerHTML = `
-    <div class="page-head">
-      <div class="page-head-title">
-        <div class="page-head-icon tone-purple">${TAG_ICON}</div>
-        <div><h1>태그</h1><p>색상 관리는 물론, 태그를 눌러 Todo·일정·메모·포스트잇 전체에서 관련 항목을 한번에 찾아보세요.</p></div>
-      </div>
-    </div>
-
     <div class="panel">
+      <div class="panel-head"><h3>태그 관리</h3></div>
       <p style="font-size:11.5px;color:var(--text-faint);margin:0 0 10px;">
         기본 4개(회의·업무 / 상담 / 교육 / 외래)는 삭제만 안 될 뿐, 이름과 색은 자유롭게 바꿀 수 있어요. 태그 이름을 누르면 이 태그가 붙은 항목을 전부 볼 수 있어요.
       </p>

@@ -1,5 +1,9 @@
 import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
 import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../shared/shell.js';
+import { lockNow } from '../shared/lock-screen.js';
+import { mountTagsPanel, TAG_ICON } from './tags.js';
+
+const LOCK_SHORTCUT_HINT = navigator.platform?.toUpperCase().includes('MAC') ? '⌘⌥L' : 'Ctrl+Alt+L';
 
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
@@ -13,6 +17,7 @@ const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" s
 
 export const TABS = [
   { id: 'display', label: '화면', icon: DISPLAY_ICON },
+  { id: 'tags', label: '태그', icon: TAG_ICON },
   { id: 'widgets', label: '위젯', icon: WIDGET_ICON },
   { id: 'shortcuts', label: '단축키', icon: KEY_ICON },
   { id: 'security', label: '보안', icon: LOCK_ICON },
@@ -69,6 +74,10 @@ export async function mount(root) {
               </select>
             </div>
           </div>
+        </div>
+
+        <div class="settings-panel" data-panel="tags">
+          <div id="tags-panelRoot"></div>
         </div>
 
         <div class="settings-panel" data-panel="widgets">
@@ -277,10 +286,12 @@ export async function mount(root) {
             <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">실행할 때마다 비밀번호를 입력해야 해요.</div>
           </div>
           <div style="display:flex;gap:8px;">
+            <button class="btn-secondary" id="sec-lockNowBtn">지금 잠그기</button>
             <button class="btn-secondary" id="sec-changeBtn">비밀번호 변경</button>
             <button class="btn-secondary" id="sec-disableBtn" style="color:var(--danger);">잠금 끄기</button>
           </div>
         </div>
+        <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">단축키 ${LOCK_SHORTCUT_HINT}로 어디서든 바로 잠글 수 있어요.</p>
         <div class="form-row" id="sec-changeForm" style="display:none;flex-direction:column;gap:8px;margin-top:12px;border-top:1px solid var(--divider);padding-top:12px;max-width:260px;">
           <label style="font-size:12px;color:var(--text-faint);display:flex;flex-direction:column;gap:4px;">
             현재 비밀번호
@@ -294,6 +305,7 @@ export async function mount(root) {
         </div>
         <div id="sec-error" style="display:none;font-size:11.5px;color:var(--danger);margin-top:6px;"></div>
       `;
+      $('sec-lockNowBtn').addEventListener('click', () => lockNow());
       $('sec-changeBtn').addEventListener('click', () => {
         $('sec-changeForm').style.display = 'flex';
         $('sec-curPw').focus();
@@ -646,6 +658,7 @@ export async function mount(root) {
 
   await initUserPanel();
   await initDisplayPanel();
+  const unmountTagsPanel = await mountTagsPanel($('tags-panelRoot'));
   await loadWidgetsPanel();
   await loadSecurityPanel();
   initDataPanel();
@@ -654,5 +667,6 @@ export async function mount(root) {
 
   return () => {
     if (typeof unsubscribeUpdater === 'function') unsubscribeUpdater();
+    if (typeof unmountTagsPanel === 'function') unmountTagsPanel();
   };
 }

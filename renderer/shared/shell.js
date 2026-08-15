@@ -11,10 +11,20 @@ async function initSidebarCollapse() {
   const saved = await window.itda.settings.get('sidebar_collapsed');
   if (saved === '1') sidebar.classList.add('collapsed');
 
-  btn.addEventListener('click', async () => {
+  async function toggle() {
     sidebar.classList.toggle('collapsed');
     const value = sidebar.classList.contains('collapsed') ? '1' : '0';
     await window.itda.settings.set({ key: 'sidebar_collapsed', value });
+  }
+  btn.addEventListener('click', toggle);
+
+  // Ctrl/Cmd+\ — VSCode 등에서 널리 쓰는 "사이드바 접기/펼치기" 관례. 입력 중에도(메모 작성 등)
+  // 걸리게 텍스트 편집 여부를 따로 체크하지 않음(Ctrl+K 빠른입력과 동일한 정책).
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+      e.preventDefault();
+      toggle();
+    }
   });
 }
 

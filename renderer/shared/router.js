@@ -5,11 +5,10 @@ import * as calendarView from '../views/calendar.js';
 import * as memoView from '../views/memo.js';
 import * as postitView from '../views/postit.js';
 import * as searchView from '../views/search.js';
-import * as tagsView from '../views/tags.js';
 import * as trashView from '../views/trash.js';
 import * as settingsView from '../views/settings.js';
 import { initShell } from './shell.js';
-import { ensureUnlocked } from './lock-screen.js';
+import { ensureUnlocked, lockNow } from './lock-screen.js';
 
 // 라우트 테이블: 새 화면 추가 시 여기 한 줄만 추가하면 사이드바/URL 해시로 바로 연결됨
 const routes = {
@@ -20,7 +19,7 @@ const routes = {
   '#/memo': memoView,
   '#/postit': postitView,
   '#/search': searchView,
-  '#/tags': tagsView,
+  // 태그 관리는 독립 화면이 아니라 설정(#/settings) 안의 "태그" 탭으로 이동함
   '#/trash': trashView,
   '#/settings': settingsView,
 };
@@ -70,4 +69,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   window.itda.onNavigate((route) => {
     location.hash = route;
   });
+  // OS 전역 단축키(Ctrl/Cmd+Alt+L)로 어디서든 바로 다시 잠그기
+  window.itda.onLockNow(lockNow);
 });

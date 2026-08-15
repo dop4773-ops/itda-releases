@@ -13,7 +13,31 @@ export async function ensureUnlocked() {
     return; // 상태 확인 자체가 안 되면 잠금을 강제하지 않고 그냥 통과시킨다(먹통 방지)
   }
   if (!status.enabled) return;
+  return showLockOverlay();
+}
 
+// 이미 잠금 해제된 상태에서 자리를 비울 때 "지금 잠그기"로 다시 잠그기 위한 함수.
+// 설정 화면의 버튼과 전역 단축키(main/global-shortcut, Ctrl/Cmd+Alt+L) 둘 다 이걸 호출한다.
+// 비밀번호가 아예 설정 안 돼 있으면 잠글 대상이 없으므로 안내만 하고 끝낸다.
+let overlayOpen = false; // 단축키 연타/중복 호출로 잠금화면이 두 겹 뜨는 것 방지
+export async function lockNow() {
+  if (overlayOpen) return;
+  let status;
+  try {
+    status = await window.itda.auth.getStatus();
+  } catch (e) {
+    return;
+  }
+  if (!status.enabled) {
+    const { toast } = await import('./ui-utils.js');
+    toast('잠금이 꺼져있어요. 설정 → 보안에서 비밀번호를 먼저 설정해주세요.');
+    return;
+  }
+  await showLockOverlay();
+}
+
+function showLockOverlay() {
+  overlayOpen = true;
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'lock-screen';
@@ -48,6 +72,7 @@ export async function ensureUnlocked() {
         const ok = await window.itda.auth.verify(pw);
         if (ok) {
           overlay.remove();
+          overlayOpen = false;
           resolve();
         } else {
           showError('비밀번호가 일치하지 않아요.');
