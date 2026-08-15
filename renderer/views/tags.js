@@ -101,8 +101,12 @@ export async function mount(root) {
         <div class="list-row" data-id="${c.id}">
           <input type="color" data-action="color" value="${c.color_hex}" style="width:22px;height:22px;border:1px solid var(--border);border-radius:6px;padding:1px;cursor:pointer;flex-shrink:0;" />
           <div class="main">
-            <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="color:${c.color_hex};font-weight:700;font-size:13px;">#</span>
+              <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />
+            </div>
           </div>
+          <span class="badge badge-neutral" title="이 태그가 붙은 항목 수" style="background:${c.color_hex}22;color:${c.color_hex};border:none;flex-shrink:0;">${c.item_count}개</span>
           <div class="text-color-toggle" data-action="textColorToggle" title="캘린더 글자색">
             <button type="button" data-value="#000000" class="${(c.text_color || '#000000') === '#000000' ? 'is-active' : ''}">검정</button>
             <button type="button" data-value="#ffffff" class="${(c.text_color || '#000000') === '#ffffff' ? 'is-active' : ''}">흰색</button>

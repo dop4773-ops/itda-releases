@@ -35,6 +35,7 @@ const registerItemWidgetIpc = require('./itemWidget.ipc');
 const registerAppIpc = require('./app.ipc');
 const registerMemoAttachmentsIpc = require('./memoAttachments.ipc');
 const registerAuthIpc = require('./auth.ipc');
+const { initTrashCleanup } = require('../trash-cleanup');
 
 function registerIpcHandlers(ipcMain, db, getMainWindow) {
   const repos = createRepositories(db);
@@ -57,7 +58,8 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerGoogleCalendarIpc(ipcMain, repos);
   registerDataIpc(ipcMain, repos, db); // 백업/복원은 repos가 아니라 db 원본이 필요해서 따로 넘김
   registerWidgetsIpc(ipcMain, repos, getMainWindow);
-  registerTrashIpc(ipcMain, repos, { deleteLinksFor, closeWidgetIfOpen, closeItemWidgetIfOpen });
+  const { purgeOne } = registerTrashIpc(ipcMain, repos, { deleteLinksFor, closeWidgetIfOpen, closeItemWidgetIfOpen });
+  initTrashCleanup(repos.trash, purgeOne); // 30일 지난 휴지통 항목 자동 영구삭제 (시작 시 1회 + 매일 재점검)
 }
 
 module.exports = registerIpcHandlers;

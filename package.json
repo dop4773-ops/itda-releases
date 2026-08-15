@@ -1,6 +1,6 @@
 {
   "name": "itda",
-  "version": "2.1.3",
+  "version": "2.2.0",
   "description": "잇다 - 병원 업무자를 위한 개인 업무 관리 데스크톱 Workspace",
   "main": "main/main.js",
   "author": "",

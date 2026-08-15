@@ -5,6 +5,8 @@ const TRASH_HEADER_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill=
 const RESTORE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>`;
 const DELETE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
+const GRID_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`;
+const CLOCK_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`;
 
 const TYPE_META = {
   todo: { label: 'Todo', icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>` },
@@ -12,6 +14,11 @@ const TYPE_META = {
   memo: { label: '메모', icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>` },
   postit: { label: '포스트잇', icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>` },
 };
+const TYPE_ORDER = ['todo', 'event', 'memo', 'postit'];
+
+// main/trash-cleanup/index.js의 RETENTION_DAYS와 반드시 같은 값 유지 — 화면 표시용 복제 상수
+// (IPC를 하나 더 만들 만큼 자주 바뀌는 값이 아니라서 그냥 상수로 둠)
+const RETENTION_DAYS = 30;
 
 // memo/postit은 label이 HTML(볼드·글씨크기 서식)일 수 있어서 태그를 걷어내고 짧게 자른다.
 function plainLabel(label) {
@@ -19,40 +26,52 @@ function plainLabel(label) {
   return text || '(제목 없음)';
 }
 
+function elapsedDays(deletedAt) {
+  const deletedTime = new Date(deletedAt.replace(' ', 'T')).getTime();
+  return (Date.now() - deletedTime) / (24 * 60 * 60 * 1000);
+}
+
+function remainingDaysLabel(deletedAt) {
+  const remaining = Math.max(0, Math.ceil(RETENTION_DAYS - elapsedDays(deletedAt)));
+  if (remaining === 0) return '오늘 삭제 예정';
+  return `${remaining}일 후 삭제`;
+}
+
 export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${TRASH_HEADER_ICON}</div>
-        <div><h1>휴지통</h1><p>삭제된 Todo·일정·메모·포스트잇을 복원하거나 완전히 삭제할 수 있어요.</p></div>
+        <div class="page-head-icon" style="background:var(--danger-soft);color:var(--danger);">${TRASH_HEADER_ICON}</div>
+        <div><h1>휴지통</h1><p>삭제된 항목을 복원하거나 완전히 삭제할 수 있어요. ${RETENTION_DAYS}일이 지나면 자동으로 영구 삭제돼요.</p></div>
+      </div>
+      <button class="btn-danger" id="tr-purgeAll">${DELETE_ICON} 휴지통 비우기</button>
+    </div>
+
+    <div class="settings-layout">
+      <div class="settings-tabs" id="tr-typeRail"></div>
+
+      <div class="settings-content">
+        <div class="trash-filter-row">
+          <div class="notes-search-box" style="flex:1;max-width:260px;">
+            ${SEARCH_ICON}
+            <input type="text" id="tr-search" placeholder="휴지통에서 검색" />
+          </div>
+          <select id="tr-categoryFilter" class="select"><option value="">전체 카테고리</option></select>
+        </div>
+
+        <div class="trash-bulk-bar" id="tr-bulkBar" style="display:none;">
+          <label class="checkbox-row"><input type="checkbox" id="tr-selectAll" /> 전체선택</label>
+          <span class="search-selected-count" id="tr-selectedCount"></span>
+          <div style="flex:1;"></div>
+          <button class="btn-secondary" id="tr-bulkRestore">선택 복원</button>
+          <button class="btn-secondary search-bulk-delete-btn" id="tr-bulkPurge">선택 완전삭제</button>
+        </div>
+
+        <div id="tr-list" class="compact-list"><div class="empty">불러오는 중…</div></div>
+
+        <div class="trash-autopurge-banner" id="tr-autopurgeBanner" style="display:none;"></div>
       </div>
     </div>
-
-    <div class="trash-filter-row">
-      <div class="notes-search-box" style="flex:1;max-width:260px;">
-        ${SEARCH_ICON}
-        <input type="text" id="tr-search" placeholder="휴지통에서 검색" />
-      </div>
-      <select id="tr-typeFilter" class="select">
-        <option value="">전체 종류</option>
-        <option value="todo">Todo</option>
-        <option value="event">일정</option>
-        <option value="memo">메모</option>
-        <option value="postit">포스트잇</option>
-      </select>
-      <select id="tr-categoryFilter" class="select"><option value="">전체 카테고리</option></select>
-    </div>
-
-    <div class="trash-bulk-bar" id="tr-bulkBar" style="display:none;">
-      <label class="checkbox-row"><input type="checkbox" id="tr-selectAll" /> 전체선택</label>
-      <span class="search-selected-count" id="tr-selectedCount"></span>
-      <div style="flex:1;"></div>
-      <button class="btn-secondary" id="tr-bulkRestore">선택 복원</button>
-      <button class="btn-secondary search-bulk-delete-btn" id="tr-bulkPurge">선택 완전삭제</button>
-      <button class="btn-secondary search-bulk-delete-btn" id="tr-purgeAll">휴지통 비우기</button>
-    </div>
-
-    <div id="tr-list" class="compact-list"><div class="empty">불러오는 중…</div></div>
   `;
 
   const $ = (id) => root.querySelector('#' + id);
@@ -75,6 +94,49 @@ export async function mount(root) {
     return list;
   }
 
+  function renderTypeRail() {
+    const counts = { todo: 0, event: 0, memo: 0, postit: 0 };
+    allItems.forEach((i) => {
+      if (counts[i.type] != null) counts[i.type] += 1;
+    });
+    const rows = [
+      { value: '', label: '전체 항목', icon: GRID_ICON, count: allItems.length },
+      ...TYPE_ORDER.map((t) => ({ value: t, label: TYPE_META[t].label, icon: TYPE_META[t].icon, count: counts[t] })),
+    ];
+    $('tr-typeRail').innerHTML = rows
+      .map(
+        (r) => `
+      <button type="button" class="settings-tab ${typeFilter === r.value ? 'active' : ''}" data-value="${r.value}">
+        ${r.icon}<span style="flex:1;">${r.label}</span><span style="font-size:11px;color:var(--text-faint);">${r.count}</span>
+      </button>`
+      )
+      .join('');
+    $('tr-typeRail').querySelectorAll('.settings-tab').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        typeFilter = btn.dataset.value;
+        render();
+      });
+    });
+  }
+
+  function renderAutopurgeBanner() {
+    const banner = $('tr-autopurgeBanner');
+    if (allItems.length === 0) {
+      banner.style.display = 'none';
+      return;
+    }
+    // 가장 오래돼서 곧 자동삭제될 항목 기준으로 진행률 표시
+    const oldest = allItems.reduce((a, b) => (a.deleted_at < b.deleted_at ? a : b));
+    const elapsed = Math.min(RETENTION_DAYS, Math.max(0, elapsedDays(oldest.deleted_at)));
+    const percent = Math.round((elapsed / RETENTION_DAYS) * 100);
+    banner.style.display = 'block';
+    banner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--danger);font-weight:600;">${CLOCK_ICON} 자동 삭제 안내</div>
+      <p style="margin:4px 0 8px;font-size:11.5px;color:var(--text-soft);">삭제된 항목은 ${RETENTION_DAYS}일이 지나면 자동으로 영구 삭제돼요. 가장 오래된 항목은 ${Math.floor(elapsed)}일 경과했어요.</p>
+      <div class="trash-progress-track"><div class="trash-progress-fill" style="width:${percent}%;"></div></div>
+    `;
+  }
+
   function updateBulkBar() {
     const bar = $('tr-bulkBar');
     if (currentKeys.length === 0) {
@@ -91,6 +153,9 @@ export async function mount(root) {
   }
 
   function render() {
+    renderTypeRail();
+    renderAutopurgeBanner();
+
     const listEl = $('tr-list');
     const items = filteredItems();
     currentKeys = items.map((i) => `${i.type}:${i.id}`);
@@ -117,6 +182,7 @@ export async function mount(root) {
             <b>${escapeHtml(plainLabel(i.label))}</b>
             <div class="meta">${TYPE_META[i.type]?.label || i.type} · ${formatRelative(i.deleted_at)} 삭제됨</div>
           </div>
+          <span class="badge badge-neutral" style="flex-shrink:0;">${remainingDaysLabel(i.deleted_at)}</span>
           <div class="actions">
             <button class="btn-icon" data-action="restore" data-type="${i.type}" data-id="${i.id}" title="복원">${RESTORE_ICON}</button>
             <button class="btn-icon" data-action="purge" data-type="${i.type}" data-id="${i.id}" title="완전 삭제" style="color:var(--danger);">${DELETE_ICON}</button>
@@ -180,10 +246,6 @@ export async function mount(root) {
       keyword = value;
       render();
     }, 150);
-  });
-  $('tr-typeFilter').addEventListener('change', (e) => {
-    typeFilter = e.target.value;
-    render();
   });
   $('tr-categoryFilter').addEventListener('change', (e) => {
     categoryFilter = e.target.value;

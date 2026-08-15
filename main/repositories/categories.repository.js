@@ -4,8 +4,20 @@
  */
 module.exports = function createCategoriesRepository(db) {
   return {
+    // item_count는 이 태그를 쓰고 있는 4개 타입(소프트 삭제 제외) 합계 — 태그 화면에서
+    // "몇 개 항목에 쓰이는지" 배지로 보여주기 위함. 카테고리 수가 적어(수십 개 수준)
+    // 상관 서브쿼리 4개를 매 행마다 돌려도 성능에 영향 없다.
     list() {
-      return db.prepare('SELECT * FROM categories ORDER BY sort_order ASC').all();
+      return db
+        .prepare(
+          `SELECT c.*,
+            (SELECT COUNT(*) FROM todos WHERE category_id = c.id AND deleted_at IS NULL) +
+            (SELECT COUNT(*) FROM events WHERE category_id = c.id AND deleted_at IS NULL) +
+            (SELECT COUNT(*) FROM memos WHERE category_id = c.id AND deleted_at IS NULL) +
+            (SELECT COUNT(*) FROM postits WHERE category_id = c.id AND deleted_at IS NULL) AS item_count
+           FROM categories c ORDER BY c.sort_order ASC`
+        )
+        .all();
     },
 
     getById(id) {
