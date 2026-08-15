@@ -183,6 +183,38 @@ export async function toggleTheme() {
 export async function applyTheme() {
   const theme = await window.itda.settings.get('theme');
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
+  await applyTextColorOverride(); // 라이트/다크 전환 시 그 모드에 저장된 글자색(없으면 기본값)을 다시 맞춘다
+}
+
+// 라이트/다크 모드별 기본 글자색(--text) 직접 지정 — 설정 → 화면에서 색상피커로 고른다.
+// documentElement 인라인 스타일이라 :root/[data-theme=dark] CSS 규칙보다 항상 우선한다.
+const SAFE_HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+function textColorSettingKey(theme) {
+  return theme === 'dark' ? 'text_color_dark' : 'text_color_light';
+}
+
+export async function getTextColorOverride(theme) {
+  const saved = await window.itda.settings.get(textColorSettingKey(theme));
+  return saved && SAFE_HEX_COLOR.test(saved) ? saved : null;
+}
+
+export async function applyTextColorOverride() {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  const override = await getTextColorOverride(theme);
+  if (override) document.documentElement.style.setProperty('--text', override);
+  else document.documentElement.style.removeProperty('--text'); // 지정 안 했으면 CSS 기본값 그대로
+}
+
+export async function setTextColorOverride(theme, hex) {
+  if (!SAFE_HEX_COLOR.test(hex)) return; // <input type=color>는 항상 #rrggbb를 주지만 방어적으로 한 번 더 체크
+  await window.itda.settings.set({ key: textColorSettingKey(theme), value: hex });
+  await applyTextColorOverride();
+}
+
+export async function resetTextColorOverride(theme) {
+  await window.itda.settings.set({ key: textColorSettingKey(theme), value: '' });
+  await applyTextColorOverride();
 }
 
 // 화면 배율 — 저해상도 병원 PC에서 글씨/UI가 너무 작게 보이는 문제 대응.

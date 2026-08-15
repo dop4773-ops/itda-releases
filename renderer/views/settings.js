@@ -1,5 +1,5 @@
 import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
-import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale, getFontFamily, setFontFamily } from '../shared/shell.js';
+import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 
@@ -84,6 +84,26 @@ export async function mount(root) {
                 <option value="pretendard">Pretendard (기본)</option>
                 <option value="system">시스템 기본</option>
               </select>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">라이트 모드 글자색</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">화면 전체 기본 글자색이에요. 잘못 골라서 안 보이게 되면 옆 "기본값" 버튼으로 되돌리세요.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input type="color" id="display-textColorLight" class="rich-color-btn" style="width:30px;height:30px;" />
+                <button class="btn-danger" id="display-textColorLightReset">기본값</button>
+              </div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">다크 모드 글자색</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">다크 모드일 때만 적용돼요.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input type="color" id="display-textColorDark" class="rich-color-btn" style="width:30px;height:30px;" />
+                <button class="btn-danger" id="display-textColorDarkReset">기본값</button>
+              </div>
             </div>
           </div>
         </div>
@@ -295,6 +315,32 @@ export async function mount(root) {
       }
     });
     fontSelect.dataset.prev = fontSelect.value;
+
+    // 기본 CSS 값 — 사용자가 지정 안 했을 때 색상피커에 뭐라도 보여주기 위함(실제 적용 여부와는 별개)
+    const DEFAULT_TEXT_COLOR = { light: '#2B2E3A', dark: '#E8E9EE' };
+    async function initTextColorRow(theme, inputId, resetId) {
+      const input = $(inputId);
+      const override = await getTextColorOverride(theme);
+      input.value = override || DEFAULT_TEXT_COLOR[theme];
+      input.addEventListener('input', async () => {
+        try {
+          await setTextColorOverride(theme, input.value);
+        } catch (e) {
+          errorToast(e, '글자색을 저장하지 못했어요');
+        }
+      });
+      $(resetId).addEventListener('click', async () => {
+        try {
+          await resetTextColorOverride(theme);
+          input.value = DEFAULT_TEXT_COLOR[theme];
+          toast('기본 글자색으로 되돌렸어요');
+        } catch (e) {
+          errorToast(e, '되돌리지 못했어요');
+        }
+      });
+    }
+    await initTextColorRow('light', 'display-textColorLight', 'display-textColorLightReset');
+    await initTextColorRow('dark', 'display-textColorDark', 'display-textColorDarkReset');
   }
 
   // ================= 보안 (실행 시 비밀번호 잠금) =================

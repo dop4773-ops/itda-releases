@@ -3,9 +3,10 @@
  * 절대 원칙: 허용 목록(whitelist) 방식만 쓴다 — 위험한 태그를 나열해서 막는 게 아니라,
  * 허용된 몇 개 태그·속성 외에는 전부 벗겨내거나 삭제한다.
  *
- * 허용 태그: b, strong, i, em, u, span(font-size만 / item-mention 칩), div, p, br,
+ * 허용 태그: b, strong, i, em, u, span(font-size/color만 / item-mention 칩), div, p, br,
  *           input(type=checkbox만, 체크리스트 전용 — contenteditable=false로 고정해서 텍스트 편집과 분리)
- * 허용 속성: span의 style 중 font-size 하나만 (10~28px 범위로 클램프), input의 type/checked만,
+ * 허용 속성: span의 style 중 font-size(10~28px 범위로 클램프)와 color(#RRGGBB 형식만) 둘만,
+ *           input의 type/checked만,
  *           span.item-mention의 data-type/data-id(연결된 항목 칩 — @검색으로 삽입, contenteditable=false로 고정)
  * 그 외 모든 태그/속성/이벤트핸들러/href/src 등은 제거된다.
  * a(링크)는 저장 시 항상 벗겨진다 — 하이퍼링크는 저장 데이터가 아니라 "열 때마다" linkifyUrls()로
@@ -18,7 +19,18 @@ const ALLOWED_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'P',
 const REMOVE_ENTIRELY_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'SVG', 'IMG']);
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 28;
+const SAFE_HEX_COLOR = /^#[0-9a-f]{6}$/i; // style에 CSS 인젝션(expression/url 등) 못 들어오게 이 형식만 허용
 const MENTION_LINK_TYPES = new Set(['todo', 'event', 'memo', 'postit']);
+
+// 브라우저는 style.color에 뭘 넣든(hex, named color 등) "rgb(r, g, b)"로 정규화해서 돌려준다 —
+// 그래서 SAFE_HEX_COLOR로 바로 검증할 수 있게 다시 hex로 바꿔준다. rgb(...) 형식이 아니면(이미
+// 깨진 값이거나 rgba 등) null을 돌려줘서 통째로 버려지게 한다.
+function rgbStringToHex(rgbStr) {
+  const m = rgbStr.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (!m) return null;
+  const toHex = (n) => Math.min(255, Math.max(0, Number(n))).toString(16).padStart(2, '0');
+  return `#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`;
+}
 
 function sanitizeElement(el) {
   const children = Array.from(el.childNodes);
@@ -77,9 +89,10 @@ function sanitizeElement(el) {
       continue;
     }
 
-    // 여기 도달했으면 허용된 태그 — 속성은 전부 지우고, span의 font-size /
+    // 여기 도달했으면 허용된 태그 — 속성은 전부 지우고, span의 font-size/color /
     // 체크리스트 줄(div.mc-item) · 체크리스트 텍스트칸(span.mc-text)의 클래스만 검증 후 재부여
     const fontSize = child.tagName === 'SPAN' ? child.style.fontSize : '';
+    const color = child.tagName === 'SPAN' ? child.style.color : '';
     const isChecklistLine = child.tagName === 'DIV' && child.classList.contains('mc-item');
     const isChecklistText = child.tagName === 'SPAN' && child.classList.contains('mc-text');
     Array.from(child.attributes).forEach((attr) => child.removeAttribute(attr.name));
@@ -89,6 +102,11 @@ function sanitizeElement(el) {
         const clamped = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, px));
         child.style.fontSize = `${clamped}px`;
       }
+    }
+    if (child.tagName === 'SPAN' && color) {
+      // 브라우저가 style.color를 항상 rgb(r, g, b)로 정규화해서 돌려주므로 hex로 바꿔서 검증한다
+      const hex = rgbStringToHex(color);
+      if (hex && SAFE_HEX_COLOR.test(hex)) child.style.color = hex;
     }
     if (isChecklistLine) child.classList.add('mc-item');
     // 체크리스트 줄의 텍스트칸은 flexbox에서 flex:1로 늘어나야 체크박스 옆에서 자연스럽게
@@ -148,6 +166,23 @@ export function applyFontSize(editableEl, px) {
   editableEl.querySelectorAll('font[size="7"]').forEach((f) => {
     const span = document.createElement('span');
     span.style.fontSize = `${px}px`;
+    span.innerHTML = f.innerHTML;
+    f.replaceWith(span);
+  });
+}
+
+/**
+ * contenteditable 요소에 글자색을 적용하는 헬퍼. applyFontSize와 완전히 동일한 트릭—
+ * execCommand('foreColor')가 만드는 <font color> 태그를 원하는 색의 <span>으로 바꿔치기한다
+ * (sanitizeRichHtml이 font 태그 자체는 허용하지 않으므로, 저장 전에 span으로 미리 바꿔야 한다).
+ */
+export function applyTextColor(editableEl, hex) {
+  if (typeof document.execCommand !== 'function') return;
+  editableEl.focus();
+  document.execCommand('foreColor', false, hex);
+  editableEl.querySelectorAll('font[color]').forEach((f) => {
+    const span = document.createElement('span');
+    span.style.color = hex;
     span.innerHTML = f.innerHTML;
     f.replaceWith(span);
   });

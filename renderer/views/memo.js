@@ -2,7 +2,7 @@ import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserT
 import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
-import { sanitizeRichHtml, stripHtmlToPlainText, toggleBold, applyFontSize, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
+import { sanitizeRichHtml, stripHtmlToPlainText, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 
@@ -199,6 +199,8 @@ export async function mount(root) {
         <button class="rich-btn rich-size-btn" data-size="12" title="작게">가</button>
         <button class="rich-btn rich-size-btn active" data-size="14" title="보통">가</button>
         <button class="rich-btn rich-size-btn" data-size="18" title="크게">가</button>
+        <span class="rich-divider"></span>
+        <input type="color" class="rich-color-btn" id="m-colorBtn" title="글자색" value="#2B2E3A" />
       </div>
       <div class="memo-attach-strip" id="m-attachStrip"></div>
       <div id="m-bodyInput" class="notes-body-input" contenteditable="true" data-placeholder="메모를 입력하세요…">${sanitizeRichHtml(memo.content || '')}</div>
@@ -247,6 +249,10 @@ export async function mount(root) {
         root.querySelectorAll('.rich-size-btn').forEach((b) => b.classList.toggle('active', b === btn));
         scheduleSave();
       });
+    });
+    $('m-colorBtn').addEventListener('input', (e) => {
+      applyTextColor(bodyEl, e.target.value);
+      scheduleSave();
     });
 
     // ---------- 첨부파일 ----------
