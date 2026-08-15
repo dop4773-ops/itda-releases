@@ -119,6 +119,8 @@ contextBridge.exposeInMainWorld('itda', {
   },
   app: {
     getMainWindowBounds: () => ipcRenderer.invoke('app:getMainWindowBounds'),
+    getAutoLaunch: () => ipcRenderer.invoke('app:getAutoLaunch'),
+    setAutoLaunch: (enabled) => ipcRenderer.invoke('app:setAutoLaunch', enabled),
   },
   widgetWindow: {
     fitToContent: (payload) => ipcRenderer.invoke('widgetWindow:fitToContent', payload),

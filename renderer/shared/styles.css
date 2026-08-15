@@ -52,6 +52,10 @@
   --fs-section-title:13.5px; /* 패널/카드 소제목 */
   --fs-body:13px;
   --fs-meta:11px;
+
+  /* 설정 → 화면 → 글꼴에서 토글. 기본은 Pretendard, "시스템 기본"을 고르면 이 값만
+     시스템 폰트 스택으로 바뀐다(shell.js applyFontFamily 참고). */
+  --app-font-family:"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
 }
 
 /* ================= 다크 모드 — html[data-theme="dark"]일 때 동일한 변수만 덮어씀 ================= */
@@ -105,7 +109,7 @@ h1,h2,h3,h4{margin:0;}
 
 body{
   margin:0;background:var(--bg);color:var(--text);
-  font-family:"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  font-family:var(--app-font-family);
   font-size:14px;line-height:1.45;
   -webkit-font-smoothing:antialiased;
   text-rendering:optimizeLegibility;
@@ -594,17 +598,21 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 }
 .sticky-card:hover{transform:rotate(0deg) !important;box-shadow:0 8px 20px rgba(16,24,40,.16);position:relative;z-index:2;}
 .sticky-card .card-top{display:flex;justify-content:space-between;align-items:center;gap:6px;}
-.sticky-card .pin-btn{background:none;border:none;cursor:pointer;color:var(--text-faint);padding:2px;display:flex;}
-.sticky-card .pin-btn.pinned{color:var(--brand);}
-.sticky-card input.card-title{background:transparent;border:none;outline:none;font-weight:600;font-size:13px;width:100%;font-family:inherit;color:var(--text);}
-.sticky-card input.card-title::placeholder{color:var(--text-faint);font-weight:400;}
-.sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:var(--text);flex:1;line-height:1.5;overflow-wrap:break-word;overflow-y:auto;min-height:0;}
+/* 포스트잇 배경(STICKY_COLORS)은 항상 밝은 파스텔 고정색이라 다크모드 여부와 무관함 —
+   그런데 글자색을 var(--text)로 쓰면 다크모드에서 거의 흰색이 돼서 안 보이는 문제가 있었음.
+   위젯창(widget.css)은 원래부터 고정 색을 썼는데 목록 화면(.sticky-card)만 테마 변수를 썼던
+   불일치 — 위젯과 동일한 고정 색으로 맞춘다.*/
+.sticky-card .pin-btn{background:none;border:none;cursor:pointer;color:rgba(0,0,0,.55);padding:2px;display:flex;}
+.sticky-card .pin-btn.pinned{color:#B8860B;}
+.sticky-card input.card-title{background:transparent;border:none;outline:none;font-weight:600;font-size:13px;width:100%;font-family:inherit;color:rgba(0,0,0,.82);}
+.sticky-card input.card-title::placeholder{color:rgba(0,0,0,.35);font-weight:400;}
+.sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:rgba(0,0,0,.82);flex:1;line-height:1.5;overflow-wrap:break-word;overflow-y:auto;min-height:0;}
 .sticky-card .card-content:empty:before{content:attr(data-placeholder);color:rgba(0,0,0,.35);}
 .sticky-card .card-content b,.sticky-card .card-content strong{font-weight:700;}
 .rich-toolbar-mini{gap:1px;padding:2px 0 4px;}
 .rich-toolbar-mini .rich-btn{width:20px;height:20px;background:rgba(0,0,0,.05);}
 .rich-toolbar-mini .rich-btn:hover,.rich-toolbar-mini .rich-btn.active{background:rgba(0,0,0,.14);color:inherit;}
-.sticky-card .card-meta{font-size:10px;color:var(--text-faint);opacity:.75;}
+.sticky-card .card-meta{font-size:10px;color:rgba(0,0,0,.5);opacity:.75;}
 /* 하단 컨트롤 줄(색상/태그/링크/위젯/삭제) — 한 줄에 다 못 들어가면 카드를 벗어나지 않고
    자연스럽게 다음 줄로 넘어가게 한다(overflow 대신 flex-wrap). */
 .sticky-card .card-bottom-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;row-gap:6px;min-width:0;}
@@ -612,7 +620,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .card-bottom-actions .btn-icon{padding:3px 5px;}
 .sticky-card .color-swatch-row{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
 .cat-select-mini{
-  font-size:9.5px;line-height:1;color:var(--text);cursor:pointer;
+  font-size:9.5px;line-height:1;color:rgba(0,0,0,.82);cursor:pointer; /* 흰 반투명 배경 위 고정 텍스트 — sticky-card 전용, 다크모드 무관 */
   height:20px;max-width:56px;flex-shrink:1;min-width:0;
   padding:0 15px 0 5px;border-radius:var(--radius-xs);border:1px solid rgba(0,0,0,.15);
   background-color:rgba(255,255,255,.6);
@@ -623,7 +631,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
   background-repeat:no-repeat;background-position:right 4px center;background-size:8px 8px;
 }
 .sticky-card .color-swatch{width:14px;height:14px;border-radius:5px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
-.sticky-card .color-swatch.selected{border-color:var(--text);}
+.sticky-card .color-swatch.selected{border-color:rgba(0,0,0,.6);}
 .new-sticky-card{
   border:1.5px dashed var(--border);border-radius:var(--radius-md);height:236px; /* .sticky-card와 높이 통일 */
   display:flex;align-items:center;justify-content:center;color:var(--text-faint);cursor:pointer;
@@ -676,8 +684,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-body-input .mc-item,.sticky-card .card-content .mc-item{display:flex;align-items:flex-start;gap:6px;margin:2px 0;}
 .notes-body-input .mc-item input[type="checkbox"],.sticky-card .card-content .mc-item input[type="checkbox"]{margin-top:3px;flex-shrink:0;cursor:pointer;accent-color:var(--brand);}
 .notes-body-input .mc-item .mc-text,.sticky-card .card-content .mc-item .mc-text{flex:1;min-width:0;word-break:break-word;white-space:pre-wrap;}
-.notes-body-input .mc-item.mc-item-done,.sticky-card .card-content .mc-item.mc-item-done{color:var(--text-faint);text-decoration:line-through;}
-.notes-body-input a,.sticky-card .card-content a{color:var(--brand);text-decoration:underline;cursor:pointer;}
+.notes-body-input .mc-item.mc-item-done{color:var(--text-faint);text-decoration:line-through;}
+.sticky-card .card-content .mc-item.mc-item-done{color:rgba(0,0,0,.4);text-decoration:line-through;}
+.notes-body-input a{color:var(--brand);text-decoration:underline;cursor:pointer;}
+.sticky-card .card-content a{color:#2255cc;text-decoration:underline;cursor:pointer;}
 
 /* 메모 상세 — "연결된 항목" 팝오버 (본문 작성을 방해하지 않도록 버튼 클릭 시에만 노출) */
 .links-popover-wrap{position:relative;}

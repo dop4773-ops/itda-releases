@@ -25,7 +25,7 @@
  *              | 'downloading' | 'downloaded' | 'error'
  */
 
-function initUpdater(app, ipcMain, mainWindow) {
+function initUpdater(app, ipcMain, mainWindow, settings) {
   ipcMain.handle('updater:getVersion', () => app.getVersion());
 
   // 개발 모드에서는 electron-updater를 아예 로드하지 않는다.
@@ -102,11 +102,16 @@ function initUpdater(app, ipcMain, mainWindow) {
 
   // 앱 시작 몇 초 후 조용히 한 번 확인만 해둔다 (다운로드는 안 함).
   // 사용자가 나중에 설정 화면을 열어보면 이미 "새 버전 있음" 상태가 보이는 정도.
-  setTimeout(() => {
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.error('[itda:updater] 시작 시 자동 확인 실패:', err);
-    });
-  }, 5000);
+  // 설정(update_auto_check)에서 꺼뒀으면 이 자동 확인만 건너뛴다 — "업데이트 확인" 버튼을
+  // 직접 누르는 건 이 설정과 무관하게 항상 동작한다(위 updater:checkNow 핸들러 참고).
+  const autoCheckEnabled = settings.get('update_auto_check') !== '0';
+  if (autoCheckEnabled) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.error('[itda:updater] 시작 시 자동 확인 실패:', err);
+      });
+    }, 5000);
+  }
 }
 
 module.exports = { initUpdater };

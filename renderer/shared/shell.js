@@ -209,9 +209,32 @@ export async function setDisplayScale(scale) {
   await applyDisplayScale();
 }
 
+// 글꼴 — Pretendard(기본, 둥글고 부드러운 인상) vs 시스템 기본(윈도우 맑은 고딕 등).
+// --app-font-family 하나만 바꾸면 body 전체에 이미 반영되게 CSS에서 만들어뒀다.
+export const FONT_FAMILY_OPTIONS = {
+  pretendard: '"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif',
+  system: '-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif',
+};
+
+export async function getFontFamily() {
+  const saved = await window.itda.settings.get('font_family');
+  return saved === 'system' ? 'system' : 'pretendard';
+}
+
+export async function applyFontFamily() {
+  const key = await getFontFamily();
+  document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_OPTIONS[key]);
+}
+
+export async function setFontFamily(key) {
+  await window.itda.settings.set({ key: 'font_family', value: key });
+  await applyFontFamily();
+}
+
 export async function initShell() {
   await applyTheme();
   await applyDisplayScale();
+  await applyFontFamily();
   await initSidebarCollapse();
   await applySidebarUserName();
   initQuickCapture();

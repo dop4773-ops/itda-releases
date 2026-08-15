@@ -57,9 +57,13 @@ export async function mountLinksWidget(container, self) {
 
   async function load() {
     try {
+      // 설정 → 편의 기능에서 끌 수 있음 — 꺼져있으면 아예 요청하지 않는다(불필요한 조회 생략)
+      const autoSuggestOn = (await window.itda.settings.get('links_auto_suggest')) !== '0';
       const [linksResult, discoverResult] = await Promise.all([
         window.itda.links.listFor({ type: self.type, id: self.id }),
-        window.itda.links.discover({ type: self.type, id: self.id }).catch(() => ({ sameCategory: [], similar: [] })), // 자동추천은 실패해도 직접연결 목록은 살아있어야 하니 별도로 방어
+        autoSuggestOn
+          ? window.itda.links.discover({ type: self.type, id: self.id }).catch(() => ({ sameCategory: [], similar: [] })) // 자동추천은 실패해도 직접연결 목록은 살아있어야 하니 별도로 방어
+          : Promise.resolve({ sameCategory: [], similar: [] }),
       ]);
       links = linksResult;
       discovered = discoverResult || { sameCategory: [], similar: [] };

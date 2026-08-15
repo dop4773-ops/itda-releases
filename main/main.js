@@ -6,6 +6,7 @@ const { initUpdater } = require('./updater');
 const { initGlobalShortcut } = require('./global-shortcut');
 const { initTray } = require('./tray');
 const { attachExternalLinkHandler } = require('./shared/external-links');
+const createSettingsRepository = require('./repositories/settings.repository');
 
 let mainWindow;
 let db;
@@ -92,7 +93,7 @@ if (!gotLock) {
 
     registerIpcHandlers(ipcMain, db, () => mainWindow);
     createWindow();
-    initUpdater(app, ipcMain, mainWindow); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
+    initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
     initGlobalShortcut(app, () => mainWindow); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).

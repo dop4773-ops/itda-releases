@@ -1,5 +1,5 @@
 import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
-import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale } from '../shared/shell.js';
+import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale, getFontFamily, setFontFamily } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 
@@ -14,6 +14,7 @@ const UPDATE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const WIDGET_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`;
 const KEY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;
 const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
+const SLIDERS_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>`;
 
 export const TABS = [
   { id: 'display', label: '화면', icon: DISPLAY_ICON },
@@ -21,6 +22,7 @@ export const TABS = [
   { id: 'widgets', label: '위젯', icon: WIDGET_ICON },
   { id: 'shortcuts', label: '단축키', icon: KEY_ICON },
   { id: 'security', label: '보안', icon: LOCK_ICON },
+  { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON },
   { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON },
   { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON },
   { id: 'update', label: '업데이트', icon: UPDATE_ICON },
@@ -73,6 +75,16 @@ export async function mount(root) {
                 ${DISPLAY_SCALE_OPTIONS.map((v) => `<option value="${v}">${v}%</option>`).join('')}
               </select>
             </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">글꼴</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Pretendard는 둥글고 부드러운 느낌, 시스템 기본은 윈도우 맑은 고딕 등 OS 기본 글꼴이에요.</div>
+              </div>
+              <select id="display-fontSelect" class="select" style="width:140px;">
+                <option value="pretendard">Pretendard (기본)</option>
+                <option value="system">시스템 기본</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -101,6 +113,9 @@ export async function mount(root) {
             <div class="shortcut-list">
               <div class="shortcut-row"><span>어디서든 빠른 입력 (Inbox에 바로 저장) — 잇다 안에서</span><kbd>Ctrl/⌘ + K</kbd></div>
               <div class="shortcut-row"><span>어디서든 빠른 입력 — 다른 프로그램을 쓰고 있어도 (전역 단축키)</span><kbd>Ctrl/⌘ + Alt + I</kbd></div>
+              <div class="shortcut-row"><span>빠른 실행 (원하는 화면·태그·항목으로 바로 이동)</span><kbd>Ctrl/⌘ + Shift + P</kbd></div>
+              <div class="shortcut-row"><span>사이드바 접기/펼치기</span><kbd>Ctrl/⌘ + \\</kbd></div>
+              <div class="shortcut-row"><span>지금 잠그기 — 다른 프로그램을 쓰고 있어도 (전역 단축키)</span><kbd>Ctrl/⌘ + Alt + L</kbd></div>
               <div class="shortcut-row"><span>열려있는 패널·모달·위젯 닫기</span><kbd>Esc</kbd></div>
               <div class="shortcut-row"><span>빠른 입력창에서 저장</span><kbd>Enter</kbd></div>
             </div>
@@ -117,6 +132,42 @@ export async function mount(root) {
               켜두면 잇다를 실행할 때마다 비밀번호를 입력해야 열려요. 비밀번호는 이 PC에만 저장되고 외부로 전송되지 않아요.
             </p>
             <div id="security-panelBody">불러오는 중…</div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-panel="convenience">
+          <div class="panel">
+            <div class="panel-head"><h3>편의 기능</h3></div>
+            <div class="update-row">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">업데이트 자동 확인</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">앱을 켤 때마다 새 버전이 있는지 조용히 한 번 확인해요(다운로드는 안 함). 꺼도 설정 → 업데이트에서 직접 확인할 수 있어요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conv-autoUpdateToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">윈도우 시작 시 자동 실행</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">컴퓨터를 켜면 잇다가 자동으로 함께 실행돼요(트레이로 시작). 패키징된 설치 버전에서만 켤 수 있어요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conv-autoLaunchToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">관련 항목 자동 추천</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Todo·일정·메모·포스트잇 상세에서 "🔗 연결된 항목" 아래에 같은 태그·비슷한 내용의 항목을 자동으로 추천해줘요. 꺼도 직접 연결하는 기능은 그대로 써요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conv-autoSuggestToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -230,6 +281,20 @@ export async function mount(root) {
       }
     });
     scaleSelect.dataset.prev = scaleSelect.value;
+
+    const fontSelect = $('display-fontSelect');
+    fontSelect.value = await getFontFamily();
+    fontSelect.addEventListener('change', async () => {
+      const prev = fontSelect.dataset.prev || fontSelect.value;
+      try {
+        await setFontFamily(fontSelect.value);
+        fontSelect.dataset.prev = fontSelect.value;
+      } catch (e) {
+        errorToast(e, '글꼴을 저장하지 못했어요');
+        fontSelect.value = prev;
+      }
+    });
+    fontSelect.dataset.prev = fontSelect.value;
   }
 
   // ================= 보안 (실행 시 비밀번호 잠금) =================
@@ -337,6 +402,50 @@ export async function mount(root) {
         }
       });
     }
+  }
+
+  // ================= 편의 기능 (업데이트 자동확인 / 윈도우 자동실행 / 관련 항목 자동추천) =================
+  async function initConveniencePanel() {
+    const autoUpdateToggle = $('conv-autoUpdateToggle');
+    // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — main/updater/index.js의 기본값과 맞춤
+    autoUpdateToggle.checked = (await window.itda.settings.get('update_auto_check')) !== '0';
+    autoUpdateToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'update_auto_check', value: autoUpdateToggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        autoUpdateToggle.checked = !autoUpdateToggle.checked;
+      }
+    });
+
+    const autoLaunchToggle = $('conv-autoLaunchToggle');
+    let autoLaunchStatus;
+    try {
+      autoLaunchStatus = await window.itda.app.getAutoLaunch();
+    } catch (e) {
+      autoLaunchStatus = { enabled: false };
+    }
+    autoLaunchToggle.checked = autoLaunchStatus.enabled;
+    autoLaunchToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.app.setAutoLaunch(autoLaunchToggle.checked);
+      } catch (e) {
+        errorToast(e, e.message || '개발 모드에서는 켤 수 없어요');
+        autoLaunchToggle.checked = !autoLaunchToggle.checked;
+      }
+    });
+
+    const autoSuggestToggle = $('conv-autoSuggestToggle');
+    // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — 지금까지의 기본 동작과 맞춤
+    autoSuggestToggle.checked = (await window.itda.settings.get('links_auto_suggest')) !== '0';
+    autoSuggestToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'links_auto_suggest', value: autoSuggestToggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        autoSuggestToggle.checked = !autoSuggestToggle.checked;
+      }
+    });
   }
 
   // ================= Google Calendar 연동 =================
@@ -661,6 +770,7 @@ export async function mount(root) {
   const unmountTagsPanel = await mountTagsPanel($('tags-panelRoot'));
   await loadWidgetsPanel();
   await loadSecurityPanel();
+  await initConveniencePanel();
   initDataPanel();
   await initUpdatePanel();
   await loadGcalPanel();

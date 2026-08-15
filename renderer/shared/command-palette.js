@@ -7,8 +7,9 @@ import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
 // keywords는 그 탭 안에 있는 세부 설정 이름 — 사용자가 "배율"을 검색해도 "화면" 탭이 걸리게 하기 위함.
 const SETTINGS_TAB_KEYWORDS = {
-  display: '배율 다크모드 테마 화면크기',
+  display: '배율 다크모드 테마 화면크기 글꼴 폰트',
   security: '잠금 비밀번호 PIN',
+  convenience: '편의기능 업데이트자동확인 자동실행 시작프로그램 자동추천 관련항목',
   data: '백업 복원 내보내기 가져오기',
   update: '버전 업데이트확인',
 };
