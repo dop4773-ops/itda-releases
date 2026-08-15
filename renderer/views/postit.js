@@ -4,6 +4,7 @@ import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import { sanitizeRichHtml, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
+import { openColorPicker } from '../shared/color-picker.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 
@@ -94,7 +95,9 @@ export async function mount(root) {
             <button class="rich-btn rich-size-btn" data-size="11" title="작게">가</button>
             <button class="rich-btn rich-size-btn active" data-size="13" title="보통">가</button>
             <button class="rich-btn rich-size-btn" data-size="16" title="크게">가</button>
-            <input type="color" class="rich-color-btn rich-color-btn-mini" data-action="textColor" title="글자색" value="#2B2E3A" />
+            <button class="rich-btn rich-color-trigger rich-color-trigger-mini" data-action="textColor" title="글자색">
+              <span>가</span><span class="rich-color-bar" style="background:#2B2E3A;"></span>
+            </button>
           </div>
           <div class="card-content" contenteditable="true" data-action="content" data-placeholder="내용을 입력하세요…">${sanitizeRichHtml(item.content)}</div>
           <div class="card-bottom-row">
@@ -155,9 +158,12 @@ export async function mount(root) {
           scheduleSave();
         });
       });
-      card.querySelector('[data-action="textColor"]').addEventListener('input', (e) => {
-        applyTextColor(contentArea, e.target.value);
-        scheduleSave();
+      card.querySelector('[data-action="textColor"]').addEventListener('click', (e) => {
+        openColorPicker(e.currentTarget, (hex) => {
+          applyTextColor(contentArea, hex);
+          e.currentTarget.querySelector('.rich-color-bar').style.background = hex;
+          scheduleSave();
+        });
       });
 
       card.querySelector('[data-action="pin"]').addEventListener('click', async () => {

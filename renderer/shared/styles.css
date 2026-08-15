@@ -718,6 +718,23 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
   box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px 12px;display:flex;flex-direction:column;gap:8px;
 }
 
+/* ================= 메모/포스트잇 글자색 선택기 (엑셀/한글 스타일 프리셋 그리드 + 사용자 지정) ================= */
+.color-picker-pop{
+  position:fixed;z-index:200;width:148px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:8px;
+}
+.color-picker-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.color-picker-swatch{width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.12);cursor:pointer;padding:0;}
+.color-picker-swatch:hover{transform:scale(1.12);box-shadow:0 2px 6px rgba(0,0,0,.2);}
+.color-picker-custom{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  font-size:11.5px;color:var(--text-soft);border-top:1px solid var(--divider);padding-top:8px;
+}
+.color-picker-customInput{width:26px;height:26px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;}
+.color-picker-customInput::-webkit-color-swatch-wrapper{padding:3px;}
+.color-picker-customInput::-webkit-color-swatch{border:1px solid rgba(0,0,0,.15);border-radius:4px;}
+
 /* ================= "@검색" 빠른 연결 — 메모/포스트잇 본문에서 @입력시 뜨는 팝업 + 삽입된 연결 칩 ================= */
 .mention-popup{
   position:absolute;z-index:200;min-width:220px;max-width:320px;max-height:260px;overflow-y:auto;
@@ -755,12 +772,17 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .rich-size-btn[data-size="14"],.rich-size-btn[data-size="13"]{font-size:12px;}
 .rich-size-btn[data-size="18"],.rich-size-btn[data-size="16"]{font-size:15px;}
 .rich-divider{width:1px;height:16px;background:var(--divider);margin:0 4px;}
-/* 네이티브 <input type=color>를 다른 rich-btn과 같은 정사각형 스와치로 보이게 —
-   브라우저 기본 여백/테두리를 지우고 배경(선택한 색)만 둥글게 보이도록 함 */
+/* 설정 화면(라이트/다크 모드 글자색)에서 쓰는 네이티브 <input type=color> — 다른 버튼과
+   같은 정사각형 스와치로 보이게 브라우저 기본 여백/테두리를 지우고 배경만 둥글게 */
 .rich-color-btn{width:26px;height:26px;padding:0;border:none;border-radius:6px;cursor:pointer;background:none;}
 .rich-color-btn::-webkit-color-swatch-wrapper{padding:3px;}
 .rich-color-btn::-webkit-color-swatch{border:1px solid rgba(0,0,0,.15);border-radius:4px;}
-.rich-color-btn-mini{width:20px;height:20px;}
+/* 메모/포스트잇 리치텍스트 툴바의 "글자색" 버튼 — "가" 글자 아래 마지막으로 고른 색을
+   막대로 보여준다(Word 글자색 아이콘과 같은 관례). 클릭하면 color-picker.js 팝오버가 뜬다. */
+.rich-color-trigger{flex-direction:column;gap:1px;padding-top:3px;font-size:11px;}
+.rich-color-bar{width:14px;height:3px;border-radius:2px;flex-shrink:0;}
+.rich-color-trigger-mini{width:20px;height:20px;font-size:9px;padding-top:1px;}
+.rich-color-trigger-mini .rich-color-bar{width:11px;height:2px;}
 
 /* ================= 메모 첨부파일 스트립 ================= */
 .memo-attach-strip{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:10px;}
