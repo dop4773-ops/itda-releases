@@ -1,6 +1,8 @@
-import { toast, emptyStateBlock, escapeHtml } from './ui-utils.js';
+import { toast, errorToast, emptyStateBlock, escapeHtml } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
 import { initCommandPalette } from './command-palette.js';
+import { preloadShortcuts, getCachedBinding, matchesAccelerator } from './shortcuts.js';
+import { initEventReminders, getActiveReminders, snoozeReminder } from './event-reminders.js';
 
 // 사이드바 접기/펼치기 — app_settings 테이블에 상태 저장 (localStorage 대신 SQLite로 통일)
 async function initSidebarCollapse() {
@@ -18,10 +20,10 @@ async function initSidebarCollapse() {
   }
   btn.addEventListener('click', toggle);
 
-  // Ctrl/Cmd+\ — VSCode 등에서 널리 쓰는 "사이드바 접기/펼치기" 관례. 입력 중에도(메모 작성 등)
-  // 걸리게 텍스트 편집 여부를 따로 체크하지 않음(Ctrl+K 빠른입력과 동일한 정책).
+  // 설정 > 단축키에서 바꿀 수 있음 (기본 Ctrl/Cmd+\). 입력 중에도(메모 작성 등) 걸리게
+  // 텍스트 편집 여부를 따로 체크하지 않음(Ctrl+K 빠른입력과 동일한 정책).
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+    if (matchesAccelerator(e, getCachedBinding('toggleSidebar'))) {
       e.preventDefault();
       toggle();
     }
@@ -57,7 +59,7 @@ function initQuickCapture() {
     if (e.target === overlay) close();
   });
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    if (matchesAccelerator(e, getCachedBinding('quickCapture'))) {
       e.preventDefault();
       open();
     }
@@ -92,12 +94,28 @@ async function refreshGlobalNotifications() {
     listEl.innerHTML = emptyStateBlock({ title: '알림을 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
     return;
   }
-  dot.style.display = items.length > 0 ? 'block' : 'none';
-  if (items.length === 0) {
+  const reminders = getActiveReminders(); // 일정 전 알림(설정 > 편의 기능) — 켜져 있고 지금 알릴 시각 근처인 것들
+  dot.style.display = items.length > 0 || reminders.length > 0 ? 'block' : 'none';
+  if (items.length === 0 && reminders.length === 0) {
     listEl.innerHTML = `<div class="empty notif-empty">새로운 알림이 없어요.</div>`;
     return;
   }
-  listEl.innerHTML = items
+
+  const reminderHtml = reminders
+    .map(
+      ({ event: e, minutesUntil }) => `
+      <div class="notif-item ${minutesUntil <= 0 ? 'urgent' : ''}" style="align-items:center;" data-reminder-id="${e.id}">
+        <div class="notif-icon notif-icon-event">${NOTIF_ICON.event}</div>
+        <div class="notif-body">
+          <b>"${escapeHtml(e.title)}" 일정</b>
+          <span>${minutesUntil <= 0 ? '지금 시작해요' : `${Math.round(minutesUntil)}분 후 시작해요`}</span>
+        </div>
+        <button class="btn-secondary" style="font-size:11px;padding:4px 8px;flex-shrink:0;" data-snooze-id="${e.id}" type="button">다시 알림</button>
+      </div>`
+    )
+    .join('');
+
+  const itemsHtml = items
     .map(
       (n) => `
       <a class="notif-item ${n.urgent ? 'urgent' : ''}" href="${n.href}">
@@ -109,6 +127,17 @@ async function refreshGlobalNotifications() {
       </a>`
     )
     .join('');
+
+  listEl.innerHTML = reminderHtml + itemsHtml;
+
+  listEl.querySelectorAll('button[data-snooze-id]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await snoozeReminder(Number(btn.dataset.snoozeId));
+      await refreshGlobalNotifications();
+    });
+  });
 }
 
 const SUN_ICON = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
@@ -124,9 +153,6 @@ function initGlobalTopbar() {
 
   searchBtn?.addEventListener('click', () => {
     location.hash = '#/search';
-  });
-  profileBtn?.addEventListener('click', () => {
-    location.hash = '#/settings';
   });
 
   function renderThemeIcon() {
@@ -152,6 +178,72 @@ function initGlobalTopbar() {
   });
 
   refreshGlobalNotifications(); // 처음 켰을 때도 빨간 점 표시를 위해 한 번 계산
+
+  // ================= 빠른 설정 (프로필 버튼 드롭다운) =================
+  // 여기서 바꾸는 값은 설정 화면(화면/편의 기능/위젯/시작) 탭들과 완전히 같은 키를 읽고 쓴다 —
+  // 별도로 저장하지 않고, 자주 쓰는 토글 4개만 여기서도 바로 바꿀 수 있게 뽑아낸 것.
+  const qsWrap = document.getElementById('gt-quickSettingsWrap');
+  const qsDark = document.getElementById('qs-darkToggle');
+  const qsNotif = document.getElementById('qs-notifToggle');
+  const qsWidgetTop = document.getElementById('qs-widgetTopToggle');
+  const qsAutoLaunch = document.getElementById('qs-autoLaunchToggle');
+  const qsMoreLink = document.getElementById('qs-moreLink');
+
+  async function refreshQuickSettings() {
+    if (qsDark) qsDark.checked = document.documentElement.dataset.theme === 'dark';
+    if (qsNotif) qsNotif.checked = (await window.itda.settings.get('notif_event_enabled')) !== '0';
+    if (qsWidgetTop) qsWidgetTop.checked = (await window.itda.settings.get('widget_always_on_top')) !== '0';
+    if (qsAutoLaunch) {
+      try {
+        qsAutoLaunch.checked = (await window.itda.app.getAutoLaunch()).enabled;
+      } catch (e) {
+        qsAutoLaunch.checked = false;
+      }
+    }
+  }
+
+  if (profileBtn && qsWrap) {
+    profileBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const opening = !qsWrap.classList.contains('open');
+      qsWrap.classList.toggle('open');
+      if (opening) await refreshQuickSettings();
+    });
+    document.addEventListener('click', (e) => {
+      if (!qsWrap.contains(e.target)) qsWrap.classList.remove('open');
+    });
+    qsMoreLink?.addEventListener('click', () => qsWrap.classList.remove('open'));
+
+    qsDark?.addEventListener('change', async () => {
+      await toggleTheme();
+      renderThemeIcon();
+    });
+    qsNotif?.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'notif_event_enabled', value: qsNotif.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        qsNotif.checked = !qsNotif.checked;
+      }
+    });
+    qsWidgetTop?.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'widget_always_on_top', value: qsWidgetTop.checked ? '1' : '0' });
+        await window.itda.widgets.applyAppearance();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        qsWidgetTop.checked = !qsWidgetTop.checked;
+      }
+    });
+    qsAutoLaunch?.addEventListener('change', async () => {
+      try {
+        await window.itda.app.setAutoLaunch(qsAutoLaunch.checked);
+      } catch (e) {
+        errorToast(e, e.message || '개발 모드에서는 켤 수 없어요');
+        qsAutoLaunch.checked = !qsAutoLaunch.checked;
+      }
+    });
+  }
 }
 
 // 사용자 이름 — app_settings에 저장. 사이드바 프로필과 대시보드 인사말이 이 값을 공유한다.
@@ -264,6 +356,7 @@ export async function setFontFamily(key) {
 }
 
 export async function initShell() {
+  await preloadShortcuts(); // 아래 키다운 리스너들이 걸리기 전에 사용자가 바꾼 단축키를 먼저 읽어둠
   await applyTheme();
   await applyDisplayScale();
   await applyFontFamily();
@@ -271,6 +364,7 @@ export async function initShell() {
   await applySidebarUserName();
   initQuickCapture();
   initGlobalTopbar();
+  initEventReminders(refreshGlobalNotifications); // 일정 전 알림(설정 > 편의 기능) — 30초마다 확인
   initErrorSafetyNet();
   initCommandPalette({ openQuickCapture }); // Ctrl/Cmd+Shift+P — 어느 화면에서든 주요 동작을 키보드로 바로 실행
 }

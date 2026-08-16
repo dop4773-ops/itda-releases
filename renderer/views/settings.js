@@ -2,8 +2,8 @@ import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
 import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
-
-const LOCK_SHORTCUT_HINT = navigator.platform?.toUpperCase().includes('MAC') ? '⌘⌥L' : 'Ctrl+Alt+L';
+import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
+import { DASHBOARD_CARDS } from './dashboard.js';
 
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
@@ -106,6 +106,12 @@ export async function mount(root) {
               </div>
             </div>
           </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>대시보드 구성</h3></div>
+            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 순서는 지금은 고정이에요.</p>
+            <div id="dashboard-cardList"></div>
+          </div>
         </div>
 
         <div class="settings-panel" data-panel="tags">
@@ -113,6 +119,29 @@ export async function mount(root) {
         </div>
 
         <div class="settings-panel" data-panel="widgets">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>위젯 화면</h3></div>
+            <div class="update-row">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">투명도</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">위젯 창을 얼마나 비치게 할지 정해요. 이미 열려있는 위젯에도 바로 적용돼요.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <input type="range" id="widget-opacityRange" min="40" max="100" step="5" style="width:120px;" />
+                <span id="widget-opacityValue" style="font-size:12px;color:var(--text-faint);width:34px;text-align:right;">100%</span>
+              </div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">항상 위에 표시</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">아래 위젯들을 다른 프로그램 창보다 항상 앞에 띄워요. (포스트잇은 각자 핀 버튼으로 따로 정해요)</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="widget-alwaysOnTopToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+          </div>
           <div class="panel">
             <div class="panel-head"><h3>위젯</h3></div>
             <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
@@ -128,19 +157,15 @@ export async function mount(root) {
           <div class="panel">
             <div class="panel-head"><h3>단축키</h3></div>
             <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
-              지금은 아래 단축키가 고정으로 적용돼요. 나중에 원하는 키로 직접 바꿀 수 있는 기능을 추가할 예정이에요.
+              "변경"을 누르고 원하는 키 조합을 누르면 바로 바뀌어요. 다른 단축키와 겹치면 저장하지 않고 알려줘요.
             </p>
-            <div class="shortcut-list">
-              <div class="shortcut-row"><span>어디서든 빠른 입력 (Inbox에 바로 저장) — 잇다 안에서</span><kbd>Ctrl/⌘ + K</kbd></div>
-              <div class="shortcut-row"><span>어디서든 빠른 입력 — 다른 프로그램을 쓰고 있어도 (전역 단축키)</span><kbd>Ctrl/⌘ + Alt + I</kbd></div>
-              <div class="shortcut-row"><span>빠른 실행 (원하는 화면·태그·항목으로 바로 이동)</span><kbd>Ctrl/⌘ + Shift + P</kbd></div>
-              <div class="shortcut-row"><span>사이드바 접기/펼치기</span><kbd>Ctrl/⌘ + \\</kbd></div>
-              <div class="shortcut-row"><span>지금 잠그기 — 다른 프로그램을 쓰고 있어도 (전역 단축키)</span><kbd>Ctrl/⌘ + Alt + L</kbd></div>
+            <div class="shortcut-list" id="shortcuts-list"></div>
+            <div class="shortcut-list" style="margin-top:8px;">
               <div class="shortcut-row"><span>열려있는 패널·모달·위젯 닫기</span><kbd>Esc</kbd></div>
               <div class="shortcut-row"><span>빠른 입력창에서 저장</span><kbd>Enter</kbd></div>
             </div>
             <p style="font-size:11px;color:var(--text-faint);margin:10px 0 0;">
-              전역 단축키는 다른 프로그램이 같은 조합을 이미 쓰고 있으면 동작하지 않을 수 있어요.
+              전역 단축키(다른 프로그램을 쓰고 있어도 동작하는 것)는 다른 프로그램이 같은 조합을 이미 쓰고 있으면 등록되지 않을 수 있어요.
             </p>
           </div>
         </div>
@@ -189,6 +214,44 @@ export async function mount(root) {
               </label>
             </div>
           </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>일정 알림</h3></div>
+            <div class="update-row">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">일정 전 알림</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">오늘 일정이 시작하기 전에 이 PC 알림으로 미리 알려줘요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="notif-eventEnabledToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">몇 분 전에 알릴지</div>
+              </div>
+              <select id="notif-leadSelect" class="select" style="width:100px;">
+                <option value="5">5분 전</option>
+                <option value="10">10분 전</option>
+                <option value="15">15분 전</option>
+                <option value="30">30분 전</option>
+                <option value="60">1시간 전</option>
+              </select>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">기본 다시 알림 (Snooze)</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">알림에서 "다시 알림"을 누르면 이 시간 뒤에 다시 알려줘요.</div>
+              </div>
+              <select id="notif-snoozeSelect" class="select" style="width:100px;">
+                <option value="10">10분</option>
+                <option value="30">30분</option>
+                <option value="60">1시간</option>
+                <option value="1440">내일</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <div class="settings-panel" data-panel="gcal">
@@ -202,6 +265,50 @@ export async function mount(root) {
         </div>
 
         <div class="settings-panel" data-panel="data">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>자동 백업</h3></div>
+            <div class="update-row">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">자동 백업</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">앱이 켜져 있는 동안 이 PC에 주기적으로 자동 저장돼요(백업 폴더에 최근 5개만 보관). 다른 위치로 직접 저장하려면 아래 "백업하기"를 쓰세요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="backup-autoToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">백업 주기</div>
+                <div id="backup-lastAt" style="font-size:12px;color:var(--text-faint);margin-top:2px;">마지막 자동 백업: -</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <select id="backup-periodSelect" class="select" style="width:90px;">
+                  <option value="daily">매일</option>
+                  <option value="weekly">매주</option>
+                  <option value="monthly">매월</option>
+                </select>
+                <select id="backup-weekdaySelect" class="select" style="width:80px;display:none;">
+                  <option value="0">일요일</option>
+                  <option value="1">월요일</option>
+                  <option value="2">화요일</option>
+                  <option value="3">수요일</option>
+                  <option value="4">목요일</option>
+                  <option value="5">금요일</option>
+                  <option value="6">토요일</option>
+                </select>
+                <select id="backup-monthdaySelect" class="select" style="width:70px;display:none;"></select>
+                <input type="time" id="backup-timeInput" class="input" style="width:100px;" />
+              </div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:var(--text);">저장 위치</div>
+                <div id="backup-dirPath" style="font-size:11.5px;color:var(--text-faint);margin-top:2px;word-break:break-all;">불러오는 중…</div>
+              </div>
+              <button class="btn-secondary" id="backup-openDirBtn">폴더 열기</button>
+            </div>
+          </div>
           <div class="panel">
             <div class="panel-head"><h3>데이터 & 백업</h3></div>
             <div class="data-action-row">
@@ -343,9 +450,87 @@ export async function mount(root) {
     await initTextColorRow('dark', 'display-textColorDark', 'display-textColorDarkReset');
   }
 
+  // ================= 단축키 =================
+  async function initShortcutsPanel() {
+    const listEl = $('shortcuts-list');
+    const bindings = await getAllBindings();
+
+    listEl.innerHTML = SHORTCUTS.map(
+      (s) => `
+        <div class="shortcut-row" data-id="${s.id}">
+          <span>${escapeHtml(s.label)}</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <kbd data-kbd="${s.id}">${escapeHtml(labelForAccelerator(bindings[s.id]))}</kbd>
+            <button class="btn-secondary" data-action="edit" data-id="${s.id}">변경</button>
+            <button class="btn-secondary" data-action="reset" data-id="${s.id}">기본값</button>
+          </div>
+        </div>`
+    ).join('');
+
+    async function applyBinding(id, accelerator) {
+      const kbdEl = listEl.querySelector(`kbd[data-kbd="${id}"]`);
+      let status;
+      try {
+        status = await setBinding(id, accelerator);
+      } catch (e) {
+        errorToast(e, '단축키를 저장하지 못했어요');
+        return;
+      }
+      kbdEl.textContent = labelForAccelerator(accelerator);
+      if (status && status[id] === false) {
+        errorToast(new Error('conflict'), '다른 프로그램이 이미 이 조합을 쓰고 있어서 등록되지 않았어요. 다른 조합으로 바꿔보세요.');
+      } else {
+        toast('단축키를 바꿨어요');
+      }
+    }
+
+    listEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const { id } = btn.dataset;
+      const kbdEl = listEl.querySelector(`kbd[data-kbd="${id}"]`);
+
+      if (btn.dataset.action === 'reset') {
+        applyBinding(id, SHORTCUTS.find((s) => s.id === id).default);
+        return;
+      }
+
+      // 편집: 다음 키 입력을 기다림 (Esc면 취소)
+      const prevText = kbdEl.textContent;
+      kbdEl.textContent = '키를 눌러주세요…';
+      btn.disabled = true;
+
+      const onKey = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.key === 'Escape') {
+          cleanup();
+          kbdEl.textContent = prevText;
+          return;
+        }
+        if (isBareKey(ev)) return; // 조합키 없이 단독 키는 무시하고 계속 대기
+        const accelerator = acceleratorFromEvent(ev);
+        const conflict = findConflict(accelerator, id);
+        cleanup();
+        if (conflict) {
+          kbdEl.textContent = prevText;
+          errorToast(new Error('conflict'), `이미 "${conflict.label}"에서 쓰고 있는 조합이에요.`);
+          return;
+        }
+        applyBinding(id, accelerator);
+      };
+      function cleanup() {
+        document.removeEventListener('keydown', onKey, true);
+        btn.disabled = false;
+      }
+      document.addEventListener('keydown', onKey, true);
+    });
+  }
+
   // ================= 보안 (실행 시 비밀번호 잠금) =================
   async function loadSecurityPanel() {
     const body = $('security-panelBody');
+    const lockShortcutHint = labelForAccelerator(await getBinding('lockNow'));
     let status;
     try {
       status = await window.itda.auth.getStatus();
@@ -402,7 +587,7 @@ export async function mount(root) {
             <button class="btn-secondary" id="sec-disableBtn" style="color:var(--danger);">잠금 끄기</button>
           </div>
         </div>
-        <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">단축키 ${LOCK_SHORTCUT_HINT}로 어디서든 바로 잠글 수 있어요.</p>
+        <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">단축키 ${escapeHtml(lockShortcutHint)}로 어디서든 바로 잠글 수 있어요.</p>
         <div class="form-row" id="sec-changeForm" style="display:none;flex-direction:column;gap:8px;margin-top:12px;border-top:1px solid var(--divider);padding-top:12px;max-width:260px;">
           <label style="font-size:12px;color:var(--text-faint);display:flex;flex-direction:column;gap:4px;">
             현재 비밀번호
@@ -490,6 +675,37 @@ export async function mount(root) {
       } catch (e) {
         errorToast(e, '저장하지 못했어요');
         autoSuggestToggle.checked = !autoSuggestToggle.checked;
+      }
+    });
+
+    const eventEnabledToggle = $('notif-eventEnabledToggle');
+    eventEnabledToggle.checked = (await window.itda.settings.get('notif_event_enabled')) !== '0';
+    eventEnabledToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'notif_event_enabled', value: eventEnabledToggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        eventEnabledToggle.checked = !eventEnabledToggle.checked;
+      }
+    });
+
+    const leadSelect = $('notif-leadSelect');
+    leadSelect.value = (await window.itda.settings.get('notif_event_lead_minutes')) || '10';
+    leadSelect.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'notif_event_lead_minutes', value: leadSelect.value });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    });
+
+    const snoozeSelect = $('notif-snoozeSelect');
+    snoozeSelect.value = (await window.itda.settings.get('notif_snooze_minutes')) || '10';
+    snoozeSelect.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'notif_snooze_minutes', value: snoozeSelect.value });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
       }
     });
   }
@@ -621,6 +837,42 @@ export async function mount(root) {
     dday: { label: 'D-DAY', desc: '가까운 마감일 순으로' },
   };
 
+  async function initWidgetAppearancePanel() {
+    const range = $('widget-opacityRange');
+    const valueLabel = $('widget-opacityValue');
+    const savedOpacity = await window.itda.settings.get('widget_opacity');
+    const percent = savedOpacity ? Math.round(Number(savedOpacity) * 100) : 100;
+    range.value = percent;
+    valueLabel.textContent = `${percent}%`;
+
+    let saveTimer = null;
+    range.addEventListener('input', () => {
+      valueLabel.textContent = `${range.value}%`;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        try {
+          await window.itda.settings.set({ key: 'widget_opacity', value: String(Number(range.value) / 100) });
+          await window.itda.widgets.applyAppearance();
+        } catch (e) {
+          errorToast(e, '투명도를 저장하지 못했어요');
+        }
+      }, 200);
+    });
+
+    const alwaysOnTopToggle = $('widget-alwaysOnTopToggle');
+    // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — 지금까지의 기본 동작(항상 위)과 맞춤
+    alwaysOnTopToggle.checked = (await window.itda.settings.get('widget_always_on_top')) !== '0';
+    alwaysOnTopToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'widget_always_on_top', value: alwaysOnTopToggle.checked ? '1' : '0' });
+        await window.itda.widgets.applyAppearance();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        alwaysOnTopToggle.checked = !alwaysOnTopToggle.checked;
+      }
+    });
+  }
+
   async function loadWidgetsPanel() {
     const listEl = $('widget-list');
     let statuses;
@@ -655,6 +907,110 @@ export async function mount(root) {
           toggle.checked = !toggle.checked;
         }
       });
+    });
+  }
+
+  // ================= 대시보드 구성 =================
+  async function initDashboardCardsPanel() {
+    const listEl = $('dashboard-cardList');
+    const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
+    let config = defaults;
+    try {
+      const raw = await window.itda.settings.get('dashboard_cards');
+      if (raw) config = { ...defaults, ...JSON.parse(raw) };
+    } catch (e) {
+      /* 깨진 값이면 기본값으로 */
+    }
+
+    listEl.innerHTML = DASHBOARD_CARDS.map(
+      (c) => `
+        <div class="data-action-row">
+          <div><b>${escapeHtml(c.label)}</b></div>
+          <label class="switch">
+            <input type="checkbox" data-id="${c.id}" ${config[c.id] ? 'checked' : ''} />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>`
+    ).join('');
+
+    listEl.querySelectorAll('input[type="checkbox"]').forEach((toggle) => {
+      toggle.addEventListener('change', async () => {
+        config[toggle.dataset.id] = toggle.checked;
+        try {
+          await window.itda.settings.set({ key: 'dashboard_cards', value: JSON.stringify(config) });
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+          toggle.checked = !toggle.checked;
+          config[toggle.dataset.id] = toggle.checked;
+        }
+      });
+    });
+  }
+
+  // ================= 자동 백업 =================
+  async function initAutoBackupPanel() {
+    const toggle = $('backup-autoToggle');
+    // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — 다른 토글들과 동일한 관례
+    toggle.checked = (await window.itda.settings.get('backup_auto_enabled')) !== '0';
+    toggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'backup_auto_enabled', value: toggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        toggle.checked = !toggle.checked;
+      }
+    });
+
+    async function saveSetting(key, value) {
+      try {
+        await window.itda.settings.set({ key, value: String(value) });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    }
+
+    const weekdaySelect = $('backup-weekdaySelect');
+    const monthdaySelect = $('backup-monthdaySelect');
+    monthdaySelect.innerHTML = Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}">${i + 1}일</option>`).join('');
+
+    function updatePeriodFieldsVisibility() {
+      weekdaySelect.style.display = periodSelect.value === 'weekly' ? '' : 'none';
+      monthdaySelect.style.display = periodSelect.value === 'monthly' ? '' : 'none';
+    }
+
+    const periodSelect = $('backup-periodSelect');
+    periodSelect.value = (await window.itda.settings.get('backup_auto_period')) || 'daily';
+    periodSelect.addEventListener('change', () => {
+      updatePeriodFieldsVisibility();
+      saveSetting('backup_auto_period', periodSelect.value);
+    });
+
+    weekdaySelect.value = (await window.itda.settings.get('backup_auto_weekday')) || '0';
+    weekdaySelect.addEventListener('change', () => saveSetting('backup_auto_weekday', weekdaySelect.value));
+
+    monthdaySelect.value = (await window.itda.settings.get('backup_auto_monthday')) || '1';
+    monthdaySelect.addEventListener('change', () => saveSetting('backup_auto_monthday', monthdaySelect.value));
+
+    updatePeriodFieldsVisibility();
+
+    const timeInput = $('backup-timeInput');
+    timeInput.value = (await window.itda.settings.get('backup_auto_time')) || '03:00';
+    timeInput.addEventListener('change', () => saveSetting('backup_auto_time', timeInput.value || '03:00'));
+
+    const lastAt = await window.itda.settings.get('backup_last_at');
+    $('backup-lastAt').textContent = `마지막 자동 백업: ${lastAt ? new Date(lastAt).toLocaleString('ko-KR') : '아직 없음'}`;
+
+    try {
+      $('backup-dirPath').textContent = await window.itda.data.getBackupsDir();
+    } catch (e) {
+      $('backup-dirPath').textContent = '위치를 불러오지 못했어요';
+    }
+    $('backup-openDirBtn').addEventListener('click', async () => {
+      try {
+        await window.itda.data.openBackupsFolder();
+      } catch (e) {
+        errorToast(e, '폴더를 열지 못했어요');
+      }
     });
   }
 
@@ -813,10 +1169,14 @@ export async function mount(root) {
 
   await initUserPanel();
   await initDisplayPanel();
+  await initDashboardCardsPanel();
   const unmountTagsPanel = await mountTagsPanel($('tags-panelRoot'));
+  await initWidgetAppearancePanel();
   await loadWidgetsPanel();
+  await initShortcutsPanel();
   await loadSecurityPanel();
   await initConveniencePanel();
+  await initAutoBackupPanel();
   initDataPanel();
   await initUpdatePanel();
   await loadGcalPanel();

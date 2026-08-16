@@ -25,9 +25,33 @@
           <div id="gt-notifList"><div class="empty">불러오는 중…</div></div>
         </div>
       </div>
-      <button class="global-icon-btn global-profile-btn" id="gt-profileBtn" title="설정">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      </button>
+      <div class="bell-wrap" id="gt-quickSettingsWrap">
+        <button class="global-icon-btn global-profile-btn" id="gt-profileBtn" title="빠른 설정">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </button>
+        <div class="notif-dropdown" id="gt-quickSettingsDropdown">
+          <div class="notif-dropdown-head">빠른 설정</div>
+          <div class="quick-settings-body">
+            <div class="update-row">
+              <div style="font-size:12.5px;color:var(--text);">🌙 다크 모드</div>
+              <label class="switch"><input type="checkbox" id="qs-darkToggle" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
+            <div class="update-row" style="margin-top:8px;">
+              <div style="font-size:12.5px;color:var(--text);">🔔 일정 전 알림</div>
+              <label class="switch"><input type="checkbox" id="qs-notifToggle" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
+            <div class="update-row" style="margin-top:8px;">
+              <div style="font-size:12.5px;color:var(--text);">🖥 위젯 항상 위</div>
+              <label class="switch"><input type="checkbox" id="qs-widgetTopToggle" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
+            <div class="update-row" style="margin-top:8px;">
+              <div style="font-size:12.5px;color:var(--text);">🚀 Windows 시작</div>
+              <label class="switch"><input type="checkbox" id="qs-autoLaunchToggle" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
+          </div>
+          <a href="#/settings" class="quick-settings-more" id="qs-moreLink">모든 설정 →</a>
+        </div>
+      </div>
     </div>
   </header>
 

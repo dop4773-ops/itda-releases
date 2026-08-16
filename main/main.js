@@ -5,6 +5,7 @@ const registerIpcHandlers = require('./ipc');
 const { initUpdater } = require('./updater');
 const { initGlobalShortcut } = require('./global-shortcut');
 const { initTray } = require('./tray');
+const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
 const createSettingsRepository = require('./repositories/settings.repository');
 
@@ -94,8 +95,9 @@ if (!gotLock) {
     registerIpcHandlers(ipcMain, db, () => mainWindow);
     createWindow();
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
-    initGlobalShortcut(app, () => mainWindow); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
+    initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
+    initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).
     // 위치/크기는 여전히 기억되지만(widget_bounds:*), "다시 켜기"는 사용자가 직접 해야 함.
 

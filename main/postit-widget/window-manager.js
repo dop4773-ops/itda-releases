@@ -16,7 +16,7 @@ const windows = new Map();
 const MIN_WIDTH = 295;
 const MIN_HEIGHT = 295;
 
-function openWidget(postit, { onBoundsChange, dropPos } = {}) {
+function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
   const existing = windows.get(postit.id);
   if (existing && !existing.isDestroyed()) {
     existing.focus();
@@ -43,6 +43,7 @@ function openWidget(postit, { onBoundsChange, dropPos } = {}) {
     },
   });
 
+  win.setOpacity(opacity);
   win.setMenu(null);
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type: 'postit', id: String(postit.id) } });
@@ -85,4 +86,11 @@ function closeIfOpen(postitId) {
   if (win && !win.isDestroyed()) win.close();
 }
 
-module.exports = { openWidget, isOpen, setAlwaysOnTop, closeIfOpen };
+// 설정 > 위젯에서 투명도를 바꿨을 때 이미 열려있는 포스트잇 창들에도 바로 반영하기 위함
+function setOpacityAll(opacity) {
+  windows.forEach((win) => {
+    if (!win.isDestroyed()) win.setOpacity(opacity);
+  });
+}
+
+module.exports = { openWidget, isOpen, setAlwaysOnTop, closeIfOpen, setOpacityAll };

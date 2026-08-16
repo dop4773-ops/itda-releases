@@ -1,6 +1,7 @@
-const { app, dialog, BrowserWindow } = require('electron');
+const { app, dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { backupsDir } = require('../auto-backup');
 
 // exportJson이 만든 데이터를 실제로 DB에 밀어넣는 로직. IPC 핸들러 밖에 둬서
 // db.transaction으로 통째로 감쌀 수 있게(하나라도 실패하면 전부 롤백) 분리했다.
@@ -145,6 +146,13 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
     if (canceled || !filePath) return { cancelled: true };
     await db.backup(filePath);
     return { cancelled: false, filePath };
+  });
+
+  // 자동 백업이 저장되는 폴더 경로 조회/열기 (설정 화면의 "저장 위치" 표시용)
+  ipcMain.handle('data:getBackupsDir', () => backupsDir());
+  ipcMain.handle('data:openBackupsFolder', () => {
+    shell.openPath(backupsDir());
+    return { opened: true };
   });
 
   // 데이터 복원: 선택한 백업 파일로 현재 DB를 완전히 덮어쓴다.

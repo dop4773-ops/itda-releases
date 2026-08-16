@@ -7,6 +7,8 @@ module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
     const dropPos = typeof arg === 'object' && arg !== null && arg.x != null ? { x: arg.x, y: arg.y } : null;
     const postit = repos.postits.getById(id);
     if (!postit) throw new Error('포스트잇을 찾을 수 없습니다.');
+    const rawOpacity = repos.settings.get('widget_opacity');
+    const opacity = rawOpacity ? Number(rawOpacity) : 1;
 
     windowManager.openWidget(postit, {
       // 창 위치/크기가 바뀔 때마다 DB에 반영 — 다른 필드는 그 사이 바뀌었을 수 있으니
@@ -27,6 +29,7 @@ module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
         });
       },
       dropPos,
+      opacity,
     });
     return { opened: true };
   });

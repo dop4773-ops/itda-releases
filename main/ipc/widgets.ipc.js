@@ -1,4 +1,5 @@
 const windowManager = require('../widgets/window-manager');
+const postitWindowManager = require('../postit-widget/window-manager');
 
 const WIDGET_TYPES = ['today-schedule', 'today-todo', 'postit-board', 'quick-memo', 'google-calendar-mini', 'inbox', 'dday'];
 
@@ -18,6 +19,16 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
     repos.settings.set(boundsKey(type), JSON.stringify(bounds));
   }
 
+  // 설정 > 위젯의 "투명도"/"항상 위에 표시" — 값이 없으면(신규 설치) 기존 동작 그대로(불투명/항상위)
+  function currentOpacity() {
+    const raw = repos.settings.get('widget_opacity');
+    const n = raw ? Number(raw) : 1;
+    return Number.isFinite(n) && n > 0 ? n : 1;
+  }
+  function currentAlwaysOnTop() {
+    return repos.settings.get('widget_always_on_top') !== '0';
+  }
+
   function assertValidType(type) {
     if (!WIDGET_TYPES.includes(type)) throw new Error('알 수 없는 위젯입니다: ' + type);
   }
@@ -27,8 +38,16 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
   // 피드백을 받고 제거함). 위치/크기(bounds)만 기억해서, 나중에 다시 켤 때 그 자리에 뜬다.
   ipcMain.handle('widgets:open', (event, type) => {
     assertValidType(type);
-    windowManager.openWidget(type, loadBounds(type), { onBoundsChange: saveBounds });
+    windowManager.openWidget(type, loadBounds(type), { onBoundsChange: saveBounds, opacity: currentOpacity(), alwaysOnTop: currentAlwaysOnTop() });
     return { opened: true };
+  });
+
+  // 설정 화면에서 투명도/항상위를 바꿨을 때, 이미 열려있는 위젯(보드형 + 포스트잇)에 즉시 반영
+  ipcMain.handle('widgets:applyAppearance', () => {
+    windowManager.setOpacityAll(currentOpacity());
+    windowManager.setAlwaysOnTopAll(currentAlwaysOnTop());
+    postitWindowManager.setOpacityAll(currentOpacity()); // 포스트잇의 "항상 위"는 개별 핀(is_always_on_top)을 그대로 유지 — 여기선 건드리지 않음
+    return { ok: true };
   });
 
   ipcMain.handle('widgets:close', (event, type) => {

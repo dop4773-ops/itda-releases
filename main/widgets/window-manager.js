@@ -8,7 +8,7 @@ const windows = new Map();
 
 const DEFAULT_BOUNDS = { width: 300, height: 360 };
 
-function openWidget(type, bounds = {}, { onBoundsChange } = {}) {
+function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTop = true } = {}) {
   const existing = windows.get(type);
   if (existing && !existing.isDestroyed()) {
     existing.focus();
@@ -25,7 +25,7 @@ function openWidget(type, bounds = {}, { onBoundsChange } = {}) {
     frame: false,
     transparent: true,
     resizable: true,
-    alwaysOnTop: true, // 바탕화면 위젯 보드 컨셉이라 기본적으로 다른 창들 위에 떠있음
+    alwaysOnTop, // 바탕화면 위젯 보드 컨셉이라 기본은 다른 창들 위에 떠있음 — 설정 > 위젯에서 끌 수 있음
     skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload.js'),
@@ -35,6 +35,7 @@ function openWidget(type, bounds = {}, { onBoundsChange } = {}) {
     },
   });
 
+  win.setOpacity(opacity);
   win.setMenu(null);
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type } });
@@ -69,4 +70,16 @@ function isOpen(type) {
   return !!(win && !win.isDestroyed());
 }
 
-module.exports = { openWidget, closeWidget, isOpen };
+// 설정에서 투명도/항상위를 바꿨을 때 이미 열려있는 위젯 창들에도 바로 반영하기 위함
+function setOpacityAll(opacity) {
+  windows.forEach((win) => {
+    if (!win.isDestroyed()) win.setOpacity(opacity);
+  });
+}
+function setAlwaysOnTopAll(value) {
+  windows.forEach((win) => {
+    if (!win.isDestroyed()) win.setAlwaysOnTop(value);
+  });
+}
+
+module.exports = { openWidget, closeWidget, isOpen, setOpacityAll, setAlwaysOnTopAll };

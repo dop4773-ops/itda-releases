@@ -2,6 +2,7 @@ import { escapeHtml, debounce } from './ui-utils.js';
 import { TABS as SETTINGS_TABS } from '../views/settings.js';
 import { TAG_ICON } from '../views/tags.js';
 import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
+import { getCachedBinding, matchesAccelerator } from './shortcuts.js';
 
 // 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
@@ -254,9 +255,7 @@ export function initCommandPalette({ openQuickCapture }) {
   }
 
   document.addEventListener('keydown', (e) => {
-    const isMac = navigator.platform.toUpperCase().includes('MAC');
-    const modOk = isMac ? e.metaKey : e.ctrlKey;
-    if (modOk && e.shiftKey && e.key.toLowerCase() === 'p') {
+    if (matchesAccelerator(e, getCachedBinding('commandPalette'))) {
       e.preventDefault();
       if (overlay?.classList.contains('open')) {
         close();

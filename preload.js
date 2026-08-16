@@ -95,6 +95,8 @@ contextBridge.exposeInMainWorld('itda', {
   },
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),
+    getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),
+    openBackupsFolder: () => ipcRenderer.invoke('data:openBackupsFolder'),
     restore: () => ipcRenderer.invoke('data:restore'),
     exportJson: () => ipcRenderer.invoke('data:exportJson'),
     importJson: () => ipcRenderer.invoke('data:importJson'),
@@ -114,6 +116,7 @@ contextBridge.exposeInMainWorld('itda', {
     close: (type) => ipcRenderer.invoke('widgets:close', type),
     isOpen: (type) => ipcRenderer.invoke('widgets:isOpen', type),
     listStatus: () => ipcRenderer.invoke('widgets:listStatus'),
+    applyAppearance: () => ipcRenderer.invoke('widgets:applyAppearance'),
     openMainApp: (route) => ipcRenderer.invoke('widgets:openMainApp', route),
   },
   itemWidget: {
@@ -157,6 +160,10 @@ contextBridge.exposeInMainWorld('itda', {
   settings: {
     get: (key) => ipcRenderer.invoke('settings:get', key),
     set: (payload) => ipcRenderer.invoke('settings:set', payload),
+  },
+  shortcuts: {
+    reregisterGlobal: () => ipcRenderer.invoke('shortcuts:reregisterGlobal'),
+    getGlobalStatus: () => ipcRenderer.invoke('shortcuts:getGlobalStatus'),
   },
   auth: {
     getStatus: () => ipcRenderer.invoke('auth:getStatus'),

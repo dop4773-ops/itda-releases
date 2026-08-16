@@ -8,6 +8,21 @@ import { getUserName } from '../shared/shell.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 
+// 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
+// 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
+export const DASHBOARD_CARDS = [
+  { id: 'todo', label: '오늘 할 일', default: true },
+  { id: 'event', label: '오늘 일정', default: true },
+  { id: 'memo', label: '최근 메모', default: true },
+  { id: 'postit', label: '고정 포스트잇', default: true },
+  { id: 'linked', label: '연결된 업무', default: true },
+  { id: 'activity', label: '최근 활동', default: false },
+  { id: 'weekSummary', label: '이번 주 요약', default: false },
+  { id: 'quickAdd', label: '빠른 추가', default: true },
+  { id: 'sideCalendar', label: '사이드 캘린더', default: true },
+  { id: 'sidePostit', label: '사이드 포스트잇', default: true },
+];
+
 const CATEGORY_FALLBACK_COLOR = 'var(--text-faint)';
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -95,24 +110,24 @@ export async function mount(root) {
           </div>
         </div>
 
-        <div class="content-grid">
-          <div class="panel">
+        <div class="content-grid" id="d-contentGrid">
+          <div class="panel" id="d-card-todo">
             <div class="panel-head"><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
             <div id="d-todoList"></div>
             <div class="empty" id="d-todoEmpty" style="display:none;">할 일이 없어요. Inbox에서 바로 추가해보세요.</div>
           </div>
-          <div class="panel">
+          <div class="panel" id="d-card-event">
             <div class="panel-head"><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
             <div id="d-eventList"></div>
             <div class="empty" id="d-eventEmpty" style="display:none;">일정이 없어요.</div>
           </div>
-          <div>
-            <div class="panel" style="margin-bottom:14px;">
+          <div id="d-col-memoPostit">
+            <div class="panel" id="d-card-memo" style="margin-bottom:14px;">
               <div class="panel-head"><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
               <div id="d-memoList"></div>
               <div class="empty" id="d-memoEmpty" style="display:none;">메모가 없어요.</div>
             </div>
-            <div class="panel">
+            <div class="panel" id="d-card-postit">
               <div class="panel-head"><h3>고정 포스트잇</h3><a class="btn-icon" href="#/postit">더보기 ›</a></div>
               <div id="d-postitList"></div>
               <div class="empty" id="d-postitEmpty" style="display:none;">고정된 포스트잇이 없어요.</div>
@@ -120,21 +135,21 @@ export async function mount(root) {
           </div>
         </div>
 
-        <div class="panel dash-linked-panel">
+        <div class="panel dash-linked-panel" id="d-card-linked">
           <div class="panel-head"><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
           <div id="d-linkedRow"><div class="empty">불러오는 중…</div></div>
         </div>
 
-        <div class="dash-bottom-grid">
-          <div class="panel">
+        <div class="dash-bottom-grid" id="d-bottomGrid">
+          <div class="panel" id="d-card-activity">
             <div class="panel-head"><h3>최근 활동</h3></div>
             <div id="d-activityList"></div>
           </div>
-          <div class="panel">
+          <div class="panel" id="d-card-weekSummary">
             <div class="panel-head"><h3>이번 주 요약</h3></div>
             <div id="d-weekSummary" class="week-summary-grid"></div>
           </div>
-          <div class="panel">
+          <div class="panel" id="d-card-quickAdd">
             <div class="panel-head"><h3>빠른 추가</h3></div>
             <div class="quick-add-grid">
               <a class="quick-add-btn" href="#/todo">+ Todo</a>
@@ -153,7 +168,7 @@ export async function mount(root) {
       </div>
 
       <aside class="dash-side" id="d-side">
-        <div class="panel side-cal-panel">
+        <div class="panel side-cal-panel" id="d-card-sideCalendar">
           <div class="panel-head">
             <h3>일정 (Calendar)</h3>
             <button class="btn-icon" id="d-calWidgetBtn" title="구글 캘린더 위젯 열기">${WIDGET_ICON}</button>
@@ -178,7 +193,7 @@ export async function mount(root) {
           <div class="side-cal-grid" id="d-calGrid"><div class="empty">불러오는 중…</div></div>
         </div>
 
-        <div class="panel side-postit-panel">
+        <div class="panel side-postit-panel" id="d-card-sidePostit">
           <div class="panel-head"><h3>포스트잇</h3><a class="btn-icon" href="#/postit">+ 새 포스트잇</a></div>
           <div class="side-postit-grid" id="d-postitGrid"></div>
         </div>
@@ -187,6 +202,55 @@ export async function mount(root) {
   `;
 
   const $ = (id) => root.querySelector('#' + id);
+
+  // 카드 on/off (설정에서 저장한 JSON 하나로 관리) — 데이터를 안 불러오는 최적화는 하지 않고
+  // 단순히 숨긴다(로컬 SQLite라 비용이 작아서 그정도 절약은 안 해도 됨).
+  // 고정 3열 그리드(content-grid/dash-bottom-grid)에서 일부만 숨기면 빈 칸이 남으므로,
+  // 보이는 카드 수에 맞춰 grid-template-columns를 다시 계산해서 채운다.
+  async function applyDashboardCardConfig() {
+    const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
+    let config = defaults;
+    try {
+      const raw = await window.itda.settings.get('dashboard_cards');
+      if (raw) config = { ...defaults, ...JSON.parse(raw) };
+    } catch (e) {
+      // 저장된 값이 깨졌으면(수동 편집 등) 기본값으로 — 대시보드가 안 뜨는 것보다 나음
+    }
+
+    const setVisible = (id, visible) => {
+      const el = $(id);
+      if (el) el.style.display = visible ? '' : 'none';
+    };
+    DASHBOARD_CARDS.forEach((c) => setVisible(`d-card-${c.id}`, config[c.id]));
+
+    const memoPostitColVisible = config.memo || config.postit;
+    setVisible('d-col-memoPostit', memoPostitColVisible);
+    const contentColumns = [
+      [config.todo, '1.1fr'],
+      [config.event, '1fr'],
+      [memoPostitColVisible, '1fr'],
+    ]
+      .filter(([visible]) => visible)
+      .map(([, weight]) => weight)
+      .join(' ');
+    $('d-contentGrid').style.gridTemplateColumns = contentColumns;
+
+    const bottomVisible = config.activity || config.weekSummary || config.quickAdd;
+    $('d-bottomGrid').style.display = bottomVisible ? '' : 'none';
+    if (bottomVisible) {
+      $('d-bottomGrid').style.gridTemplateColumns = [
+        [config.activity, '1.3fr'],
+        [config.weekSummary, '1fr'],
+        [config.quickAdd, '1fr'],
+      ]
+        .filter(([visible]) => visible)
+        .map(([, weight]) => weight)
+        .join(' ');
+    }
+
+    $('d-layout').classList.toggle('side-collapsed', !(config.sideCalendar || config.sidePostit));
+  }
+  await applyDashboardCardConfig();
 
   // 일정 상세/수정 팝업 — 캘린더 화면으로 이동하지 않고 대시보드 안에서 바로 뜨도록
   // calendar.js와 동일한 모달을 재사용(renderer/shared/event-detail-modal.js)한다.

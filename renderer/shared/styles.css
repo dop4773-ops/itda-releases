@@ -195,6 +195,9 @@ html, body{height:100%;}
 }
 .bell-wrap.open .notif-dropdown{display:flex;}
 .notif-dropdown-head{font-size:12px;font-weight:600;color:var(--text-faint);padding:12px 14px 6px;}
+.quick-settings-body{padding:6px 14px 10px;}
+.quick-settings-more{display:block;text-align:center;font-size:12px;color:var(--brand);text-decoration:none;padding:10px 14px;border-top:1px solid var(--divider);}
+.quick-settings-more:hover{background:var(--bg);}
 .notif-item{display:flex;gap:10px;padding:9px 14px;text-decoration:none;color:inherit;align-items:flex-start;}
 .notif-item:hover{background:var(--bg);}
 .notif-icon{width:28px;height:28px;border-radius:var(--radius-sm);background:var(--brand-soft);color:var(--brand);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
