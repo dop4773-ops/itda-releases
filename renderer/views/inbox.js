@@ -1,6 +1,7 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { openCreateEventModal } from '../shared/create-event-modal.js';
 
 const INBOX_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>`;
 const CHECK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>`;
@@ -74,6 +75,7 @@ export async function mount(root) {
           </div>
           <div class="actions">
             <button class="btn-secondary" data-action="to-todo" data-id="${i.id}" data-content="${escapeHtml(i.content)}">Todo로 전환</button>
+            <button class="btn-secondary" data-action="to-event" data-id="${i.id}" data-content="${escapeHtml(i.content)}">일정으로 전환</button>
             <button class="btn-icon" data-action="delete" data-id="${i.id}" title="삭제">${TRASH_ICON}</button>
           </div>
         </div>`
@@ -104,6 +106,21 @@ export async function mount(root) {
         } catch (e) {
           errorToast(e, '전환하지 못했어요');
           btn.disabled = false;
+        }
+      });
+    });
+
+    listEl.querySelectorAll('[data-action="to-event"]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = Number(btn.dataset.id);
+        const content = btn.dataset.content;
+        const newEvent = await openCreateEventModal({ title: content });
+        if (!newEvent) return; // 취소
+        try {
+          await window.itda.inbox.markProcessed({ id, type: 'event', refId: newEvent.id });
+          load();
+        } catch (e) {
+          errorToast(e, 'Inbox 항목을 처리 표시하지 못했어요');
         }
       });
     });

@@ -6,6 +6,7 @@ import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 import { attachDateQuickChips } from '../shared/date-quick-chips.js';
 import { confirmSeriesScope } from '../shared/series-scope.js';
+import { openCreateEventModal } from '../shared/create-event-modal.js';
 
 const TODO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`;
 const RECURRENCE_LABEL = { daily: '매일', weekly: '매주', monthly: '매월' };
@@ -461,6 +462,7 @@ export async function mount(root) {
 
       <div class="panel-footer">
         <span class="panel-meta">생성일: ${(todo.created_at || '').slice(0, 10)}</span>
+        <button class="btn-secondary" id="tp-toEvent" title="이 할 일 내용으로 일정을 등록해요">📅 일정으로 만들기</button>
         <button class="btn-secondary panel-delete-btn" id="tp-delete">${TRASH_ICON} 삭제</button>
       </div>
     `;
@@ -569,6 +571,18 @@ export async function mount(root) {
         renderPanel(fresh);
       } catch (err) {
         errorToast(err, '하위 할 일을 추가하지 못했어요');
+      }
+    });
+
+    $('tp-toEvent').addEventListener('click', async () => {
+      const newEvent = await openCreateEventModal({ title: todo.title, memo: todo.memo || '', dueDate: todo.due_date || null });
+      if (!newEvent) return; // 취소
+      try {
+        await window.itda.links.add({ aType: 'todo', aId: todo.id, bType: 'event', bId: newEvent.id });
+        const fresh = await window.itda.todos.get(todo.id);
+        renderPanel(fresh); // 연결된 항목 목록에 방금 만든 일정이 바로 보이도록 다시 그림
+      } catch (e) {
+        errorToast(e, '일정과 연결하지 못했어요');
       }
     });
 
