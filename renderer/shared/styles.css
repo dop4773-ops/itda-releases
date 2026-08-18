@@ -849,20 +849,22 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ---- 요약 카드 5개 ---- */
 .summary-grid-5{grid-template-columns:repeat(5,1fr);}
 
-/* ---- 위젯 그리드: 그립을 드래그하면 순서 변경, 패널 모서리를 드래그하면 크기 조절
-   (네이티브 CSS resize 사용 — 결과는 dashboard.js의 ResizeObserver가 감지해 저장) ---- */
-.dash-widget-grid{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin-bottom:16px;}
-/* flex-grow/shrink을 0으로 둬야 리사이즈 핸들로 정한 width가 다시 늘어나지 않고 그대로 유지됨
-   (grow가 있으면 flex가 남는 공간을 이 카드에 다시 배분해서 리사이즈가 무의미해짐). */
-.dash-widget{flex:0 0 auto;width:320px;min-width:260px;min-height:140px;max-width:100%;resize:both;overflow:auto;}
-.dash-widget-wide{width:100%;}
-.dash-widget.dragging{opacity:.35;}
+/* ---- 위젯 그리드: 그립을 자유롭게 드래그해서 아무 데나 옮기고, 패널 모서리를 드래그하면
+   크기 조절(네이티브 CSS resize) — 위치/크기 둘 다 dashboard.js가 감지해서 저장한다.
+   카드가 자유 위치라 position:absolute를 쓰고, 컨테이너 높이는 JS가 내용에 맞춰 갱신한다. */
+.dash-widget-grid{position:relative;margin-bottom:16px;}
+.dash-widget{position:absolute;min-width:260px;min-height:140px;resize:both;overflow:auto;}
+.dash-widget.dragging{opacity:.6;z-index:20;box-shadow:0 10px 24px rgba(16,24,40,.22);}
 .dash-widget-grip{cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;display:inline-flex;}
 .dash-widget-grip:active{cursor:grabbing;}
 /* 기본 .panel-head는 space-between(제목 vs 더보기 버튼 2개 기준)인데, 위젯엔 그립까지 3번째
    요소로 들어가서 그립+제목이 서로 멀어져버림 — 그립+제목을 붙이고 더보기만 오른쪽 끝으로 민다. */
 .dash-widget .panel-head{justify-content:flex-start;}
 .dash-widget .panel-head > a{margin-left:auto;}
+/* 파워포인트 스마트 가이드 느낌의 정렬 점선 — 드래그 중에만 잠깐 나타났다 사라진다. */
+.dash-guide{position:absolute;pointer-events:none;z-index:30;}
+.dash-guide-v{top:0;bottom:0;border-left:1px dashed var(--brand);}
+.dash-guide-h{left:0;right:0;border-top:1px dashed var(--brand);}
 
 /* ---- 연결된 업무 ---- */
 .linked-row-inner{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0;}

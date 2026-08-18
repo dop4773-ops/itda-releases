@@ -7,6 +7,7 @@ import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget
 import { getUserName } from '../shared/shell.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
+import { getPreset } from '../shared/dashboard-layouts.js';
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
@@ -132,7 +133,7 @@ export async function mount(root) {
             <div id="d-postitList"></div>
             <div class="empty" id="d-postitEmpty" style="display:none;">고정된 포스트잇이 없어요.</div>
           </div>
-          <div class="panel dash-widget dash-widget-wide" id="d-card-linked" data-card="linked">
+          <div class="panel dash-widget" id="d-card-linked" data-card="linked">
             <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
             <div id="d-linkedRow"><div class="empty">불러오는 중…</div></div>
           </div>
@@ -223,45 +224,69 @@ export async function mount(root) {
   }
   await applyDashboardCardConfig();
 
-  // ================= 위젯 그리드: 드래그로 순서 바꾸기 + 크기 기억 =================
-  // 위치(순서)와 크기(드래그 리사이즈 결과)를 카드별로 설정에 저장해서 다음에 열어도 유지한다.
+  // ================= 위젯 그리드: 자유 위치 이동 + 크기 조절 + 정렬 가이드 =================
+  // 카드마다 {x,y,w,h}를 설정에 저장해서 다음에 열어도 유지한다. 처음 보거나(설치 직후) 새로
+  // 켠 카드처럼 저장된 위치가 없는 카드는 현재 프리셋(기본형/2열형)으로 계산해서 채워 넣는다.
   async function initWidgetGrid() {
     const grid = $('d-widgetGrid');
     const widgets = Array.from(grid.querySelectorAll('.dash-widget'));
+    const widgetById = new Map(widgets.map((w) => [w.dataset.card, w]));
 
-    let layout = { order: [], sizes: {} };
+    let presetId = 'flow';
+    let positions = {};
     try {
       const raw = await window.itda.settings.get('dashboard_layout');
-      if (raw) layout = { order: [], sizes: {}, ...JSON.parse(raw) };
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.widgets) {
+          presetId = parsed.preset || 'flow';
+          positions = parsed.widgets;
+        }
+      }
     } catch (e) {
-      // 저장된 값이 없거나 깨졌으면 기본 순서/크기 그대로 사용
+      // 저장된 값이 없거나(신규 설치) 옛 버전 형식/깨진 값이면 프리셋으로 새로 계산
     }
 
-    // 저장된 순서대로 DOM을 재배치 — order에 없는(새로 추가된) 카드는 원래 위치 그대로 뒤에 남는다.
-    if (layout.order.length) {
-      const byCard = new Map(widgets.map((w) => [w.dataset.card, w]));
-      layout.order.forEach((cardId) => {
-        const el = byCard.get(cardId);
-        if (el) grid.appendChild(el);
+    const visibleIds = widgets.filter((w) => w.style.display !== 'none').map((w) => w.dataset.card);
+    const missingIds = visibleIds.filter((id) => !positions[id]);
+    if (missingIds.length) {
+      const containerWidth = grid.clientWidth || 1000;
+      const computed = getPreset(presetId).compute(visibleIds, containerWidth);
+      missingIds.forEach((id) => {
+        positions[id] = computed[id];
       });
     }
-    // 저장된 크기 적용
-    widgets.forEach((w) => {
-      const size = layout.sizes[w.dataset.card];
-      if (size?.width) w.style.width = `${size.width}px`;
-      if (size?.height) w.style.height = `${size.height}px`;
-    });
 
-    function persistLayout() {
-      const order = Array.from(grid.querySelectorAll('.dash-widget')).map((w) => w.dataset.card);
-      window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ order, sizes: layout.sizes }) }).catch(() => {});
+    function applyPosition(cardId) {
+      const w = widgetById.get(cardId);
+      const p = positions[cardId];
+      if (!w || !p) return;
+      w.style.left = `${p.x}px`;
+      w.style.top = `${p.y}px`;
+      w.style.width = `${p.w}px`;
+      w.style.height = `${p.h}px`;
     }
+    widgets.forEach((w) => applyPosition(w.dataset.card));
+
+    function recalcContainerHeight() {
+      let maxBottom = 0;
+      widgets.forEach((w) => {
+        if (w.style.display === 'none') return;
+        const p = positions[w.dataset.card];
+        if (p) maxBottom = Math.max(maxBottom, p.y + p.h);
+      });
+      grid.style.height = `${maxBottom}px`;
+    }
+    recalcContainerHeight();
+
+    function persist() {
+      window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: presetId, widgets: positions }) }).catch(() => {});
+    }
+    persist(); // 방금 새로 채운 기본 위치도 다음엔 그대로 이어서 보이도록 저장해둔다
 
     // 크기: 네이티브 resize(모서리 드래그)로 바뀐 최종 크기를 ResizeObserver로 감지해 저장.
-    // observe()는 관찰을 시작하자마자 "현재 크기"로 콜백을 한 번 더 호출하는데(스펙 동작),
-    // 이걸 그대로 저장하면 사용자가 손도 안 댄 카드까지 "그 순간의 화면 크기"로 고정돼버려서
-    // (예: 폭이 100%인 '연결된 업무' 카드가 창을 열자마자 몇 px짜리 고정폭으로 굳어버림) —
-    // 카드별로 이 최초 콜백 한 번은 무시하고, 그 다음부터(=실제 드래그로 바뀐 경우)만 저장한다.
+    // observe()는 관찰을 시작하자마자 "현재 크기"로 콜백을 한 번 더 주는데(스펙 동작), 이걸
+    // 그대로 저장하면 손도 안 댄 카드까지 저장돼버리니 카드별로 이 최초 콜백 한 번은 무시한다.
     const observedOnce = new Set();
     let resizeTimer = null;
     const resizeObserver = new ResizeObserver((entries) => {
@@ -277,43 +302,109 @@ export async function mount(root) {
         const box = entry.borderBoxSize?.[0];
         const width = box ? box.inlineSize : entry.target.offsetWidth;
         const height = box ? box.blockSize : entry.target.offsetHeight;
-        layout.sizes[cardId] = { width: Math.round(width), height: Math.round(height) };
+        positions[cardId] = { ...positions[cardId], w: Math.round(width), h: Math.round(height) };
         changed = true;
       });
       if (!changed) return;
+      recalcContainerHeight();
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(persistLayout, 400);
+      resizeTimer = setTimeout(persist, 400);
     });
     widgets.forEach((w) => resizeObserver.observe(w, { box: 'border-box' }));
 
-    // 순서: 그립 아이콘을 드래그해서 다른 카드 위에 놓으면 그 카드 앞으로 이동
-    let draggingCard = null;
+    // 이동: 그립을 눌러서 자유롭게 끌 수 있고, 다른 카드와 가장자리/중심이 맞으면(파워포인트
+    // 스마트 가이드처럼) 점선을 보여주고 그 위치에 딱 붙는다(스냅).
+    const SNAP = 6;
+    let guideEls = [];
+    function clearGuides() {
+      guideEls.forEach((el) => el.remove());
+      guideEls = [];
+    }
+    function showGuide(axis, pos) {
+      const el = document.createElement('div');
+      el.className = `dash-guide dash-guide-${axis}`;
+      el.style[axis === 'v' ? 'left' : 'top'] = `${pos}px`;
+      grid.appendChild(el);
+      guideEls.push(el);
+    }
+    // dragged를 (left, top)에 놨을 때 다른 카드들과의 가장자리/중심선 중 SNAP px 이내로 가장
+    // 가까운 것을 하나 골라 그 좌표에 딱 맞춘다 — 가로/세로 축은 독립적으로 각각 계산한다.
+    function computeSnap(dragged, left, top) {
+      const w = dragged.offsetWidth;
+      const h = dragged.offsetHeight;
+      const dX = [left, left + w / 2, left + w];
+      const dY = [top, top + h / 2, top + h];
+      let bestX = null;
+      let bestY = null;
+      widgets.forEach((o) => {
+        if (o === dragged || o.style.display === 'none') return;
+        const ol = o.offsetLeft;
+        const ot = o.offsetTop;
+        const oX = [ol, ol + o.offsetWidth / 2, ol + o.offsetWidth];
+        const oY = [ot, ot + o.offsetHeight / 2, ot + o.offsetHeight];
+        dX.forEach((dx) => oX.forEach((ox) => {
+          const diff = Math.abs(dx - ox);
+          if (diff <= SNAP && (!bestX || diff < bestX.diff)) bestX = { diff, delta: ox - dx, pos: ox };
+        }));
+        dY.forEach((dy) => oY.forEach((oy) => {
+          const diff = Math.abs(dy - oy);
+          if (diff <= SNAP && (!bestY || diff < bestY.diff)) bestY = { diff, delta: oy - dy, pos: oy };
+        }));
+      });
+      return {
+        left: bestX ? left + bestX.delta : left,
+        top: bestY ? top + bestY.delta : top,
+        guideX: bestX ? bestX.pos : null,
+        guideY: bestY ? bestY.pos : null,
+      };
+    }
+
+    let activeOnMove = null;
+    let activeOnUp = null;
     grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
-      grip.addEventListener('dragstart', (e) => {
-        draggingCard = grip.closest('.dash-widget');
-        draggingCard.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', draggingCard.dataset.card); // 일부 환경은 setData 없인 드래그 자체를 안 받아줌
-      });
-      grip.addEventListener('dragend', () => {
-        draggingCard?.classList.remove('dragging');
-        draggingCard = null;
-        persistLayout();
-      });
-    });
-    widgets.forEach((w) => {
-      w.addEventListener('dragover', (e) => {
-        if (!draggingCard || draggingCard === w) return;
+      grip.addEventListener('mousedown', (e) => {
         e.preventDefault();
-      });
-      w.addEventListener('drop', (e) => {
-        if (!draggingCard || draggingCard === w) return;
-        e.preventDefault();
-        w.before(draggingCard);
+        const widget = grip.closest('.dash-widget');
+        const cardId = widget.dataset.card;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = widget.offsetLeft;
+        const startTop = widget.offsetTop;
+        widget.classList.add('dragging');
+
+        function onMove(ev) {
+          const rawLeft = Math.max(0, startLeft + (ev.clientX - startX));
+          const rawTop = Math.max(0, startTop + (ev.clientY - startY));
+          const snap = computeSnap(widget, rawLeft, rawTop);
+          widget.style.left = `${snap.left}px`;
+          widget.style.top = `${snap.top}px`;
+          clearGuides();
+          if (snap.guideX != null) showGuide('v', snap.guideX);
+          if (snap.guideY != null) showGuide('h', snap.guideY);
+        }
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          activeOnMove = null;
+          activeOnUp = null;
+          widget.classList.remove('dragging');
+          clearGuides();
+          positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, y: widget.offsetTop };
+          recalcContainerHeight();
+          persist();
+        }
+        activeOnMove = onMove;
+        activeOnUp = onUp;
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
       });
     });
 
-    return () => resizeObserver.disconnect();
+    return () => {
+      resizeObserver.disconnect();
+      if (activeOnMove) document.removeEventListener('mousemove', activeOnMove);
+      if (activeOnUp) document.removeEventListener('mouseup', activeOnUp);
+    };
   }
   const disconnectWidgetGrid = await initWidgetGrid();
 

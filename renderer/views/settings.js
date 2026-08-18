@@ -4,6 +4,7 @@ import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
 import { DASHBOARD_CARDS } from './dashboard.js';
+import { LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
 
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
@@ -15,9 +16,11 @@ const WIDGET_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none"
 const KEY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;
 const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
 const SLIDERS_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>`;
+const DASHBOARD_TAB_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>`;
 
 export const TABS = [
   { id: 'display', label: '화면', icon: DISPLAY_ICON },
+  { id: 'dashboard', label: '대시보드', icon: DASHBOARD_TAB_ICON },
   { id: 'tags', label: '태그', icon: TAG_ICON },
   { id: 'widgets', label: '위젯', icon: WIDGET_ICON },
   { id: 'shortcuts', label: '단축키', icon: KEY_ICON },
@@ -106,11 +109,21 @@ export async function mount(root) {
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="settings-panel" data-panel="dashboard">
+          <div class="panel">
+            <div class="panel-head"><h3>카드 구성</h3></div>
+            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 직접 바꿀 수 있어요.</p>
+            <div id="dashboard-cardList"></div>
+          </div>
 
           <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>대시보드 구성</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 카드 순서/크기는 대시보드에서 직접 드래그로 바꿀 수 있어요.</p>
-            <div id="dashboard-cardList"></div>
+            <div class="panel-head"><h3>배치 프리셋</h3></div>
+            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">미리 만들어둔 배치로 한 번에 정렬해요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
+            <div class="form-row">
+              ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
+            </div>
             <button class="btn-secondary" id="dashboard-resetLayoutBtn" style="margin-top:12px;">기본 배치로 되돌리기</button>
           </div>
         </div>
@@ -975,6 +988,19 @@ export async function mount(root) {
       } catch (e) {
         errorToast(e, '되돌리지 못했어요');
       }
+    });
+
+    // 프리셋 버튼 — 카드별 위치/크기(widgets)를 비우고 프리셋 id만 저장하면, 대시보드가
+    // 다음에 열릴 때 그 프리셋 계산식으로 전부 새로 배치한다(dashboard.js initWidgetGrid 참고).
+    root.querySelectorAll('[data-preset]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: btn.dataset.preset, widgets: {} }) });
+          toast('대시보드에 반영하려면 대시보드로 이동하세요.');
+        } catch (e) {
+          errorToast(e, '프리셋을 적용하지 못했어요');
+        }
+      });
     });
   }
 
