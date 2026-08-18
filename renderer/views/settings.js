@@ -1,5 +1,5 @@
 import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
-import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_OPTIONS, getDisplayScale, setDisplayScale, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
+import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
@@ -21,30 +21,32 @@ const DASHBOARD_TAB_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill
 const TRASH_MINI_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 
 export const TABS = [
-  { id: 'display', label: '화면', icon: DISPLAY_ICON },
-  { id: 'dashboard', label: '대시보드', icon: DASHBOARD_TAB_ICON },
-  { id: 'tags', label: '태그', icon: TAG_ICON },
-  { id: 'widgets', label: '위젯', icon: WIDGET_ICON },
-  { id: 'shortcuts', label: '단축키', icon: KEY_ICON },
-  { id: 'security', label: '보안', icon: LOCK_ICON },
-  { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON },
-  { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON },
-  { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON },
-  { id: 'update', label: '업데이트', icon: UPDATE_ICON },
+  { id: 'display', label: '화면', icon: DISPLAY_ICON, tone: 'blue' },
+  { id: 'dashboard', label: '대시보드', icon: DASHBOARD_TAB_ICON, tone: 'purple' },
+  { id: 'tags', label: '태그', icon: TAG_ICON, tone: 'yellow' },
+  { id: 'widgets', label: '위젯', icon: WIDGET_ICON, tone: 'pink' },
+  { id: 'shortcuts', label: '단축키', icon: KEY_ICON, tone: 'green' },
+  { id: 'security', label: '보안', icon: LOCK_ICON, tone: 'danger' },
+  { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON, tone: 'blue' },
+  { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON, tone: 'green' },
+  { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON, tone: 'purple' },
+  { id: 'update', label: '업데이트', icon: UPDATE_ICON, tone: 'pink' },
 ];
 
 export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
-        <div class="page-head-icon">${SETTINGS_ICON}</div>
+        <div class="page-head-icon tone-blue">${SETTINGS_ICON}</div>
         <div><h1>설정</h1><p>잇다를 내 방식대로 설정하고 관리하세요.</p></div>
       </div>
     </div>
 
     <div class="settings-layout">
       <div class="settings-tabs">
-        ${TABS.map((t, i) => `<button class="settings-tab ${i === 0 ? 'active' : ''}" data-tab="${t.id}">${t.icon}<span>${t.label}</span></button>`).join('')}
+        ${TABS.map(
+          (t, i) => `<button class="settings-tab tone-${t.tone} ${i === 0 ? 'active' : ''}" data-tab="${t.id}"><span class="settings-tab-icon">${t.icon}</span><span>${t.label}</span></button>`
+        ).join('')}
       </div>
       <div class="settings-content">
         <div class="settings-panel active" data-panel="display">
@@ -76,18 +78,20 @@ export async function mount(root) {
                 <div style="font-size:13px;font-weight:600;color:var(--text);">화면 배율</div>
                 <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">글씨/버튼 크기를 키우거나 줄여요. 저해상도 모니터에서 화면이 너무 작게 보일 때 조정해보세요.</div>
               </div>
-              <select id="display-scaleSelect" class="select" style="width:90px;">
-                ${DISPLAY_SCALE_OPTIONS.map((v) => `<option value="${v}">${v}%</option>`).join('')}
-              </select>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <input type="range" id="display-scaleRange" min="${DISPLAY_SCALE_MIN}" max="${DISPLAY_SCALE_MAX}" step="${DISPLAY_SCALE_STEP}" style="width:140px;" />
+                <span id="display-scaleValue" style="font-size:12px;color:var(--text-soft);width:36px;text-align:right;">100%</span>
+              </div>
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
                 <div style="font-size:13px;font-weight:600;color:var(--text);">글꼴</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Pretendard는 둥글고 부드러운 느낌, 시스템 기본은 윈도우 맑은 고딕 등 OS 기본 글꼴이에요.</div>
+                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">목록에서 각 글꼴의 실제 모양을 미리 볼 수 있어요.</div>
               </div>
               <select id="display-fontSelect" class="select" style="width:140px;">
-                <option value="pretendard">Pretendard (기본)</option>
-                <option value="system">시스템 기본</option>
+                ${Object.entries(FONT_FAMILY_OPTIONS)
+                  .map(([key, f]) => `<option value="${key}" style='font-family:${f.stack};'>${escapeHtml(f.label)}</option>`)
+                  .join('')}
               </select>
             </div>
             <div class="update-row" style="margin-top:10px;">
@@ -412,19 +416,30 @@ export async function mount(root) {
       }
     });
 
-    const scaleSelect = $('display-scaleSelect');
-    scaleSelect.value = String(await getDisplayScale());
-    scaleSelect.addEventListener('change', async () => {
-      const prev = scaleSelect.dataset.prev || scaleSelect.value;
+    const scaleRange = $('display-scaleRange');
+    const scaleValue = $('display-scaleValue');
+    const initialScale = await getDisplayScale();
+    scaleRange.value = String(initialScale);
+    scaleValue.textContent = `${initialScale}%`;
+    // 드래그하는 동안은 라이브 미리보기만(퍼센트 표시 + 화면 확대/축소) — 대시보드 좌표
+    // 재계산까지 매 픽셀마다 하면 낭비라 저장은 손을 뗀 시점(change)에 한 번만 한다.
+    scaleRange.addEventListener('input', () => {
+      scaleValue.textContent = `${scaleRange.value}%`;
+      document.documentElement.style.zoom = String(Number(scaleRange.value) / 100);
+    });
+    scaleRange.addEventListener('change', async () => {
+      const prev = scaleRange.dataset.prev || String(initialScale);
       try {
-        await setDisplayScale(Number(scaleSelect.value));
-        scaleSelect.dataset.prev = scaleSelect.value;
+        await setDisplayScale(Number(scaleRange.value));
+        scaleRange.dataset.prev = scaleRange.value;
       } catch (e) {
         errorToast(e, '화면 배율을 저장하지 못했어요');
-        scaleSelect.value = prev;
+        scaleRange.value = prev;
+        scaleValue.textContent = `${prev}%`;
+        document.documentElement.style.zoom = String(Number(prev) / 100);
       }
     });
-    scaleSelect.dataset.prev = scaleSelect.value;
+    scaleRange.dataset.prev = String(initialScale);
 
     const fontSelect = $('display-fontSelect');
     fontSelect.value = await getFontFamily();

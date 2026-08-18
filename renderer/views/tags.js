@@ -4,6 +4,8 @@ import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
 export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
+const LIST_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
+const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="9" rx="1"/><rect x="19" y="4" width="2" height="5" rx="1"/></svg>`;
 
 // 탐색 모달에 쓸 타입별 순서/라벨 — Todo → 일정 → 메모 → 포스트잇 순으로 고정 노출
 const BROWSE_TYPE_ORDER = ['todo', 'event', 'memo', 'postit'];
@@ -16,7 +18,13 @@ const BROWSE_TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '�
 export async function mountTagsPanel(root) {
   root.innerHTML = `
     <div class="panel">
-      <div class="panel-head"><h3>태그 관리</h3></div>
+      <div class="panel-head">
+        <h3>태그 관리</h3>
+        <div class="view-toggle" id="tag-viewToggle">
+          <button class="view-toggle-btn active" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
+          <button class="view-toggle-btn" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
+        </div>
+      </div>
       <p style="font-size:11.5px;color:var(--text-faint);margin:0 0 10px;">
         기본 4개(회의·업무 / 상담 / 교육 / 외래)는 삭제만 안 될 뿐, 이름과 색은 자유롭게 바꿀 수 있어요. 태그 이름을 누르면 이 태그가 붙은 항목을 전부 볼 수 있어요.
       </p>
@@ -45,6 +53,16 @@ export async function mountTagsPanel(root) {
   `;
 
   const $ = (id) => root.querySelector('#' + id);
+  let currentView = 'list';
+
+  root.querySelectorAll('#tag-viewToggle .view-toggle-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('#tag-viewToggle .view-toggle-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentView = btn.dataset.view;
+      $('tag-list').classList.toggle('board-view', currentView === 'board');
+    });
+  });
 
   async function openBrowse(category) {
     $('tag-browseTitle').textContent = `# ${category.name}`;

@@ -32,6 +32,12 @@ function createWindow() {
     },
   });
 
+  // 위젯 창(postit-widget/window-manager.js)과 동일하게 네이티브 메뉴를 뗀다 — 이 앱은 UI를
+  // 전부 자체 사이드바/화면으로 만들어서 File/Edit/View 같은 기본 메뉴가 필요 없고, 특히
+  // Alt 키를 renderer의 "단축키 목록 보기" 제스처(shell.js initAltShortcutOverlay)로 쓰려면
+  // 네이티브 메뉴가 Alt를 먼저 가로채 메뉴 포커스로 써버리지 않게 꺼둬야 한다.
+  mainWindow.setMenu(null);
+
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   attachExternalLinkHandler(mainWindow); // 메모/포스트잇 자동 하이퍼링크 클릭 시 OS 기본 브라우저로 열기
 

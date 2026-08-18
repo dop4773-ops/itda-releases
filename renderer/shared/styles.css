@@ -253,6 +253,22 @@ html, body{height:100%;}
 .settings-tab{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--radius-sm);border:none;background:none;color:var(--text-soft);font-size:12.5px;cursor:pointer;text-align:left;}
 .settings-tab:hover{background:var(--bg);}
 .settings-tab.active{background:var(--brand-soft);color:var(--brand);font-weight:600;}
+/* 탭마다 카테고리 색을 줘서(다른 화면의 tone-* 아이콘과 같은 팔레트) 회색 일색이던 설정
+   사이드바에 색감을 줬다 — 평소엔 아이콘만 살짝 물들이고, 선택됐을 때 배경까지 그 색으로. */
+.settings-tab-icon{display:flex;flex-shrink:0;}
+.settings-tab.tone-purple .settings-tab-icon{color:var(--tone-purple-fg);}
+.settings-tab.tone-green .settings-tab-icon{color:var(--tone-green-fg);}
+.settings-tab.tone-yellow .settings-tab-icon{color:var(--tone-yellow-fg);}
+.settings-tab.tone-pink .settings-tab-icon{color:var(--tone-pink-fg);}
+.settings-tab.tone-blue .settings-tab-icon{color:var(--tone-blue-fg);}
+.settings-tab.tone-danger .settings-tab-icon{color:var(--danger);}
+.settings-tab.tone-purple.active{background:var(--tone-purple-bg);color:var(--tone-purple-fg);}
+.settings-tab.tone-green.active{background:var(--tone-green-bg);color:var(--tone-green-fg);}
+.settings-tab.tone-yellow.active{background:var(--tone-yellow-bg);color:var(--tone-yellow-fg);}
+.settings-tab.tone-pink.active{background:var(--tone-pink-bg);color:var(--tone-pink-fg);}
+.settings-tab.tone-blue.active{background:var(--tone-blue-bg);color:var(--tone-blue-fg);}
+.settings-tab.tone-danger.active{background:var(--danger-soft);color:var(--danger);}
+.settings-tab.active .settings-tab-icon{color:inherit;}
 .settings-panel{display:none;}
 .settings-panel.active{display:block;}
 
@@ -332,6 +348,15 @@ html, body{height:100%;}
 .quick-modal input::placeholder{color:var(--text-faint);}
 .quick-modal .hint-row{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--text-faint);gap:10px;flex-wrap:wrap;}
 .quick-modal kbd{border:1px solid var(--border);border-radius:5px;padding:2px 5px;}
+
+/* ================= Alt 두 번/누르고 있기 → 단축키 목록 오버레이 ================= */
+.alt-shortcuts-overlay{position:fixed;inset:0;background:rgba(20,24,32,.4);display:flex;align-items:center;justify-content:center;z-index:200;}
+.alt-shortcuts-card{width:380px;max-width:88vw;background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 24px 56px rgba(16,24,40,.32);padding:18px 20px;}
+.alt-shortcuts-card h3{font-size:14px;font-weight:700;color:var(--text);margin:0 0 12px;}
+.alt-shortcuts-list{display:flex;flex-direction:column;gap:9px;}
+.alt-shortcuts-row{display:flex;align-items:center;justify-content:space-between;gap:14px;font-size:12.5px;color:var(--text-soft);}
+.alt-shortcuts-row kbd{font-size:11px;font-weight:600;color:var(--text-soft);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 9px;white-space:nowrap;font-family:inherit;flex-shrink:0;}
+.alt-shortcuts-hint{margin:14px 0 0;font-size:11px;color:var(--text-faint);text-align:center;}
 
 /* ================= 커맨드 팔레트 (Ctrl/Cmd+Shift+P) — 문서 9번 "빠른 실행" ================= */
 .cmdk-overlay{align-items:flex-start;padding-top:16vh;}
@@ -487,6 +512,12 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .compact-list .list-row{padding:8px 10px;margin-bottom:5px;gap:8px;}
 .compact-list .list-row .row-icon{width:24px;height:24px;}
 .compact-list .list-row .main b{font-size:12.5px;}
+/* 보드형(태그 관리) — 같은 .list-row를 그리드 카드 안에서 세로로 쌓아서 재사용한다
+   (마크업/이벤트 바인딩은 그대로 두고 배치만 CSS로 바꿈). */
+.compact-list.board-view{display:grid;grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));gap:10px;}
+.compact-list.board-view .list-row{flex-direction:column;align-items:flex-start;margin-bottom:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);}
+.compact-list.board-view .list-row .main{width:100%;}
+.compact-list.board-view .list-row .actions{width:100%;justify-content:flex-end;}
 
 /* ================= Todo: 보기 전환 · 필터 행 · 카드 배지 ================= */
 .view-toggle{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;flex-shrink:0;}
@@ -514,6 +545,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .kanban-column-title{font-size:var(--fs-section-title);font-weight:600;color:var(--text);}
 .kanban-column-count{font-size:10.5px;color:var(--text-faint);background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-pill);padding:1px 7px;}
 .kanban-column-body{display:flex;flex-direction:column;gap:8px;}
+.kanban-column.collapsed .kanban-column-body{display:none;}
 .kanban-empty{color:var(--text-faint);font-size:11.5px;text-align:center;padding:16px 0;}
 
 .kanban-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:11px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;}

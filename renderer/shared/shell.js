@@ -1,7 +1,7 @@
 import { toast, errorToast, emptyStateBlock, escapeHtml } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
 import { initCommandPalette } from './command-palette.js';
-import { preloadShortcuts, getCachedBinding, matchesAccelerator } from './shortcuts.js';
+import { SHORTCUTS, preloadShortcuts, getCachedBinding, matchesAccelerator, labelForAccelerator } from './shortcuts.js';
 import { initEventReminders, getActiveReminders, snoozeReminder } from './event-reminders.js';
 
 // 사이드바 접기/펼치기 — app_settings 테이블에 상태 저장 (localStorage 대신 SQLite로 통일)
@@ -314,13 +314,17 @@ export async function resetTextColorOverride(theme) {
 // 앱 자체에 배율 조정을 넣어달라는 요청 반영. CSS zoom은 폰트뿐 아니라 레이아웃까지
 // 함께 확대/축소되어(transform:scale과 달리 reflow가 일어남) 이 용도에 가장 적합하다.
 // 위젯(widget.html)은 별도 렌더러라 이 배율의 영향을 받지 않음 — 위젯은 이미 작은 고정 크기라 대상 아님.
-export const DISPLAY_SCALE_OPTIONS = [80, 90, 100, 110, 120, 130];
+// 예전엔 10%씩 6단계 드롭다운이었는데, 더 세밀하게 조절하고 싶다는 요청으로 슬라이더(5% 단위)로
+// 바꿨다 — 그래서 고정 목록 대신 범위로 검증한다.
+export const DISPLAY_SCALE_MIN = 50;
+export const DISPLAY_SCALE_MAX = 200;
+export const DISPLAY_SCALE_STEP = 5;
 const DEFAULT_DISPLAY_SCALE = 100;
 
 export async function getDisplayScale() {
   const saved = await window.itda.settings.get('display_scale');
   const n = Number(saved);
-  return DISPLAY_SCALE_OPTIONS.includes(n) ? n : DEFAULT_DISPLAY_SCALE;
+  return n >= DISPLAY_SCALE_MIN && n <= DISPLAY_SCALE_MAX ? n : DEFAULT_DISPLAY_SCALE;
 }
 
 export async function applyDisplayScale() {
@@ -374,26 +378,111 @@ async function rescaleDashboardLayout(oldScale, newScale) {
   }
 }
 
-// 글꼴 — Pretendard(기본, 둥글고 부드러운 인상) vs 시스템 기본(윈도우 맑은 고딕 등).
-// --app-font-family 하나만 바꾸면 body 전체에 이미 반영되게 CSS에서 만들어뒀다.
+// 글꼴 — Pretendard(기본)은 로컬 번들이라 항상 뜨고, 나머지는 전부 윈도우/맥에 이미 깔려있는
+// OS 기본 글꼴이라(별도 파일 다운로드 없이) 병원 PC 오프라인 환경에서도 바로 동작한다.
 export const FONT_FAMILY_OPTIONS = {
-  pretendard: '"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif',
-  system: '-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif',
+  pretendard: { label: 'Pretendard (기본)', stack: '"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif' },
+  system: { label: '시스템 기본', stack: '-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif' },
+  malgun: { label: '맑은 고딕', stack: '"Malgun Gothic","맑은 고딕",-apple-system,sans-serif' },
+  dotum: { label: '돋움', stack: '"Dotum","돋움",-apple-system,sans-serif' },
+  batang: { label: '바탕 (명조)', stack: '"Batang","바탕",serif' },
 };
+const DEFAULT_FONT_FAMILY = 'pretendard';
 
 export async function getFontFamily() {
   const saved = await window.itda.settings.get('font_family');
-  return saved === 'system' ? 'system' : 'pretendard';
+  return FONT_FAMILY_OPTIONS[saved] ? saved : DEFAULT_FONT_FAMILY;
 }
 
 export async function applyFontFamily() {
   const key = await getFontFamily();
-  document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_OPTIONS[key]);
+  document.documentElement.style.setProperty('--app-font-family', FONT_FAMILY_OPTIONS[key].stack);
 }
 
 export async function setFontFamily(key) {
   await window.itda.settings.set({ key: 'font_family', value: key });
   await applyFontFamily();
+}
+
+// 윈도우에서 Alt 키를 두 번 연달아 누르거나 누르고 있으면 단축키 목록을 보여준다
+// (main.js가 네이티브 메뉴를 꺼둬서 Alt가 메뉴 포커스로 뺏기지 않고 여기로 온다).
+// 다른 키와 조합해서 누른 거면(=진짜 단축키 사용) 오버레이 대상이 아니다.
+function initAltShortcutOverlay() {
+  let overlayEl = null;
+  let holdTimer = null;
+  let altCombined = false;
+  let shownByHold = false;
+  let lastAltUpTime = 0;
+  const HOLD_MS = 500;
+  const DOUBLE_TAP_MS = 400;
+
+  function buildOverlay() {
+    const el = document.createElement('div');
+    el.className = 'alt-shortcuts-overlay';
+    el.innerHTML = `
+      <div class="alt-shortcuts-card">
+        <h3>단축키</h3>
+        <div class="alt-shortcuts-list">
+          ${SHORTCUTS.map(
+            (s) => `
+            <div class="alt-shortcuts-row">
+              <span>${escapeHtml(s.label)}</span>
+              <kbd>${escapeHtml(labelForAccelerator(getCachedBinding(s.id)))}</kbd>
+            </div>`
+          ).join('')}
+        </div>
+        <p class="alt-shortcuts-hint">Alt를 떼거나 Esc를 누르면 닫혀요</p>
+      </div>`;
+    return el;
+  }
+
+  function showOverlay(byHold) {
+    if (overlayEl) return;
+    shownByHold = byHold;
+    overlayEl = buildOverlay();
+    document.body.appendChild(overlayEl);
+  }
+  function hideOverlay() {
+    overlayEl?.remove();
+    overlayEl = null;
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Alt' && !e.repeat) {
+      altCombined = false;
+      clearTimeout(holdTimer);
+      holdTimer = setTimeout(() => showOverlay(true), HOLD_MS);
+      return;
+    }
+    if (e.altKey && e.key !== 'Alt') altCombined = true; // Alt+무언가 = 실제 단축키 조합, 오버레이 대상 아님
+    if (e.key === 'Escape' && overlayEl) hideOverlay();
+  });
+  document.addEventListener('keyup', (e) => {
+    if (e.key !== 'Alt') return;
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    if (altCombined) {
+      altCombined = false;
+      return;
+    }
+    if (shownByHold) {
+      hideOverlay();
+      return;
+    }
+    const now = Date.now();
+    if (now - lastAltUpTime < DOUBLE_TAP_MS) {
+      showOverlay(false);
+      lastAltUpTime = 0; // 연타로 계속 다시 열리지 않게
+    } else {
+      lastAltUpTime = now;
+    }
+  });
+  window.addEventListener('blur', () => {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    altCombined = false;
+    if (overlayEl && shownByHold) hideOverlay(); // 창 밖으로 포커스가 빠지면(Alt+Tab 등) keyup을 못 받으니 여기서 정리
+  });
 }
 
 export async function initShell() {
@@ -408,6 +497,7 @@ export async function initShell() {
   initEventReminders(refreshGlobalNotifications); // 일정 전 알림(설정 > 편의 기능) — 30초마다 확인
   initErrorSafetyNet();
   initCommandPalette({ openQuickCapture }); // Ctrl/Cmd+Shift+P — 어느 화면에서든 주요 동작을 키보드로 바로 실행
+  initAltShortcutOverlay();
 }
 
 // 화면 코드에서 try/catch를 빠뜨린 경우를 위한 마지막 안전망.

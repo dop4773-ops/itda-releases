@@ -89,6 +89,7 @@ export async function mount(root) {
   let selectedTodoId = null;
   let doneSortMode = 'recent'; // '완료' 탭 전용 — 최근 완료순 vs 카테고리별 묶어보기
   const collapsedIds = new Set(); // 접어둔 카드(항목별 접기/펼치기) — 화면을 나가면 초기화되는 세션 상태
+  const collapsedColumns = new Set(); // 접어둔 보드 컬럼(해야 할 일/진행 중/완료) — 마찬가지로 세션 상태
 
   async function loadCategories() {
     try {
@@ -334,21 +335,35 @@ export async function mount(root) {
     listEl.innerHTML = `
       <div class="kanban-board">
         ${Object.entries(columns)
-          .map(
-            ([status, items]) => `
-          <div class="kanban-column">
+          .map(([status, items]) => {
+            const collapsed = collapsedColumns.has(status);
+            return `
+          <div class="kanban-column ${collapsed ? 'collapsed' : ''}">
             <div class="kanban-column-head">
+              <button class="btn-icon todo-collapse-btn ${collapsed ? '' : 'expanded'}" data-action="toggle-column" data-status="${status}" title="컬럼 접기/펼치기">${CHEVRON_RIGHT}</button>
               <span class="kanban-column-title">${STATUS_LABEL[status]}</span>
               <span class="kanban-column-count">${items.length}</span>
             </div>
             <div class="kanban-column-body">
               ${items.length ? items.map((t) => renderCard(t, { boardMode: true })).join('') : `<div class="kanban-empty">없음</div>`}
             </div>
-          </div>`
-          )
+          </div>`;
+          })
           .join('')}
       </div>`;
     bindCardActions(listEl);
+
+    listEl.querySelectorAll('[data-action="toggle-column"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const status = btn.dataset.status;
+        const column = btn.closest('.kanban-column');
+        if (collapsedColumns.has(status)) collapsedColumns.delete(status);
+        else collapsedColumns.add(status);
+        const nowCollapsed = collapsedColumns.has(status);
+        column.classList.toggle('collapsed', nowCollapsed);
+        btn.classList.toggle('expanded', !nowCollapsed);
+      });
+    });
   }
 
   // ---------- 상세 패널 ----------
