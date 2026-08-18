@@ -378,14 +378,18 @@ async function rescaleDashboardLayout(oldScale, newScale) {
   }
 }
 
-// 글꼴 — Pretendard(기본)은 로컬 번들이라 항상 뜨고, 나머지는 전부 윈도우/맥에 이미 깔려있는
-// OS 기본 글꼴이라(별도 파일 다운로드 없이) 병원 PC 오프라인 환경에서도 바로 동작한다.
+// 글꼴 — Pretendard(기본)/손글씨 3종은 로컬 번들(woff2, OFL 라이선스)이라 항상 뜨고,
+// 나머지는 전부 윈도우/맥에 이미 깔려있는 OS 기본 글꼴이라(별도 파일 없이) 병원 PC
+// 오프라인 환경에서도 바로 동작한다.
 export const FONT_FAMILY_OPTIONS = {
   pretendard: { label: 'Pretendard (기본)', stack: '"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif' },
   system: { label: '시스템 기본', stack: '-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif' },
   malgun: { label: '맑은 고딕', stack: '"Malgun Gothic","맑은 고딕",-apple-system,sans-serif' },
   dotum: { label: '돋움', stack: '"Dotum","돋움",-apple-system,sans-serif' },
   batang: { label: '바탕 (명조)', stack: '"Batang","바탕",serif' },
+  gaegu: { label: '개구쟁이 (손글씨)', stack: '"Gaegu",-apple-system,sans-serif' },
+  gamjaflower: { label: '감자꽃 (손글씨)', stack: '"Gamja Flower",-apple-system,sans-serif' },
+  nanumpen: { label: '나눔손글씨 펜', stack: '"Nanum Pen Script",-apple-system,sans-serif' },
 };
 const DEFAULT_FONT_FAMILY = 'pretendard';
 

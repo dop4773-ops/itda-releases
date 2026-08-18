@@ -7,6 +7,8 @@ const DELETE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
 const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
 const GRID_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`;
 const CLOCK_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`;
+const LIST_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
+const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="9" rx="1"/><rect x="19" y="4" width="2" height="5" rx="1"/></svg>`;
 
 const TYPE_META = {
   todo: { label: 'Todo', icon: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>` },
@@ -57,6 +59,10 @@ export async function mount(root) {
             <input type="text" id="tr-search" placeholder="휴지통에서 검색" />
           </div>
           <select id="tr-categoryFilter" class="select"><option value="">전체 카테고리</option></select>
+          <div class="view-toggle" id="tr-viewToggle">
+            <button class="view-toggle-btn active" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
+            <button class="view-toggle-btn" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
+          </div>
         </div>
 
         <div class="trash-bulk-bar" id="tr-bulkBar" style="display:none;">
@@ -250,6 +256,13 @@ export async function mount(root) {
   $('tr-categoryFilter').addEventListener('change', (e) => {
     categoryFilter = e.target.value;
     render();
+  });
+  root.querySelectorAll('#tr-viewToggle .view-toggle-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      root.querySelectorAll('#tr-viewToggle .view-toggle-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      $('tr-list').classList.toggle('board-view', btn.dataset.view === 'board');
+    });
   });
 
   $('tr-selectAll').addEventListener('change', (e) => {

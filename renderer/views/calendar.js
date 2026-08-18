@@ -804,6 +804,23 @@ export async function mount(root) {
   }
   document.addEventListener('keydown', handleDeleteKey);
 
+  // + 로 새 일정 추가, Tab으로 월/주/일 순환 — 입력 중이거나 모달이 열려있으면 평소 동작
+  // (문자 입력/폼 안에서 다음 칸으로 이동)을 그대로 두고 가로채지 않는다.
+  function handleQuickKeys(e) {
+    if (isUserTyping()) return;
+    if ($('c-modalOverlay').classList.contains('open') || $('c-detailOverlay').classList.contains('open')) return;
+    if (e.key === '+') {
+      e.preventDefault();
+      openModal();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      const order = ['month', 'week', 'day'];
+      const next = order[(order.indexOf(currentView) + 1) % order.length];
+      root.querySelector(`.tab[data-view="${next}"]`)?.click();
+    }
+  }
+  document.addEventListener('keydown', handleQuickKeys);
+
   await loadCategories();
   await load();
 
@@ -817,6 +834,7 @@ export async function mount(root) {
   return () => {
     unsubscribeEsc();
     document.removeEventListener('keydown', handleDeleteKey);
+    document.removeEventListener('keydown', handleQuickKeys);
     offDataChanged?.();
   };
 }

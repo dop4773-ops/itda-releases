@@ -65,8 +65,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>화면</h3></div>
             <div class="update-row">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">다크 모드</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">어두운 화면으로 바꿔요. 다른 테마(색상 선택 등)는 추후 추가될 예정이에요.</div>
+                <div class="settings-row-title">다크 모드</div>
+                <div class="settings-row-desc">어두운 화면으로 바꿔요. 다른 테마(색상 선택 등)는 추후 추가될 예정이에요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="theme-darkToggle" />
@@ -75,8 +75,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">화면 배율</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">글씨/버튼 크기를 키우거나 줄여요. 저해상도 모니터에서 화면이 너무 작게 보일 때 조정해보세요.</div>
+                <div class="settings-row-title">화면 배율</div>
+                <div class="settings-row-desc">글씨/버튼 크기를 키우거나 줄여요. 저해상도 모니터에서 화면이 너무 작게 보일 때 조정해보세요.</div>
               </div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <input type="range" id="display-scaleRange" min="${DISPLAY_SCALE_MIN}" max="${DISPLAY_SCALE_MAX}" step="${DISPLAY_SCALE_STEP}" style="width:140px;" />
@@ -85,8 +85,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">글꼴</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">목록에서 각 글꼴의 실제 모양을 미리 볼 수 있어요.</div>
+                <div class="settings-row-title">글꼴</div>
+                <div class="settings-row-desc">목록에서 각 글꼴의 실제 모양을 미리 볼 수 있어요.</div>
               </div>
               <select id="display-fontSelect" class="select" style="width:140px;">
                 ${Object.entries(FONT_FAMILY_OPTIONS)
@@ -96,8 +96,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">라이트 모드 글자색</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">화면 전체 기본 글자색이에요. 잘못 골라서 안 보이게 되면 옆 "기본값" 버튼으로 되돌리세요.</div>
+                <div class="settings-row-title">라이트 모드 글자색</div>
+                <div class="settings-row-desc">화면 전체 기본 글자색이에요. 잘못 골라서 안 보이게 되면 옆 "기본값" 버튼으로 되돌리세요.</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <input type="color" id="display-textColorLight" class="rich-color-btn" style="width:30px;height:30px;" />
@@ -106,8 +106,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">다크 모드 글자색</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">다크 모드일 때만 적용돼요.</div>
+                <div class="settings-row-title">다크 모드 글자색</div>
+                <div class="settings-row-desc">다크 모드일 때만 적용돼요.</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <input type="color" id="display-textColorDark" class="rich-color-btn" style="width:30px;height:30px;" />
@@ -120,13 +120,13 @@ export async function mount(root) {
         <div class="settings-panel" data-panel="dashboard">
           <div class="panel">
             <div class="panel-head"><h3>카드 구성</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 직접 바꿀 수 있어요.</p>
+            <p class="settings-panel-desc">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 직접 바꿀 수 있어요.</p>
             <div id="dashboard-cardList"></div>
           </div>
 
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>배치 프리셋</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">미리 만들어둔 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
+            <p class="settings-panel-desc">미리 만들어둔 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
             <div class="form-row" id="dashboard-presetList"></div>
             <div class="form-row" style="margin-top:10px;">
               <button class="btn-secondary" id="dashboard-savePresetBtn">현재 배치를 프리셋으로 저장</button>
@@ -144,8 +144,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>위젯 화면</h3></div>
             <div class="update-row">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">투명도</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">위젯 창을 얼마나 비치게 할지 정해요. 이미 열려있는 위젯에도 바로 적용돼요.</div>
+                <div class="settings-row-title">투명도</div>
+                <div class="settings-row-desc">위젯 창을 얼마나 비치게 할지 정해요. 이미 열려있는 위젯에도 바로 적용돼요.</div>
               </div>
               <div style="display:flex;align-items:center;gap:8px;">
                 <input type="range" id="widget-opacityRange" min="40" max="100" step="5" style="width:120px;" />
@@ -154,8 +154,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">항상 위에 표시</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">아래 위젯들을 다른 프로그램 창보다 항상 앞에 띄워요. (포스트잇은 각자 핀 버튼으로 따로 정해요)</div>
+                <div class="settings-row-title">항상 위에 표시</div>
+                <div class="settings-row-desc">아래 위젯들을 다른 프로그램 창보다 항상 앞에 띄워요. (포스트잇은 각자 핀 버튼으로 따로 정해요)</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="widget-alwaysOnTopToggle" />
@@ -165,7 +165,7 @@ export async function mount(root) {
           </div>
           <div class="panel">
             <div class="panel-head"><h3>위젯</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
+            <p class="settings-panel-desc">
               바탕화면에 항상 떠있는 작은 창들이에요. 여기서는 어떤 위젯을 쓸지 켜고 끌 수 있고,
               실제로 여는 건 각 화면(Todo/일정/메모/포스트잇/Inbox) 상단의 위젯 아이콘 버튼을 누르면 돼요.
               위치와 크기는 옮긴 대로 기억됩니다.
@@ -177,7 +177,7 @@ export async function mount(root) {
         <div class="settings-panel" data-panel="shortcuts">
           <div class="panel">
             <div class="panel-head"><h3>단축키</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
+            <p class="settings-panel-desc">
               "변경"을 누르고 원하는 키 조합을 누르면 바로 바뀌어요. 다른 단축키와 겹치면 저장하지 않고 알려줘요.
             </p>
             <div class="shortcut-list" id="shortcuts-list"></div>
@@ -194,7 +194,7 @@ export async function mount(root) {
         <div class="settings-panel" data-panel="security">
           <div class="panel">
             <div class="panel-head"><h3>비밀번호 잠금</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
+            <p class="settings-panel-desc">
               켜두면 잇다를 실행할 때마다 비밀번호를 입력해야 열려요. 비밀번호는 이 PC에만 저장되고 외부로 전송되지 않아요.
             </p>
             <div id="security-panelBody">불러오는 중…</div>
@@ -206,8 +206,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>편의 기능</h3></div>
             <div class="update-row">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">업데이트 자동 확인</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">앱을 켤 때마다 새 버전이 있는지 조용히 한 번 확인해요(다운로드는 안 함). 꺼도 설정 → 업데이트에서 직접 확인할 수 있어요.</div>
+                <div class="settings-row-title">업데이트 자동 확인</div>
+                <div class="settings-row-desc">앱을 켤 때마다 새 버전이 있는지 조용히 한 번 확인해요(다운로드는 안 함). 꺼도 설정 → 업데이트에서 직접 확인할 수 있어요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="conv-autoUpdateToggle" />
@@ -216,8 +216,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">윈도우 시작 시 자동 실행</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">컴퓨터를 켜면 잇다가 자동으로 함께 실행돼요(트레이로 시작). 패키징된 설치 버전에서만 켤 수 있어요.</div>
+                <div class="settings-row-title">윈도우 시작 시 자동 실행</div>
+                <div class="settings-row-desc">컴퓨터를 켜면 잇다가 자동으로 함께 실행돼요(트레이로 시작). 패키징된 설치 버전에서만 켤 수 있어요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="conv-autoLaunchToggle" />
@@ -226,8 +226,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">관련 항목 자동 추천</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">Todo·일정·메모·포스트잇 상세에서 "🔗 연결된 항목" 아래에 같은 태그·비슷한 내용의 항목을 자동으로 추천해줘요. 꺼도 직접 연결하는 기능은 그대로 써요.</div>
+                <div class="settings-row-title">관련 항목 자동 추천</div>
+                <div class="settings-row-desc">Todo·일정·메모·포스트잇 상세에서 "🔗 연결된 항목" 아래에 같은 태그·비슷한 내용의 항목을 자동으로 추천해줘요. 꺼도 직접 연결하는 기능은 그대로 써요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="conv-autoSuggestToggle" />
@@ -240,8 +240,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>일정 알림</h3></div>
             <div class="update-row">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">일정 전 알림</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">오늘 일정이 시작하기 전에 이 PC 알림으로 미리 알려줘요.</div>
+                <div class="settings-row-title">일정 전 알림</div>
+                <div class="settings-row-desc">오늘 일정이 시작하기 전에 이 PC 알림으로 미리 알려줘요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="notif-eventEnabledToggle" />
@@ -250,7 +250,7 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">몇 분 전에 알릴지</div>
+                <div class="settings-row-title">몇 분 전에 알릴지</div>
               </div>
               <select id="notif-leadSelect" class="select" style="width:100px;">
                 <option value="5">5분 전</option>
@@ -262,8 +262,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">기본 다시 알림 (Snooze)</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">알림에서 "다시 알림"을 누르면 이 시간 뒤에 다시 알려줘요.</div>
+                <div class="settings-row-title">기본 다시 알림 (Snooze)</div>
+                <div class="settings-row-desc">알림에서 "다시 알림"을 누르면 이 시간 뒤에 다시 알려줘요.</div>
               </div>
               <select id="notif-snoozeSelect" class="select" style="width:100px;">
                 <option value="10">10분</option>
@@ -278,7 +278,7 @@ export async function mount(root) {
         <div class="settings-panel" data-panel="gcal">
           <div class="panel">
             <div class="panel-head"><h3>Google Calendar</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">
+            <p class="settings-panel-desc">
               읽기 전용으로만 연동돼요. 잇다에서 만든 일정은 Google로 올라가지 않고, Google 쪽 일정도 잇다에서 수정·삭제할 수 없어요.
             </p>
             <div id="gcal-panel"><div class="empty">불러오는 중…</div></div>
@@ -290,8 +290,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>자동 백업</h3></div>
             <div class="update-row">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">자동 백업</div>
-                <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">앱이 켜져 있는 동안 이 PC에 주기적으로 자동 저장돼요(백업 폴더에 최근 5개만 보관). 다른 위치로 직접 저장하려면 아래 "백업하기"를 쓰세요.</div>
+                <div class="settings-row-title">자동 백업</div>
+                <div class="settings-row-desc">앱이 켜져 있는 동안 이 PC에 주기적으로 자동 저장돼요(백업 폴더에 최근 5개만 보관). 다른 위치로 직접 저장하려면 아래 "백업하기"를 쓰세요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="backup-autoToggle" />
@@ -300,8 +300,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">백업 주기</div>
-                <div id="backup-lastAt" style="font-size:12px;color:var(--text-faint);margin-top:2px;">마지막 자동 백업: -</div>
+                <div class="settings-row-title">백업 주기</div>
+                <div id="backup-lastAt" class="settings-row-desc">마지막 자동 백업: -</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <select id="backup-periodSelect" class="select" style="width:90px;">
@@ -324,7 +324,7 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div style="font-size:13px;font-weight:600;color:var(--text);">저장 위치</div>
+                <div class="settings-row-title">저장 위치</div>
                 <div id="backup-dirPath" style="font-size:11.5px;color:var(--text-faint);margin-top:2px;word-break:break-all;">불러오는 중…</div>
               </div>
               <button class="btn-secondary" id="backup-openDirBtn">폴더 열기</button>
@@ -360,8 +360,8 @@ export async function mount(root) {
             <div class="panel-head"><h3>업데이트</h3></div>
             <div class="update-row">
               <div>
-                <div id="upd-version" style="font-size:13px;font-weight:600;color:var(--text);">버전 확인 중…</div>
-                <div id="upd-status" style="font-size:12px;color:var(--text-faint);margin-top:2px;">-</div>
+                <div id="upd-version" class="settings-row-title">버전 확인 중…</div>
+                <div id="upd-status" class="settings-row-desc">-</div>
               </div>
               <div id="upd-actions"></div>
             </div>
@@ -575,8 +575,8 @@ export async function mount(root) {
       body.innerHTML = `
         <div class="update-row">
           <div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);">잠금 꺼짐</div>
-            <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">비밀번호 없이 바로 열려요.</div>
+            <div class="settings-row-title">잠금 꺼짐</div>
+            <div class="settings-row-desc">비밀번호 없이 바로 열려요.</div>
           </div>
           <button class="btn-secondary" id="sec-enableBtn">비밀번호 설정</button>
         </div>
@@ -610,8 +610,8 @@ export async function mount(root) {
       body.innerHTML = `
         <div class="update-row">
           <div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);">잠금 켜짐</div>
-            <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">실행할 때마다 비밀번호를 입력해야 해요.</div>
+            <div class="settings-row-title">잠금 켜짐</div>
+            <div class="settings-row-desc">실행할 때마다 비밀번호를 입력해야 해요.</div>
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn-secondary" id="sec-lockNowBtn">지금 잠그기</button>
@@ -788,8 +788,8 @@ export async function mount(root) {
       panel.innerHTML = `
         <div class="update-row">
           <div>
-            <div style="font-size:13px;font-weight:600;color:var(--text);">연결됨</div>
-            <div style="font-size:12px;color:var(--text-faint);margin-top:2px;">
+            <div class="settings-row-title">연결됨</div>
+            <div class="settings-row-desc">
               ${status.lastSyncedAt ? `마지막 동기화: ${formatSyncedAt(status.lastSyncedAt)}` : '아직 동기화 전이에요'}
             </div>
           </div>
