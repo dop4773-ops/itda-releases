@@ -226,7 +226,8 @@ html, body{height:100%;}
 
 /* ================= 요약 카드 ================= */
 .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
-.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 17px;box-shadow:var(--shadow);}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 17px;box-shadow:var(--shadow);cursor:pointer;transition:box-shadow .12s ease;}
+.summary-card:hover{box-shadow:0 6px 18px rgba(16,24,40,.14);}
 .summary-card .top{display:flex;align-items:center;gap:8px;color:var(--text-soft);font-size:var(--fs-page-sub);margin-bottom:10px;}
 .summary-card .dot{width:8px;height:8px;border-radius:2px;}
 .summary-card .num{font-size:26px;font-weight:700;}
@@ -871,14 +872,22 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ---- 요약 카드 5개 ---- */
 .summary-grid-5{grid-template-columns:repeat(5,1fr);}
 
-/* ---- 위젯 그리드: 그립을 자유롭게 드래그해서 아무 데나 옮기고, 패널 모서리를 드래그하면
-   크기 조절(네이티브 CSS resize) — 위치/크기 둘 다 dashboard.js가 감지해서 저장한다.
-   카드가 자유 위치라 position:absolute를 쓰고, 컨테이너 높이는 JS가 내용에 맞춰 갱신한다. */
+/* ---- 위젯 그리드: 그립을 자유롭게 드래그해서 아무 데나 옮기고, 모서리 핸들을 드래그하면
+   크기 조절 — 둘 다 커스텀 마우스 드래그라서(네이티브 CSS resize 아님) 정렬 가이드 스냅이
+   이동/크기조절에 똑같이 적용된다(dashboard.js initWidgetGrid 참고). 카드가 자유 위치라
+   position:absolute를 쓰고, 컨테이너 높이는 JS가 내용에 맞춰 갱신한다. */
 .dash-widget-grid{position:relative;margin-bottom:16px;}
-.dash-widget{position:absolute;min-width:260px;min-height:140px;resize:both;overflow:auto;}
+/* overflow:auto가 아니라 hidden인 이유: 리사이즈 핸들이 카드 우하단에 고정으로 붙어있는데,
+   auto로 하면 내용이 넘칠 때 핸들도 스크롤을 따라 같이 밀려나서 손이 안 닿게 된다. 대신
+   내용이 넘치면 그냥 잘리고, 더 보고 싶으면 카드를 세로로 늘리면 된다(파워포인트 텍스트
+   상자처럼 — 이 기능 자체가 파워포인트 배치를 본떠 만든 거라 잘 맞는 절충이다). */
+.dash-widget{position:absolute;min-width:260px;min-height:140px;overflow:hidden;}
 .dash-widget.dragging{opacity:.6;z-index:20;box-shadow:0 10px 24px rgba(16,24,40,.22);}
 .dash-widget-grip{cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;display:inline-flex;}
 .dash-widget-grip:active{cursor:grabbing;}
+.dash-widget-resize{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;}
+.dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:2px solid var(--text-faint);border-bottom:2px solid var(--text-faint);opacity:.45;}
+.dash-widget-resize:hover::after,.dash-widget.dragging .dash-widget-resize::after{opacity:.9;border-color:var(--brand);}
 /* 기본 .panel-head는 space-between(제목 vs 더보기 버튼 2개 기준)인데, 위젯엔 그립까지 3번째
    요소로 들어가서 그립+제목이 서로 멀어져버림 — 그립+제목을 붙이고 더보기만 오른쪽 끝으로 민다. */
 .dash-widget .panel-head{justify-content:flex-start;}

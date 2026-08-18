@@ -89,24 +89,24 @@ export async function mount(root) {
         </div>
 
         <div class="summary-grid summary-grid-5">
-          <div class="summary-card tone-purple">
+          <div class="summary-card tone-purple" data-nav="#/todo" title="더블클릭하면 Todo로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-purple-fg)"></span>오늘 할 일</div>
             <div class="num" id="d-todoCount">-</div>
             <div id="d-todoSub" style="font-size:11.5px;color:var(--text-faint);"></div>
           </div>
-          <div class="summary-card tone-green">
+          <div class="summary-card tone-green" data-nav="#/calendar" title="더블클릭하면 일정으로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-green-fg)"></span>오늘 일정</div>
             <div class="num" id="d-eventCount">-</div>
           </div>
-          <div class="summary-card tone-yellow">
+          <div class="summary-card tone-yellow" data-nav="#/memo" title="더블클릭하면 메모로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-yellow-fg)"></span>메모</div>
             <div class="num" id="d-memoCount">-</div>
           </div>
-          <div class="summary-card tone-pink">
+          <div class="summary-card tone-pink" data-nav="#/postit" title="더블클릭하면 포스트잇으로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-pink-fg)"></span>포스트잇</div>
             <div class="num" id="d-postitCount">-</div>
           </div>
-          <div class="summary-card tone-blue">
+          <div class="summary-card tone-blue" id="d-notifSummaryCard" title="더블클릭하면 알림 목록을 열어요">
             <div class="top"><span class="dot" style="background:var(--tone-blue-fg)"></span>알림</div>
             <div class="num" id="d-notifCount">-</div>
           </div>
@@ -114,39 +114,39 @@ export async function mount(root) {
 
         <div class="dash-widget-grid" id="d-widgetGrid">
           <div class="panel dash-widget" id="d-card-todo" data-card="todo">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
             <div id="d-todoList"></div>
             <div class="empty" id="d-todoEmpty" style="display:none;">할 일이 없어요. Inbox에서 바로 추가해보세요.</div>
           </div>
           <div class="panel dash-widget" id="d-card-event" data-card="event">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
             <div id="d-eventList"></div>
             <div class="empty" id="d-eventEmpty" style="display:none;">일정이 없어요.</div>
           </div>
           <div class="panel dash-widget" id="d-card-memo" data-card="memo">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
             <div id="d-memoList"></div>
             <div class="empty" id="d-memoEmpty" style="display:none;">메모가 없어요.</div>
           </div>
           <div class="panel dash-widget" id="d-card-postit" data-card="postit">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>고정 포스트잇</h3><a class="btn-icon" href="#/postit">더보기 ›</a></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>고정 포스트잇</h3><a class="btn-icon" href="#/postit">더보기 ›</a></div>
             <div id="d-postitList"></div>
             <div class="empty" id="d-postitEmpty" style="display:none;">고정된 포스트잇이 없어요.</div>
           </div>
           <div class="panel dash-widget" id="d-card-linked" data-card="linked">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
             <div id="d-linkedRow"><div class="empty">불러오는 중…</div></div>
           </div>
           <div class="panel dash-widget" id="d-card-activity" data-card="activity">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 활동</h3></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 활동</h3></div>
             <div id="d-activityList"></div>
           </div>
           <div class="panel dash-widget" id="d-card-weekSummary" data-card="weekSummary">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>이번 주 요약</h3></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>이번 주 요약</h3></div>
             <div id="d-weekSummary" class="week-summary-grid"></div>
           </div>
           <div class="panel dash-widget" id="d-card-quickAdd" data-card="quickAdd">
-            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>빠른 추가</h3></div>
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>빠른 추가</h3></div>
             <div class="quick-add-grid">
               <a class="quick-add-btn" href="#/todo">+ Todo</a>
               <a class="quick-add-btn" href="#/calendar">+ 일정</a>
@@ -284,36 +284,9 @@ export async function mount(root) {
     }
     persist(); // 방금 새로 채운 기본 위치도 다음엔 그대로 이어서 보이도록 저장해둔다
 
-    // 크기: 네이티브 resize(모서리 드래그)로 바뀐 최종 크기를 ResizeObserver로 감지해 저장.
-    // observe()는 관찰을 시작하자마자 "현재 크기"로 콜백을 한 번 더 주는데(스펙 동작), 이걸
-    // 그대로 저장하면 손도 안 댄 카드까지 저장돼버리니 카드별로 이 최초 콜백 한 번은 무시한다.
-    const observedOnce = new Set();
-    let resizeTimer = null;
-    const resizeObserver = new ResizeObserver((entries) => {
-      let changed = false;
-      entries.forEach((entry) => {
-        const cardId = entry.target.dataset.card;
-        if (!observedOnce.has(cardId)) {
-          observedOnce.add(cardId);
-          return;
-        }
-        // style.width/height는 전역 box-sizing:border-box라 테두리 포함 크기로 해석되므로,
-        // contentRect(패딩 제외) 대신 borderBoxSize를 써야 저장했다가 다시 적용해도 안 줄어든다.
-        const box = entry.borderBoxSize?.[0];
-        const width = box ? box.inlineSize : entry.target.offsetWidth;
-        const height = box ? box.blockSize : entry.target.offsetHeight;
-        positions[cardId] = { ...positions[cardId], w: Math.round(width), h: Math.round(height) };
-        changed = true;
-      });
-      if (!changed) return;
-      recalcContainerHeight();
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(persist, 400);
-    });
-    widgets.forEach((w) => resizeObserver.observe(w, { box: 'border-box' }));
-
-    // 이동: 그립을 눌러서 자유롭게 끌 수 있고, 다른 카드와 가장자리/중심이 맞으면(파워포인트
-    // 스마트 가이드처럼) 점선을 보여주고 그 위치에 딱 붙는다(스냅).
+    // 이동/크기조절 둘 다 커서를 직접 따라가는 커스텀 드래그라(네이티브 CSS resize 아님),
+    // 다른 카드와 가장자리/중심이 맞으면(파워포인트 스마트 가이드처럼) 점선을 보여주고
+    // 그 위치에 딱 붙는(스냅) 걸 이동/크기조절 둘 다에 똑같이 적용할 수 있다.
     const SNAP = 6;
     let guideEls = [];
     function clearGuides() {
@@ -327,40 +300,46 @@ export async function mount(root) {
       grid.appendChild(el);
       guideEls.push(el);
     }
-    // dragged를 (left, top)에 놨을 때 다른 카드들과의 가장자리/중심선 중 SNAP px 이내로 가장
-    // 가까운 것을 하나 골라 그 좌표에 딱 맞춘다 — 가로/세로 축은 독립적으로 각각 계산한다.
-    function computeSnap(dragged, left, top) {
-      const w = dragged.offsetWidth;
-      const h = dragged.offsetHeight;
-      const dX = [left, left + w / 2, left + w];
-      const dY = [top, top + h / 2, top + h];
-      let bestX = null;
-      let bestY = null;
+    // dragged 기준 후보 x좌표들(edges)이 다른 카드들의 가장자리/중심선 중 SNAP px 이내로 가장
+    // 가까운 것과 만나면 그 차이(delta)만큼 스냅한다 — 이동은 후보가 3개(좌/중앙/우), 크기조절은
+    // 움직이는 가장자리 1개만 후보로 넘겨서 같은 함수를 재사용한다.
+    function findSnap(dragged, candidates, otherEdges) {
+      let best = null;
       widgets.forEach((o) => {
         if (o === dragged || o.style.display === 'none') return;
-        const ol = o.offsetLeft;
-        const ot = o.offsetTop;
-        const oX = [ol, ol + o.offsetWidth / 2, ol + o.offsetWidth];
-        const oY = [ot, ot + o.offsetHeight / 2, ot + o.offsetHeight];
-        dX.forEach((dx) => oX.forEach((ox) => {
-          const diff = Math.abs(dx - ox);
-          if (diff <= SNAP && (!bestX || diff < bestX.diff)) bestX = { diff, delta: ox - dx, pos: ox };
-        }));
-        dY.forEach((dy) => oY.forEach((oy) => {
-          const diff = Math.abs(dy - oy);
-          if (diff <= SNAP && (!bestY || diff < bestY.diff)) bestY = { diff, delta: oy - dy, pos: oy };
+        const edges = otherEdges(o);
+        candidates.forEach((c) => edges.forEach((oe) => {
+          const diff = Math.abs(c - oe);
+          if (diff <= SNAP && (!best || diff < best.diff)) best = { diff, delta: oe - c, pos: oe };
         }));
       });
-      return {
-        left: bestX ? left + bestX.delta : left,
-        top: bestY ? top + bestY.delta : top,
-        guideX: bestX ? bestX.pos : null,
-        guideY: bestY ? bestY.pos : null,
-      };
+      return best;
+    }
+    function otherXEdges(o) {
+      return [o.offsetLeft, o.offsetLeft + o.offsetWidth / 2, o.offsetLeft + o.offsetWidth];
+    }
+    function otherYEdges(o) {
+      return [o.offsetTop, o.offsetTop + o.offsetHeight / 2, o.offsetTop + o.offsetHeight];
     }
 
+    // 드래그 시작 시점에 한 번만 호출 — document에 mousemove/mouseup을 걸어주고,
+    // 언마운트 중 드래그가 끊겨도 정리할 수 있게 activeOnMove/activeOnUp에 기록해둔다.
     let activeOnMove = null;
     let activeOnUp = null;
+    function startDrag(onMove, onUp) {
+      activeOnMove = onMove;
+      activeOnUp = (ev) => {
+        document.removeEventListener('mousemove', activeOnMove);
+        document.removeEventListener('mouseup', activeOnUp);
+        activeOnMove = null;
+        activeOnUp = null;
+        onUp(ev);
+      };
+      document.addEventListener('mousemove', activeOnMove);
+      document.addEventListener('mouseup', activeOnUp);
+    }
+
+    // 이동: 그립을 눌러서 자유롭게 끈다 — 좌/중앙/우, 상/중앙/하 세 후보 다 스냅 대상.
     grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
       grip.addEventListener('mousedown', (e) => {
         e.preventDefault();
@@ -372,36 +351,75 @@ export async function mount(root) {
         const startTop = widget.offsetTop;
         widget.classList.add('dragging');
 
-        function onMove(ev) {
-          const rawLeft = Math.max(0, startLeft + (ev.clientX - startX));
-          const rawTop = Math.max(0, startTop + (ev.clientY - startY));
-          const snap = computeSnap(widget, rawLeft, rawTop);
-          widget.style.left = `${snap.left}px`;
-          widget.style.top = `${snap.top}px`;
-          clearGuides();
-          if (snap.guideX != null) showGuide('v', snap.guideX);
-          if (snap.guideY != null) showGuide('h', snap.guideY);
-        }
-        function onUp() {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          activeOnMove = null;
-          activeOnUp = null;
-          widget.classList.remove('dragging');
-          clearGuides();
-          positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, y: widget.offsetTop };
-          recalcContainerHeight();
-          persist();
-        }
-        activeOnMove = onMove;
-        activeOnUp = onUp;
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        startDrag(
+          (ev) => {
+            const rawLeft = Math.max(0, startLeft + (ev.clientX - startX));
+            const rawTop = Math.max(0, startTop + (ev.clientY - startY));
+            const w = widget.offsetWidth;
+            const h = widget.offsetHeight;
+            const snapX = findSnap(widget, [rawLeft, rawLeft + w / 2, rawLeft + w], otherXEdges);
+            const snapY = findSnap(widget, [rawTop, rawTop + h / 2, rawTop + h], otherYEdges);
+            widget.style.left = `${snapX ? rawLeft + snapX.delta : rawLeft}px`;
+            widget.style.top = `${snapY ? rawTop + snapY.delta : rawTop}px`;
+            clearGuides();
+            if (snapX) showGuide('v', snapX.pos);
+            if (snapY) showGuide('h', snapY.pos);
+          },
+          () => {
+            widget.classList.remove('dragging');
+            clearGuides();
+            positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, y: widget.offsetTop };
+            recalcContainerHeight();
+            persist();
+          }
+        );
+      });
+    });
+
+    // 크기조절: 오른쪽 아래 모서리 핸들을 눌러서 끈다 — 움직이는 건 우측/하단 가장자리뿐이라
+    // 그 가장자리가 다른 카드의 가장자리/중심과 맞을 때만 스냅한다(= 폭/높이를 맞추는 효과도 됨).
+    widgets.forEach((widget) => {
+      const handle = document.createElement('span');
+      handle.className = 'dash-widget-resize';
+      handle.title = '드래그해서 크기 조절';
+      widget.appendChild(handle);
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // 패널 클릭/그립 드래그로 안 새게
+        const cardId = widget.dataset.card;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = widget.offsetWidth;
+        const startH = widget.offsetHeight;
+        const left = widget.offsetLeft;
+        const top = widget.offsetTop;
+        widget.classList.add('dragging');
+
+        startDrag(
+          (ev) => {
+            const rawW = Math.max(260, startW + (ev.clientX - startX));
+            const rawH = Math.max(140, startH + (ev.clientY - startY));
+            const snapX = findSnap(widget, [left + rawW], otherXEdges);
+            const snapY = findSnap(widget, [top + rawH], otherYEdges);
+            widget.style.width = `${snapX ? rawW + snapX.delta : rawW}px`;
+            widget.style.height = `${snapY ? rawH + snapY.delta : rawH}px`;
+            clearGuides();
+            if (snapX) showGuide('v', snapX.pos);
+            if (snapY) showGuide('h', snapY.pos);
+          },
+          () => {
+            widget.classList.remove('dragging');
+            clearGuides();
+            positions[cardId] = { ...positions[cardId], w: widget.offsetWidth, h: widget.offsetHeight };
+            recalcContainerHeight();
+            persist();
+          }
+        );
       });
     });
 
     return () => {
-      resizeObserver.disconnect();
       if (activeOnMove) document.removeEventListener('mousemove', activeOnMove);
       if (activeOnUp) document.removeEventListener('mouseup', activeOnUp);
     };
@@ -476,6 +494,17 @@ export async function mount(root) {
     document.getElementById('fab')?.click(); // 기존 ⌘K 빠른입력 모달 재사용
   });
   bindWidgetLaunchButton(root, 'd-ddayWidgetBtn', 'dday');
+
+  // 상단 요약 카드 더블클릭 — 해당 화면으로 바로 이동. "알림"은 전용 화면이 없어서
+  // 대신 전역 상단바의 알림 종(bell) 드롭다운을 그대로 열어준다(중복 구현 안 함).
+  root.querySelectorAll('.summary-card[data-nav]').forEach((card) => {
+    card.addEventListener('dblclick', () => {
+      location.hash = card.dataset.nav;
+    });
+  });
+  $('d-notifSummaryCard')?.addEventListener('dblclick', () => {
+    document.getElementById('gt-bellBtn')?.click();
+  });
 
   function refreshDateLabel() {
     $('d-dateLabel').textContent = formatDateLabel(viewDate);
