@@ -31,6 +31,7 @@ const CHEVRON_RIGHT = `<svg width="13" height="13" viewBox="0 0 24 24" fill="non
 const PIN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
 const WIDGET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`;
 const LINK_ROW_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07l1.5-1.5"/></svg>`;
+const GRIP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>`;
 
 const TYPE_META = {
   todo: { label: 'Todo', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`, route: '#/todo' },
@@ -110,47 +111,41 @@ export async function mount(root) {
           </div>
         </div>
 
-        <div class="content-grid" id="d-contentGrid">
-          <div class="panel" id="d-card-todo">
-            <div class="panel-head"><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
+        <div class="dash-widget-grid" id="d-widgetGrid">
+          <div class="panel dash-widget" id="d-card-todo" data-card="todo">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
             <div id="d-todoList"></div>
             <div class="empty" id="d-todoEmpty" style="display:none;">할 일이 없어요. Inbox에서 바로 추가해보세요.</div>
           </div>
-          <div class="panel" id="d-card-event">
-            <div class="panel-head"><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
+          <div class="panel dash-widget" id="d-card-event" data-card="event">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
             <div id="d-eventList"></div>
             <div class="empty" id="d-eventEmpty" style="display:none;">일정이 없어요.</div>
           </div>
-          <div id="d-col-memoPostit">
-            <div class="panel" id="d-card-memo" style="margin-bottom:14px;">
-              <div class="panel-head"><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
-              <div id="d-memoList"></div>
-              <div class="empty" id="d-memoEmpty" style="display:none;">메모가 없어요.</div>
-            </div>
-            <div class="panel" id="d-card-postit">
-              <div class="panel-head"><h3>고정 포스트잇</h3><a class="btn-icon" href="#/postit">더보기 ›</a></div>
-              <div id="d-postitList"></div>
-              <div class="empty" id="d-postitEmpty" style="display:none;">고정된 포스트잇이 없어요.</div>
-            </div>
+          <div class="panel dash-widget" id="d-card-memo" data-card="memo">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
+            <div id="d-memoList"></div>
+            <div class="empty" id="d-memoEmpty" style="display:none;">메모가 없어요.</div>
           </div>
-        </div>
-
-        <div class="panel dash-linked-panel" id="d-card-linked">
-          <div class="panel-head"><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
-          <div id="d-linkedRow"><div class="empty">불러오는 중…</div></div>
-        </div>
-
-        <div class="dash-bottom-grid" id="d-bottomGrid">
-          <div class="panel" id="d-card-activity">
-            <div class="panel-head"><h3>최근 활동</h3></div>
+          <div class="panel dash-widget" id="d-card-postit" data-card="postit">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>고정 포스트잇</h3><a class="btn-icon" href="#/postit">더보기 ›</a></div>
+            <div id="d-postitList"></div>
+            <div class="empty" id="d-postitEmpty" style="display:none;">고정된 포스트잇이 없어요.</div>
+          </div>
+          <div class="panel dash-widget dash-widget-wide" id="d-card-linked" data-card="linked">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>연결된 업무</h3><a class="btn-icon" id="d-linkedMore" href="#/calendar">+ 연결하기</a></div>
+            <div id="d-linkedRow"><div class="empty">불러오는 중…</div></div>
+          </div>
+          <div class="panel dash-widget" id="d-card-activity" data-card="activity">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 활동</h3></div>
             <div id="d-activityList"></div>
           </div>
-          <div class="panel" id="d-card-weekSummary">
-            <div class="panel-head"><h3>이번 주 요약</h3></div>
+          <div class="panel dash-widget" id="d-card-weekSummary" data-card="weekSummary">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>이번 주 요약</h3></div>
             <div id="d-weekSummary" class="week-summary-grid"></div>
           </div>
-          <div class="panel" id="d-card-quickAdd">
-            <div class="panel-head"><h3>빠른 추가</h3></div>
+          <div class="panel dash-widget" id="d-card-quickAdd" data-card="quickAdd">
+            <div class="panel-head"><span class="dash-widget-grip" draggable="true" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>빠른 추가</h3></div>
             <div class="quick-add-grid">
               <a class="quick-add-btn" href="#/todo">+ Todo</a>
               <a class="quick-add-btn" href="#/calendar">+ 일정</a>
@@ -207,8 +202,7 @@ export async function mount(root) {
 
   // 카드 on/off (설정에서 저장한 JSON 하나로 관리) — 데이터를 안 불러오는 최적화는 하지 않고
   // 단순히 숨긴다(로컬 SQLite라 비용이 작아서 그정도 절약은 안 해도 됨).
-  // 고정 3열 그리드(content-grid/dash-bottom-grid)에서 일부만 숨기면 빈 칸이 남으므로,
-  // 보이는 카드 수에 맞춰 grid-template-columns를 다시 계산해서 채운다.
+  // 위젯 그리드(flex-wrap)라 일부만 숨겨도 나머지가 자연스럽게 채워져서 별도 열 계산이 필요 없다.
   async function applyDashboardCardConfig() {
     const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
     let config = defaults;
@@ -225,34 +219,90 @@ export async function mount(root) {
     };
     DASHBOARD_CARDS.forEach((c) => setVisible(`d-card-${c.id}`, config[c.id]));
 
-    const memoPostitColVisible = config.memo || config.postit;
-    setVisible('d-col-memoPostit', memoPostitColVisible);
-    const contentColumns = [
-      [config.todo, '1.1fr'],
-      [config.event, '1fr'],
-      [memoPostitColVisible, '1fr'],
-    ]
-      .filter(([visible]) => visible)
-      .map(([, weight]) => weight)
-      .join(' ');
-    $('d-contentGrid').style.gridTemplateColumns = contentColumns;
-
-    const bottomVisible = config.activity || config.weekSummary || config.quickAdd;
-    $('d-bottomGrid').style.display = bottomVisible ? '' : 'none';
-    if (bottomVisible) {
-      $('d-bottomGrid').style.gridTemplateColumns = [
-        [config.activity, '1.3fr'],
-        [config.weekSummary, '1fr'],
-        [config.quickAdd, '1fr'],
-      ]
-        .filter(([visible]) => visible)
-        .map(([, weight]) => weight)
-        .join(' ');
-    }
-
     $('d-layout').classList.toggle('side-collapsed', !(config.sideCalendar || config.sidePostit));
   }
   await applyDashboardCardConfig();
+
+  // ================= 위젯 그리드: 드래그로 순서 바꾸기 + 크기 기억 =================
+  // 위치(순서)와 크기(드래그 리사이즈 결과)를 카드별로 설정에 저장해서 다음에 열어도 유지한다.
+  async function initWidgetGrid() {
+    const grid = $('d-widgetGrid');
+    const widgets = Array.from(grid.querySelectorAll('.dash-widget'));
+
+    let layout = { order: [], sizes: {} };
+    try {
+      const raw = await window.itda.settings.get('dashboard_layout');
+      if (raw) layout = { order: [], sizes: {}, ...JSON.parse(raw) };
+    } catch (e) {
+      // 저장된 값이 없거나 깨졌으면 기본 순서/크기 그대로 사용
+    }
+
+    // 저장된 순서대로 DOM을 재배치 — order에 없는(새로 추가된) 카드는 원래 위치 그대로 뒤에 남는다.
+    if (layout.order.length) {
+      const byCard = new Map(widgets.map((w) => [w.dataset.card, w]));
+      layout.order.forEach((cardId) => {
+        const el = byCard.get(cardId);
+        if (el) grid.appendChild(el);
+      });
+    }
+    // 저장된 크기 적용
+    widgets.forEach((w) => {
+      const size = layout.sizes[w.dataset.card];
+      if (size?.width) w.style.width = `${size.width}px`;
+      if (size?.height) w.style.height = `${size.height}px`;
+    });
+
+    function persistLayout() {
+      const order = Array.from(grid.querySelectorAll('.dash-widget')).map((w) => w.dataset.card);
+      window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ order, sizes: layout.sizes }) }).catch(() => {});
+    }
+
+    // 크기: 네이티브 resize(모서리 드래그)로 바뀐 최종 크기를 ResizeObserver로 감지해 저장
+    let resizeTimer = null;
+    const resizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        const cardId = entry.target.dataset.card;
+        // style.width/height는 전역 box-sizing:border-box라 테두리 포함 크기로 해석되므로,
+        // contentRect(패딩 제외) 대신 borderBoxSize를 써야 저장했다가 다시 적용해도 안 줄어든다.
+        const box = entry.borderBoxSize?.[0];
+        const width = box ? box.inlineSize : entry.target.offsetWidth;
+        const height = box ? box.blockSize : entry.target.offsetHeight;
+        layout.sizes[cardId] = { width: Math.round(width), height: Math.round(height) };
+      });
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(persistLayout, 400);
+    });
+    widgets.forEach((w) => resizeObserver.observe(w, { box: 'border-box' }));
+
+    // 순서: 그립 아이콘을 드래그해서 다른 카드 위에 놓으면 그 카드 앞으로 이동
+    let draggingCard = null;
+    grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
+      grip.addEventListener('dragstart', (e) => {
+        draggingCard = grip.closest('.dash-widget');
+        draggingCard.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      grip.addEventListener('dragend', () => {
+        draggingCard?.classList.remove('dragging');
+        draggingCard = null;
+        persistLayout();
+      });
+    });
+    widgets.forEach((w) => {
+      w.addEventListener('dragover', (e) => {
+        if (!draggingCard || draggingCard === w) return;
+        e.preventDefault();
+      });
+      w.addEventListener('drop', (e) => {
+        if (!draggingCard || draggingCard === w) return;
+        e.preventDefault();
+        w.before(draggingCard);
+      });
+    });
+
+    return () => resizeObserver.disconnect();
+  }
+  const disconnectWidgetGrid = await initWidgetGrid();
 
   // ================= 사이드 패널(우측 캘린더/포스트잇) 폭 드래그 조절 =================
   const SIDE_WIDTH_MIN = 260;
@@ -822,5 +872,6 @@ export async function mount(root) {
     offDataChanged?.();
     if (onResizerMove) document.removeEventListener('mousemove', onResizerMove);
     if (onResizerUp) document.removeEventListener('mouseup', onResizerUp);
+    disconnectWidgetGrid?.();
   };
 }

@@ -244,7 +244,6 @@ html, body{height:100%;}
 .summary-card.tone-blue .num{color:var(--tone-blue-fg);}
 
 /* ================= 콘텐츠 그리드 / 패널 ================= */
-.content-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:14px;}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px;min-height:120px;}
 
 /* ================= 설정 화면 — 좌측 탭 레이아웃 ================= */
@@ -850,8 +849,22 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ---- 요약 카드 5개 ---- */
 .summary-grid-5{grid-template-columns:repeat(5,1fr);}
 
+/* ---- 위젯 그리드: 그립을 드래그하면 순서 변경, 패널 모서리를 드래그하면 크기 조절
+   (네이티브 CSS resize 사용 — 결과는 dashboard.js의 ResizeObserver가 감지해 저장) ---- */
+.dash-widget-grid{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-start;margin-bottom:16px;}
+/* flex-grow/shrink을 0으로 둬야 리사이즈 핸들로 정한 width가 다시 늘어나지 않고 그대로 유지됨
+   (grow가 있으면 flex가 남는 공간을 이 카드에 다시 배분해서 리사이즈가 무의미해짐). */
+.dash-widget{flex:0 0 auto;width:320px;min-width:260px;min-height:140px;max-width:100%;resize:both;overflow:auto;}
+.dash-widget-wide{width:100%;}
+.dash-widget.dragging{opacity:.35;}
+.dash-widget-grip{cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;display:inline-flex;}
+.dash-widget-grip:active{cursor:grabbing;}
+/* 기본 .panel-head는 space-between(제목 vs 더보기 버튼 2개 기준)인데, 위젯엔 그립까지 3번째
+   요소로 들어가서 그립+제목이 서로 멀어져버림 — 그립+제목을 붙이고 더보기만 오른쪽 끝으로 민다. */
+.dash-widget .panel-head{justify-content:flex-start;}
+.dash-widget .panel-head > a{margin-left:auto;}
+
 /* ---- 연결된 업무 ---- */
-.dash-linked-panel{margin-bottom:16px;}
 .linked-row-inner{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0;}
 .linked-connector{color:var(--text-faint);flex-shrink:0;display:flex;}
 .linked-card{flex-shrink:0;min-width:130px;background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;display:flex;flex-direction:column;gap:4px;text-decoration:none;color:inherit;}
@@ -860,8 +873,6 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .linked-card b{font-size:12.5px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .linked-card span{font-size:10.5px;color:var(--text-faint);}
 
-/* ---- 하단 3열: 최근활동 / 이번주요약 / 빠른추가 ---- */
-.dash-bottom-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px;margin-bottom:16px;}
 .activity-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--divider);font-size:12px;}
 .activity-row:last-child{border-bottom:none;}
 .activity-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--brand);}
@@ -883,7 +894,6 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 
 @media (max-width: 1100px){
   .summary-grid-5{grid-template-columns:repeat(3,1fr);}
-  .dash-bottom-grid{grid-template-columns:1fr;}
 }
 
 /* 우측 캘린더 위젯 */
@@ -952,8 +962,16 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .side-postit-empty{grid-column:1 / -1;}
 
 /* ================= 검색 결과 ================= */
+.search-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .search-group{margin-bottom:18px;}
 .search-group h4{font-size:12px;color:var(--text-faint);margin:0 0 8px;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+
+.search-board-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:12px;}
+.search-card{display:flex;align-items:flex-start;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px;min-width:0;}
+.search-card input[type="checkbox"]{width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex-shrink:0;margin-top:2px;}
+.search-card-body{flex:1;min-width:0;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:4px;}
+.search-card-body b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.search-card-body p{font-size:11.5px;color:var(--text-faint);margin:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}
 
 .search-bulk-bar{display:flex;align-items:center;gap:14px;margin-top:12px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-md);}
 

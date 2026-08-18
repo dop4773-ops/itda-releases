@@ -1123,25 +1123,25 @@ export async function mount(root) {
         bindCheckBtn();
         break;
       case 'available':
-        statusEl.textContent = `새 버전 ${data.version}이(가) 있어요.`;
-        renderUpdateActions(`<button class="btn" id="upd-downloadBtn">다운로드</button>`);
+        // autoDownload가 켜져 있어서(main/updater/index.js) 이 상태는 잠깐 보이고 바로
+        // 'downloading'으로 넘어간다 — 사용자가 따로 누를 다운로드 버튼은 필요 없다.
+        statusEl.textContent = `새 버전 ${data.version}이(가) 있어요. 백그라운드에서 자동으로 받는 중…`;
+        renderUpdateActions('');
         if (data.releaseNotes) {
           notesEl.textContent = data.releaseNotes;
           notesEl.style.display = 'block';
         }
-        $('upd-downloadBtn').addEventListener('click', async () => {
-          renderUpdateActions('');
-          statusEl.textContent = '다운로드를 시작합니다…';
-          await window.itda.updater.downloadUpdate();
-        });
         break;
       case 'downloading':
-        statusEl.textContent = `다운로드 중… ${data.percent ?? 0}%`;
+        statusEl.textContent = `자동으로 다운로드하는 중… ${data.percent ?? 0}%`;
         renderUpdateActions('');
         break;
       case 'downloaded':
-        statusEl.textContent = `버전 ${data.version} 다운로드 완료. 재시작하면 적용돼요.`;
-        renderUpdateActions(`<button class="btn" id="upd-installBtn">재시작 후 설치</button>`);
+        // autoInstallOnAppQuit이 켜져 있어서 다음에 앱이 자연스럽게 종료될 때(트레이 "완전히
+        // 종료" 등) 조용히 설치된다 — 굳이 지금 누르지 않아도 된다. 바로 적용하고 싶은
+        // 사람을 위한 선택지로만 버튼을 남겨둔다.
+        statusEl.textContent = `버전 ${data.version} 다운로드 완료. 다음에 앱을 종료할 때 자동으로 적용돼요.`;
+        renderUpdateActions(`<button class="btn" id="upd-installBtn">지금 재시작해서 설치</button>`);
         $('upd-installBtn').addEventListener('click', () => window.itda.updater.quitAndInstall());
         break;
       case 'error':
