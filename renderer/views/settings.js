@@ -4,7 +4,8 @@ import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
 import { DASHBOARD_CARDS } from './dashboard.js';
-import { LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
+import { LAYOUT_PRESETS, getPreset, scaleForPreview, WIDGET_CARD_IDS } from '../shared/dashboard-layouts.js';
+import { promptText } from '../shared/text-prompt.js';
 
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
@@ -17,6 +18,7 @@ const KEY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" st
 const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
 const SLIDERS_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/></svg>`;
 const DASHBOARD_TAB_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>`;
+const TRASH_MINI_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 
 export const TABS = [
   { id: 'display', label: '화면', icon: DISPLAY_ICON },
@@ -120,11 +122,12 @@ export async function mount(root) {
 
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>배치 프리셋</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">미리 만들어둔 배치로 한 번에 정렬해요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
-            <div class="form-row">
-              ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
+            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">미리 만들어둔 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
+            <div class="form-row" id="dashboard-presetList"></div>
+            <div class="form-row" style="margin-top:10px;">
+              <button class="btn-secondary" id="dashboard-savePresetBtn">현재 배치를 프리셋으로 저장</button>
+              <button class="btn-secondary" id="dashboard-resetLayoutBtn">기본 배치로 되돌리기</button>
             </div>
-            <button class="btn-secondary" id="dashboard-resetLayoutBtn" style="margin-top:12px;">기본 배치로 되돌리기</button>
           </div>
         </div>
 
@@ -990,17 +993,135 @@ export async function mount(root) {
       }
     });
 
-    // 프리셋 버튼 — 카드별 위치/크기(widgets)를 비우고 프리셋 id만 저장하면, 대시보드가
-    // 다음에 열릴 때 그 프리셋 계산식으로 전부 새로 배치한다(dashboard.js initWidgetGrid 참고).
-    root.querySelectorAll('[data-preset]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          await window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: btn.dataset.preset, widgets: {} }) });
-          toast('대시보드에 반영하려면 대시보드로 이동하세요.');
-        } catch (e) {
-          errorToast(e, '프리셋을 적용하지 못했어요');
-        }
+    const visibleCardIds = WIDGET_CARD_IDS.filter((id) => config[id]);
+    await initPresetSection(visibleCardIds);
+  }
+
+  // ================= 배치 프리셋: 목록 렌더링(기본 제공 + 내가 저장한 것) + 미리보기 + 저장/삭제 =================
+  const PREVIEW_W = 200;
+  const PREVIEW_H = 120;
+
+  async function loadCustomPresets() {
+    try {
+      const raw = await window.itda.settings.get('dashboard_custom_presets');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function buildPreviewHtml(positions) {
+    const labelById = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.label]));
+    const scaled = scaleForPreview(positions, PREVIEW_W - 8, PREVIEW_H - 8);
+    const boxes = Object.entries(scaled)
+      .map(([id, p]) => `<div class="preset-preview-box" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px;" title="${escapeHtml(labelById[id] || id)}"></div>`)
+      .join('');
+    return `<div class="preset-preview-canvas" style="width:${PREVIEW_W}px;height:${PREVIEW_H}px;">${boxes}</div>`;
+  }
+
+  // 프리셋 버튼에 커서를 올리면(파워포인트 레이아웃 갤러리처럼) 예시 구조를 작은 팝오버로 보여준다.
+  function attachPreviewHover(btn, getPositions) {
+    let popEl = null;
+    btn.addEventListener('mouseenter', () => {
+      const positions = getPositions();
+      if (!positions || !Object.keys(positions).length) return;
+      popEl = document.createElement('div');
+      popEl.className = 'preset-preview-pop';
+      popEl.innerHTML = buildPreviewHtml(positions);
+      document.body.appendChild(popEl);
+      const rect = btn.getBoundingClientRect();
+      const popRect = popEl.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      popEl.style.left = `${Math.max(8, Math.min(rect.left, vw - popRect.width - 8))}px`;
+      popEl.style.top = `${Math.min(rect.bottom + 6, vh - popRect.height - 8)}px`;
+    });
+    btn.addEventListener('mouseleave', () => {
+      popEl?.remove();
+      popEl = null;
+    });
+  }
+
+  async function initPresetSection(visibleCardIds) {
+    const listEl = $('dashboard-presetList');
+
+    async function render() {
+      const customPresets = await loadCustomPresets();
+      listEl.innerHTML =
+        LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('') +
+        customPresets
+          .map(
+            (p) => `
+          <span class="preset-custom-chip">
+            <button class="btn-secondary" data-preset="${p.id}" data-custom="1">${escapeHtml(p.label)}</button>
+            <button class="btn-icon" data-delete-preset="${p.id}" title="이 프리셋 삭제">${TRASH_MINI_ICON}</button>
+          </span>`
+          )
+          .join('');
+
+      // 기본 제공 프리셋: 지금 대시보드에 켜둔 카드들 기준으로 예시 구조를 계산해서 미리보기
+      listEl.querySelectorAll('[data-preset]:not([data-custom])').forEach((btn) => {
+        attachPreviewHover(btn, () => getPreset(btn.dataset.preset).compute(visibleCardIds, 960));
+        btn.addEventListener('click', async () => {
+          try {
+            await window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: btn.dataset.preset, widgets: {} }) });
+            toast('대시보드에 반영하려면 대시보드로 이동하세요.');
+          } catch (e) {
+            errorToast(e, '프리셋을 적용하지 못했어요');
+          }
+        });
       });
+
+      // 내가 저장한 프리셋: 저장해둔 실제 좌표 그대로 미리보기 + 적용 + 삭제
+      listEl.querySelectorAll('[data-preset][data-custom]').forEach((btn) => {
+        const preset = customPresets.find((p) => p.id === btn.dataset.preset);
+        attachPreviewHover(btn, () => preset?.widgets);
+        btn.addEventListener('click', async () => {
+          try {
+            await window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: 'flow', widgets: preset.widgets }) });
+            toast('대시보드에 반영하려면 대시보드로 이동하세요.');
+          } catch (e) {
+            errorToast(e, '프리셋을 적용하지 못했어요');
+          }
+        });
+      });
+      listEl.querySelectorAll('[data-delete-preset]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const remaining = customPresets.filter((p) => p.id !== btn.dataset.deletePreset);
+          try {
+            await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(remaining) });
+            await render();
+          } catch (e) {
+            errorToast(e, '삭제하지 못했어요');
+          }
+        });
+      });
+    }
+    await render();
+
+    $('dashboard-savePresetBtn').addEventListener('click', async () => {
+      const name = await promptText($('dashboard-savePresetBtn'), { title: '프리셋 이름', placeholder: '예: 회의 준비용' });
+      if (!name) return;
+      let widgets = {};
+      try {
+        const raw = await window.itda.settings.get('dashboard_layout');
+        widgets = raw ? JSON.parse(raw).widgets || {} : {};
+      } catch (e) {
+        /* 깨졌으면 빈 배치로 취급 */
+      }
+      if (!Object.keys(widgets).length) {
+        toast('저장할 배치가 없어요. 대시보드에서 카드를 한 번 옮기거나 크기를 바꿔보세요.');
+        return;
+      }
+      const customPresets = await loadCustomPresets();
+      customPresets.push({ id: `custom-${Date.now()}`, label: name, widgets });
+      try {
+        await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(customPresets) });
+        toast('프리셋으로 저장했어요');
+        await render();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
     });
   }
 
@@ -1178,10 +1299,9 @@ export async function mount(root) {
         renderUpdateActions('');
         break;
       case 'downloaded':
-        // autoInstallOnAppQuit이 켜져 있어서 다음에 앱이 자연스럽게 종료될 때(트레이 "완전히
-        // 종료" 등) 조용히 설치된다 — 굳이 지금 누르지 않아도 된다. 바로 적용하고 싶은
-        // 사람을 위한 선택지로만 버튼을 남겨둔다.
-        statusEl.textContent = `버전 ${data.version} 다운로드 완료. 다음에 앱을 종료할 때 자동으로 적용돼요.`;
+        // main/updater/index.js가 창을 닫는(트레이로 내려가는) 시점을 감지해서 조용히
+        // 설치+재시작한다 — 굳이 지금 누르지 않아도 창만 닫으면 알아서 적용된다.
+        statusEl.textContent = `버전 ${data.version} 다운로드 완료. 창을 닫으면 자동으로 설치되고 다시 켜져요.`;
         renderUpdateActions(`<button class="btn" id="upd-installBtn">지금 재시작해서 설치</button>`);
         $('upd-installBtn').addEventListener('click', () => window.itda.updater.quitAndInstall());
         break;

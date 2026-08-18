@@ -8,11 +8,14 @@
  *     완전히 분리된 이 모듈 하나로 캡슐화한다. main.js는 initUpdater() 한 줄만 호출한다.
  *   - 다운로드/설치는 조용히 자동으로 진행하되, "일하는 도중 갑자기 재시작"만은 피한다 →
  *     새 버전이 있으면 백그라운드에서 자동으로 다운로드하고(autoDownload), 설치는 사용자가
- *     "재시작 후 설치"를 직접 누르지 않아도 앱이 어차피 다음에 자연스럽게 종료될 때
- *     (트레이 "완전히 종료", OS 종료/로그아웃 등) 조용히 적용된다(autoInstallOnAppQuit).
- *     즉 강제로 지금 당장 재시작시키는 일은 없고, 사용자 입장에서는 다음에 앱을 열면
- *     이미 최신 버전인 것처럼 느껴진다. 설정 화면의 "지금 재시작해서 설치" 버튼은
- *     즉시 적용하고 싶은 사람을 위한 선택지로만 남겨둔다.
+ *     직접 "재시작 후 설치"를 누르지 않아도 창을 닫는(트레이로 내려가는) 바로 그 순간
+ *     조용히 적용된다. 이 앱은 트레이 상주형이라 "완전히 종료"를 거의 안 눌러서, electron-updater
+ *     기본값인 autoInstallOnAppQuit만으로는 사실상 설치될 기회가 없었다 — 그래서 mainWindow의
+ *     'close' 이벤트(= 사용자가 X를 눌러 자리를 비우려는 시점)를 직접 감지해서, 그때 마침
+ *     설치할 업데이트가 준비돼 있으면 숨기는 대신 조용히 재시작+설치한다. 일하는 도중에는
+ *     창을 안 닫으니 방해받지 않고, 사용자 입장에서는 다음에 창을 열면 이미 최신 버전인
+ *     것처럼 느껴진다. 설정 화면의 "지금 재시작해서 설치" 버튼은 당장 적용하고 싶은
+ *     사람을 위한 선택지로만 남겨둔다.
  *   - 로컬 우선: 개발 모드(패키징 안 된 상태로 소스에서 직접 실행)에서는
  *     electron-updater 자체가 정상 동작하지 않으므로(배포 메타파일이 없음),
  *     아예 아무 것도 하지 않고 "개발 모드" 상태만 응답한다.
@@ -78,7 +81,23 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   autoUpdater.on('download-progress', (progress) => {
     sendStatus('downloading', { percent: Math.round(progress.percent) });
   });
-  autoUpdater.on('update-downloaded', (info) => sendStatus('downloaded', { version: info.version }));
+  let updateReadyToInstall = false;
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReadyToInstall = true;
+    sendStatus('downloaded', { version: info.version });
+  });
+
+  // 창을 닫아서(트레이로 내려가서) 안 보이게 되는 바로 그 시점 — 마침 설치할 업데이트가
+  // 준비돼 있으면 그냥 숨기지 않고 조용히 재시작+설치한다. main.js의 close 핸들러(숨기기)보다
+  // 나중에 등록돼서 나중에 실행되므로, 여기서 종료로 확정하면 숨기기 대신 실제로 꺼지고
+  // isForceRunAfter=true라 설치 후 자동으로 다시 켜진다.
+  if (mainWindow) {
+    mainWindow.on('close', () => {
+      if (!updateReadyToInstall) return;
+      app.isQuittingItda = true;
+      autoUpdater.quitAndInstall(true, true);
+    });
+  }
 
   ipcMain.handle('updater:checkNow', async () => {
     try {

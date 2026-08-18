@@ -16,6 +16,11 @@ const CARD_SIZE = {
 };
 const DEFAULT_SIZE = { w: 320, h: 220 };
 
+// 자유 배치 그리드에 실제로 속하는 카드 id 목록 — DASHBOARD_CARDS에는 사이드 패널 카드
+// (sideCalendar/sidePostit)도 섞여 있는데 걔들은 .dash-widget이 아니라 별도 aside라
+// 여기 배치 계산/미리보기 대상이 아니다. 이 목록으로 걸러서 프리셋 미리보기에 안 섞이게 한다.
+export const WIDGET_CARD_IDS = Object.keys(CARD_SIZE);
+
 function sizeFor(cardId) {
   return CARD_SIZE[cardId] || DEFAULT_SIZE;
 }
@@ -74,4 +79,25 @@ export const LAYOUT_PRESETS = [
 
 export function getPreset(id) {
   return LAYOUT_PRESETS.find((p) => p.id === id) || LAYOUT_PRESETS[0];
+}
+
+// 프리셋 미리보기용 — 실제 좌표 배치를 작은 박스(boxW x boxH) 안에 맞게 축소한다.
+// (설정 화면에서 프리셋 버튼에 커서를 올리면 이 축소본으로 예시 구조를 보여준다.)
+export function scaleForPreview(positions, boxW, boxH) {
+  const ids = Object.keys(positions);
+  if (!ids.length) return {};
+  let maxX = 0;
+  let maxY = 0;
+  ids.forEach((id) => {
+    const p = positions[id];
+    maxX = Math.max(maxX, p.x + p.w);
+    maxY = Math.max(maxY, p.y + p.h);
+  });
+  const scale = Math.min(boxW / maxX, boxH / maxY, 1);
+  const scaled = {};
+  ids.forEach((id) => {
+    const p = positions[id];
+    scaled[id] = { x: Math.round(p.x * scale), y: Math.round(p.y * scale), w: Math.max(6, Math.round(p.w * scale)), h: Math.max(6, Math.round(p.h * scale)) };
+  });
+  return scaled;
 }

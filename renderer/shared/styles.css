@@ -749,6 +749,28 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .series-scope-title{font-size:11.5px;color:var(--text-faint);margin-bottom:2px;}
 .series-scope-pop button{width:100%;text-align:center;}
 
+/* ================= 텍스트 한 줄 입력 팝오버 (프리셋 이름 저장 등) ================= */
+.text-prompt-pop{
+  position:fixed;z-index:200;width:220px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:8px;
+}
+.text-prompt-title{font-size:11.5px;color:var(--text-faint);}
+.text-prompt-actions{display:flex;gap:6px;justify-content:flex-end;}
+.text-prompt-actions button{padding:5px 10px;font-size:12px;}
+
+/* ================= 대시보드 배치 프리셋 미리보기 팝오버 ================= */
+.preset-preview-pop{
+  position:fixed;z-index:200;padding:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
+  box-shadow:0 12px 32px rgba(16,24,40,.18);
+}
+.preset-preview-canvas{position:relative;background:var(--bg);border-radius:var(--radius-sm);overflow:hidden;}
+.preset-preview-box{position:absolute;background:var(--brand-soft);border:1px solid var(--brand);border-radius:2px;}
+.preset-custom-chip{display:inline-flex;align-items:center;gap:2px;}
+.preset-custom-chip [data-delete-preset]{color:var(--text-faint);}
+.preset-custom-chip [data-delete-preset]:hover{color:var(--danger);}
+
 /* ================= "@검색" 빠른 연결 — 메모/포스트잇 본문에서 @입력시 뜨는 팝업 + 삽입된 연결 칩 ================= */
 .mention-popup{
   position:absolute;z-index:200;min-width:220px;max-width:320px;max-height:260px;overflow-y:auto;
