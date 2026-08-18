@@ -109,8 +109,9 @@ export async function mount(root) {
 
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>대시보드 구성</h3></div>
-            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 순서는 지금은 고정이에요.</p>
+            <p style="font-size:12px;color:var(--text-faint);margin:0 0 12px;">대시보드에 어떤 카드를 보여줄지 정해요. 카드 순서/크기는 대시보드에서 직접 드래그로 바꿀 수 있어요.</p>
             <div id="dashboard-cardList"></div>
+            <button class="btn-secondary" id="dashboard-resetLayoutBtn" style="margin-top:12px;">기본 배치로 되돌리기</button>
           </div>
         </div>
 
@@ -960,6 +961,20 @@ export async function mount(root) {
           config[toggle.dataset.id] = toggle.checked;
         }
       });
+    });
+
+    $('dashboard-resetLayoutBtn').addEventListener('click', async () => {
+      try {
+        // 카드 순서/크기(dashboard_layout)와 사이드 패널 폭(dashboard_side_width) 둘 다 초기화 —
+        // "기본 배치"는 둘을 합친 전체 모양을 뜻하므로 하나만 지우면 반쪽짜리 초기화가 됨.
+        await Promise.all([
+          window.itda.settings.set({ key: 'dashboard_layout', value: '' }),
+          window.itda.settings.set({ key: 'dashboard_side_width', value: '' }),
+        ]);
+        toast('대시보드를 기본 배치로 되돌렸어요. 대시보드로 이동하면 반영돼요.');
+      } catch (e) {
+        errorToast(e, '되돌리지 못했어요');
+      }
     });
   }
 

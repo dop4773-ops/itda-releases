@@ -257,18 +257,30 @@ export async function mount(root) {
       window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ order, sizes: layout.sizes }) }).catch(() => {});
     }
 
-    // 크기: 네이티브 resize(모서리 드래그)로 바뀐 최종 크기를 ResizeObserver로 감지해 저장
+    // 크기: 네이티브 resize(모서리 드래그)로 바뀐 최종 크기를 ResizeObserver로 감지해 저장.
+    // observe()는 관찰을 시작하자마자 "현재 크기"로 콜백을 한 번 더 호출하는데(스펙 동작),
+    // 이걸 그대로 저장하면 사용자가 손도 안 댄 카드까지 "그 순간의 화면 크기"로 고정돼버려서
+    // (예: 폭이 100%인 '연결된 업무' 카드가 창을 열자마자 몇 px짜리 고정폭으로 굳어버림) —
+    // 카드별로 이 최초 콜백 한 번은 무시하고, 그 다음부터(=실제 드래그로 바뀐 경우)만 저장한다.
+    const observedOnce = new Set();
     let resizeTimer = null;
     const resizeObserver = new ResizeObserver((entries) => {
+      let changed = false;
       entries.forEach((entry) => {
         const cardId = entry.target.dataset.card;
+        if (!observedOnce.has(cardId)) {
+          observedOnce.add(cardId);
+          return;
+        }
         // style.width/height는 전역 box-sizing:border-box라 테두리 포함 크기로 해석되므로,
         // contentRect(패딩 제외) 대신 borderBoxSize를 써야 저장했다가 다시 적용해도 안 줄어든다.
         const box = entry.borderBoxSize?.[0];
         const width = box ? box.inlineSize : entry.target.offsetWidth;
         const height = box ? box.blockSize : entry.target.offsetHeight;
         layout.sizes[cardId] = { width: Math.round(width), height: Math.round(height) };
+        changed = true;
       });
+      if (!changed) return;
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(persistLayout, 400);
     });
@@ -281,6 +293,7 @@ export async function mount(root) {
         draggingCard = grip.closest('.dash-widget');
         draggingCard.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', draggingCard.dataset.card); // 일부 환경은 setData 없인 드래그 자체를 안 받아줌
       });
       grip.addEventListener('dragend', () => {
         draggingCard?.classList.remove('dragging');
