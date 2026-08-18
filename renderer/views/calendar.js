@@ -315,7 +315,6 @@ export async function mount(root) {
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         ${widgetLaunchButtonHtml('c-scheduleWidgetBtn', '오늘 일정 위젯 열기')}
-        ${widgetLaunchButtonHtml('c-gcalWidgetBtn', '구글 캘린더 위젯 열기')}
         <button class="btn" id="c-openAdd">+ 새 일정</button>
       </div>
     </div>
@@ -328,10 +327,13 @@ export async function mount(root) {
         <button class="btn-secondary" id="c-today">오늘</button>
         <button class="btn-icon" id="c-miniToggle" title="미니 캘린더 보기">${CAL_ICON}</button>
       </div>
-      <div class="tabs">
-        <button class="tab active" data-view="month">월</button>
-        <button class="tab" data-view="week">주</button>
-        <button class="tab" data-view="day">일</button>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="btn-secondary" id="c-toggleGoogle" title="구글 캘린더 일정 표시 켜기/끄기">${CAL_ICON} 구글 캘린더</button>
+        <div class="tabs">
+          <button class="tab active" data-view="month">월</button>
+          <button class="tab" data-view="week">주</button>
+          <button class="tab" data-view="day">일</button>
+        </div>
       </div>
     </div>
 
@@ -410,6 +412,7 @@ export async function mount(root) {
   let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
   let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
   let miniOpen = false;
+  let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
   async function loadCategories() {
@@ -434,10 +437,11 @@ export async function mount(root) {
     let googleEvents = [];
     try {
       const { fromDate, toDate } = queryRange(currentView, anchor);
-      // 구글 캘린더는 읽기전용 캐시 테이블 조회일 뿐이라 연결 안 되어 있어도 그냥 빈 배열이 옴(에러 아님)
+      // 구글 캘린더는 읽기전용 캐시 테이블 조회일 뿐이라 연결 안 되어 있어도 그냥 빈 배열이 옴(에러 아님).
+      // showGoogle이 꺼져 있으면 아예 요청하지 않는다(불필요한 조회 생략).
       const [localResult, googleResult] = await Promise.allSettled([
         window.itda.events.range({ fromDate, toDate }),
-        window.itda.googleCalendar.range({ fromDate, toDate }),
+        showGoogle ? window.itda.googleCalendar.range({ fromDate, toDate }) : Promise.resolve([]),
       ]);
       if (localResult.status === 'fulfilled') localEvents = localResult.value;
       else throw localResult.reason;
@@ -758,7 +762,31 @@ export async function mount(root) {
   });
 
   bindWidgetLaunchButton(root, 'c-scheduleWidgetBtn', 'today-schedule');
-  bindWidgetLaunchButton(root, 'c-gcalWidgetBtn', 'google-calendar-mini');
+
+  // 구글 캘린더 표시 켜기/끄기 — 이전엔 별도 위젯 창으로만 볼 수 있었는데, 이 화면 안에서
+  // 바로 켜고 끌 수 있게 하고 위젯 버튼은 없앴다(중복 UI라 판단). 상태는 다음에 열 때도
+  // 그대로 유지되도록 설정에 저장한다.
+  const toggleGoogleBtn = $('c-toggleGoogle');
+  function applyGoogleToggleUi() {
+    toggleGoogleBtn.classList.toggle('active', showGoogle);
+    toggleGoogleBtn.title = showGoogle ? '구글 캘린더 일정 숨기기' : '구글 캘린더 일정 표시하기';
+  }
+  try {
+    showGoogle = (await window.itda.settings.get('calendar_show_google')) !== '0';
+  } catch (e) {
+    // 못 불러오면 기본값(켬) 유지
+  }
+  applyGoogleToggleUi();
+  toggleGoogleBtn.addEventListener('click', async () => {
+    showGoogle = !showGoogle;
+    applyGoogleToggleUi();
+    load();
+    try {
+      await window.itda.settings.set({ key: 'calendar_show_google', value: showGoogle ? '1' : '0' });
+    } catch (e) {
+      errorToast(e, '설정을 저장하지 못했어요');
+    }
+  });
   const unsubscribeEsc = registerEscClose(
     () => $('c-detailOverlay').classList.contains('open') || $('c-modalOverlay').classList.contains('open'),
     () => {

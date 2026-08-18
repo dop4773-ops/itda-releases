@@ -12,10 +12,13 @@
  *     조용히 적용된다. 이 앱은 트레이 상주형이라 "완전히 종료"를 거의 안 눌러서, electron-updater
  *     기본값인 autoInstallOnAppQuit만으로는 사실상 설치될 기회가 없었다 — 그래서 mainWindow의
  *     'close' 이벤트(= 사용자가 X를 눌러 자리를 비우려는 시점)를 직접 감지해서, 그때 마침
- *     설치할 업데이트가 준비돼 있으면 숨기는 대신 조용히 재시작+설치한다. 일하는 도중에는
- *     창을 안 닫으니 방해받지 않고, 사용자 입장에서는 다음에 창을 열면 이미 최신 버전인
- *     것처럼 느껴진다. 설정 화면의 "지금 재시작해서 설치" 버튼은 당장 적용하고 싶은
- *     사람을 위한 선택지로만 남겨둔다.
+ *     설치할 업데이트가 준비돼 있으면 숨기는 대신 조용히 재시작+설치한다(autoInstallOnAppQuit은
+ *     끄고 이 close 리스너 하나로만 트리거 — 둘 다 켜두면 설치 경로가 겹쳐서 설치창이 잠깐
+ *     보이는 원인이 됐었다). 설치창 자체가 안 뜨는 건 package.json의 nsis.oneClick:true도
+ *     필요하다 — assisted(oneClick:false) 인스톨러는 isSilent=true로 불러도 일부 UI가
+ *     남아서 뜬다. 일하는 도중에는 창을 안 닫으니 방해받지 않고, 사용자 입장에서는 다음에
+ *     창을 열면 이미 최신 버전인 것처럼 느껴진다. 설정 화면의 "지금 재시작해서 설치" 버튼은
+ *     당장 적용하고 싶은 사람을 위한 선택지로만 남겨둔다.
  *   - 로컬 우선: 개발 모드(패키징 안 된 상태로 소스에서 직접 실행)에서는
  *     electron-updater 자체가 정상 동작하지 않으므로(배포 메타파일이 없음),
  *     아예 아무 것도 하지 않고 "개발 모드" 상태만 응답한다.
@@ -56,7 +59,11 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   // 지연 require한다 — 개발 중에는 이 줄 자체가 실행되지 않는다.
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true; // 새 버전이 확인되면 바로 백그라운드에서 다운로드
-  autoUpdater.autoInstallOnAppQuit = true; // 앱이 자연스럽게 종료될 때(트레이 종료 등) 조용히 설치 — 강제 재시작은 안 함
+  // autoInstallOnAppQuit(기본값 true)은 일부러 꺼둔다 — 아래 mainWindow 'close' 리스너가
+  // isSilent=true로 직접 quitAndInstall을 호출하는데, 둘 다 켜져 있으면 app.quit() 시퀀스
+  // 중에 electron-updater 내부의 기본(비-silent) 설치 경로가 같이 걸려서 설치창이 잠깐
+  // 보이는 원인이 될 수 있었다. 이 앱은 close 리스너가 설치 시점을 전담하므로 하나만 켠다.
+  autoUpdater.autoInstallOnAppQuit = false;
 
   function sendStatus(status, extra = {}) {
     if (mainWindow && !mainWindow.isDestroyed()) {

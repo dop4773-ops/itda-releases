@@ -89,6 +89,7 @@ export async function mount(root) {
                 <span>가</span><span class="rich-color-bar" style="background:#2B2E3A;"></span>
               </button>
             </div>
+            <span class="card-meta" title="${formatRelative(item.updated_at)}">${formatRelative(item.updated_at)}</span>
             <button class="pin-btn ${item.is_pinned ? 'pinned' : ''}" data-action="pin" title="${item.is_pinned ? '고정 해제' : '고정'}">${PIN_ICON}</button>
           </div>
           <div class="card-content" contenteditable="true" data-action="content" data-placeholder="내용을 입력하세요…">${sanitizeRichHtml(item.content)}</div>
@@ -98,7 +99,6 @@ export async function mount(root) {
                 (c) => `<span class="color-swatch ${c === item.color_hex ? 'selected' : ''}" data-color="${c}" style="background:${c}"></span>`
               ).join('')}
             </div>
-            <span class="card-meta">${formatRelative(item.updated_at)}</span>
             <div class="card-bottom-actions">
               <button class="btn-icon" data-action="toggle-links" title="연결된 항목">${LINK_ICON}</button>
               <button class="btn-icon" data-action="open-widget" title="위젯으로 열기 (독립된 작은 창)">${WIDGET_ICON}</button>

@@ -329,8 +329,49 @@ export async function applyDisplayScale() {
 }
 
 export async function setDisplayScale(scale) {
+  const oldScale = await getDisplayScale();
+  if (oldScale !== scale) await rescaleDashboardLayout(oldScale, scale);
   await window.itda.settings.set({ key: 'display_scale', value: String(scale) });
   await applyDisplayScale();
+}
+
+// 배율이 바뀌면 CSS zoom이 폰트/레이아웃을 전부 다시 흘려보내면서, zoom 아래에서 측정되는
+// "유효 CSS px" 폭 자체가 달라진다(zoom이 클수록 같은 물리 화면에 들어가는 CSS px가 줄어듦).
+// 그런데 대시보드 위젯은 이미 확정된 픽셀 좌표(x/y/w/h)로 절대 배치돼 있어서, 이 변화에
+// 맞춰 저절로 다시 흐르지 않고 그대로 남아있다가 좁아진 폭에서 넘치거나(고배율) 남는
+// 공간을 못 채우고(저배율) 만다. 좌표를 (이전배율/새배율) 비율로 그대로 곱해주면 카드들의
+// 상대적인 배치/비율은 그대로 유지한 채 새 유효 폭에 맞게 같이 줄었다 늘었다 한다.
+const MIN_WIDGET_W = 260;
+const MIN_WIDGET_H = 140;
+async function rescaleDashboardLayout(oldScale, newScale) {
+  const ratio = oldScale / newScale;
+  try {
+    const raw = await window.itda.settings.get('dashboard_layout');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.widgets) {
+        const widgets = {};
+        Object.entries(parsed.widgets).forEach(([id, p]) => {
+          widgets[id] = {
+            x: Math.max(0, Math.round(p.x * ratio)),
+            y: Math.max(0, Math.round(p.y * ratio)),
+            w: Math.max(MIN_WIDGET_W, Math.round(p.w * ratio)),
+            h: Math.max(MIN_WIDGET_H, Math.round(p.h * ratio)),
+          };
+        });
+        await window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: parsed.preset, widgets }) });
+      }
+    }
+  } catch (e) {
+    // 저장된 배치가 없거나 깨졌으면 그냥 둔다 — 다음에 대시보드를 열 때 기본 배치로 다시 계산됨
+  }
+  try {
+    const rawWidth = await window.itda.settings.get('dashboard_side_width');
+    const n = Number(rawWidth);
+    if (n) await window.itda.settings.set({ key: 'dashboard_side_width', value: String(Math.round(n * ratio)) });
+  } catch (e) {
+    // 무시 — 다음에 열 때 기본 폭으로 대체됨
+  }
 }
 
 // 글꼴 — Pretendard(기본, 둥글고 부드러운 인상) vs 시스템 기본(윈도우 맑은 고딕 등).

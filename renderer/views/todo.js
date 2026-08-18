@@ -65,6 +65,10 @@ export async function mount(root) {
             <button class="tab" data-filter="favorite">중요</button>
             <button class="tab" data-filter="done">완료</button>
           </div>
+          <select id="t-doneSort" class="select" style="display:none;">
+            <option value="recent">최근 완료순</option>
+            <option value="category">카테고리별</option>
+          </select>
           <select id="t-categoryFilter" class="select"><option value="">전체 카테고리</option></select>
         </div>
 
@@ -83,6 +87,8 @@ export async function mount(root) {
   let currentView = 'board'; // 프로그램 전체에서 Todo는 기본적으로 칸반 보드로 시작 (요청에 따름)
   let busy = false; // 이중 클릭으로 같은 요청이 중복 발생하지 않도록
   let selectedTodoId = null;
+  let doneSortMode = 'recent'; // '완료' 탭 전용 — 최근 완료순 vs 카테고리별 묶어보기
+  const collapsedIds = new Set(); // 접어둔 카드(항목별 접기/펼치기) — 화면을 나가면 초기화되는 세션 상태
 
   async function loadCategories() {
     try {
@@ -130,13 +136,17 @@ export async function mount(root) {
         ? ''
         : `<span class="badge badge-neutral">${due.label}</span>`;
 
+    const collapsed = collapsedIds.has(t.id);
+    const collapseBtn = `<button class="btn-icon todo-collapse-btn ${collapsed ? '' : 'expanded'}" data-action="toggle-collapse" data-id="${t.id}" title="접기/펼치기">${CHEVRON_RIGHT}</button>`;
+
     if (boardMode) {
       return `
-        <div class="kanban-card" data-id="${t.id}">
+        <div class="kanban-card ${collapsed ? 'collapsed' : ''}" data-id="${t.id}">
           <div class="kanban-card-top">
             <input type="checkbox" class="kanban-card-check" data-action="toggle" data-id="${t.id}" ${t.is_done ? 'checked' : ''} title="완료" />
             <div class="kanban-card-badges">${catPill}${pri ? `<span class="badge badge-${pri.tone}">${pri.label}</span>` : ''}</div>
             <div class="kanban-card-top-right">
+              ${collapseBtn}
               <span class="drag-handle" data-drag-id="${t.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
               <button class="star-btn ${t.is_favorite ? 'active' : ''}" data-action="favorite" data-id="${t.id}" title="중요 표시">${t.is_favorite ? STAR_ICON : STAR_OUTLINE_ICON}</button>
             </div>
@@ -153,7 +163,7 @@ export async function mount(root) {
     }
 
     return `
-      <div class="list-row todo-card ${t.is_done ? 'done' : ''}" data-id="${t.id}">
+      <div class="list-row todo-card ${t.is_done ? 'done' : ''} ${collapsed ? 'collapsed' : ''}" data-id="${t.id}">
         <input type="checkbox" data-action="toggle" data-id="${t.id}" ${t.is_done ? 'checked' : ''} />
         <div class="main">
           <div class="todo-card-title-row">
@@ -163,6 +173,7 @@ export async function mount(root) {
           <div class="meta">${catPill}${dueBadge}${pri ? `<span class="badge badge-${pri.tone}">${pri.label}</span>` : ''}</div>
         </div>
         <div class="actions">
+          ${collapseBtn}
           <span class="drag-handle" data-drag-id="${t.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
           <button class="btn-icon" data-action="delete" data-id="${t.id}" title="삭제">${TRASH_ICON}</button>
         </div>
@@ -224,8 +235,22 @@ export async function mount(root) {
 
     container.querySelectorAll('.todo-card,.kanban-card').forEach((card) => {
       card.addEventListener('click', (e) => {
-        if (e.target.closest('input,button')) return; // 체크박스/별표/삭제/이동 버튼 클릭은 패널을 열지 않음
+        if (e.target.closest('input,button')) return; // 체크박스/별표/삭제/이동/접기 버튼 클릭은 패널을 열지 않음
         openPanel(Number(card.dataset.id));
+      });
+    });
+
+    // 항목별 접기/펼치기 — 다시 그리기 없이 그 카드 하나만 즉시 토글(collapsedIds는 세션 동안만 기억)
+    container.querySelectorAll('[data-action="toggle-collapse"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.id);
+        const card = btn.closest('.todo-card,.kanban-card');
+        if (collapsedIds.has(id)) collapsedIds.delete(id);
+        else collapsedIds.add(id);
+        const nowCollapsed = collapsedIds.has(id);
+        card.classList.toggle('collapsed', nowCollapsed);
+        btn.classList.toggle('expanded', !nowCollapsed);
       });
     });
 
@@ -269,7 +294,31 @@ export async function mount(root) {
       });
       return;
     }
-    listEl.innerHTML = filtered.map((t) => renderCard(t, { boardMode: false })).join('');
+
+    // '완료' 탭에서만 정렬/묶음 방식을 고를 수 있다 — 최근 완료순(기본) 또는 카테고리별로 묶어보기.
+    if (currentFilter === 'done' && doneSortMode === 'category') {
+      const groups = {};
+      filtered.forEach((t) => {
+        const key = t.category_name || '카테고리 없음';
+        groups[key] = groups[key] || [];
+        groups[key].push(t);
+      });
+      listEl.innerHTML = Object.entries(groups)
+        .map(
+          ([label, items]) => `
+        <div class="todo-done-group">
+          <h4>${escapeHtml(label)} (${items.length})</h4>
+          ${items.map((t) => renderCard(t, { boardMode: false })).join('')}
+        </div>`
+        )
+        .join('');
+    } else {
+      const ordered =
+        currentFilter === 'done'
+          ? [...filtered].sort((a, b) => (b.completed_at || '').localeCompare(a.completed_at || ''))
+          : filtered;
+      listEl.innerHTML = ordered.map((t) => renderCard(t, { boardMode: false })).join('');
+    }
     bindCardActions(listEl);
   }
 
@@ -578,8 +627,14 @@ export async function mount(root) {
       root.querySelectorAll('#t-tabs .tab').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       currentFilter = tab.dataset.filter;
+      $('t-doneSort').style.display = currentFilter === 'done' ? '' : 'none';
       refresh();
     });
+  });
+
+  $('t-doneSort').addEventListener('change', (e) => {
+    doneSortMode = e.target.value;
+    refresh();
   });
 
   $('t-categoryFilter').addEventListener('change', (e) => {
