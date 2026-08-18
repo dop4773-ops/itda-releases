@@ -167,6 +167,8 @@ export async function mount(root) {
         </div>
       </div>
 
+      <div class="dash-resizer" id="d-resizer" title="드래그해서 사이드 패널 폭 조절"></div>
+
       <aside class="dash-side" id="d-side">
         <div class="panel side-cal-panel" id="d-card-sideCalendar">
           <div class="panel-head">
@@ -251,6 +253,50 @@ export async function mount(root) {
     $('d-layout').classList.toggle('side-collapsed', !(config.sideCalendar || config.sidePostit));
   }
   await applyDashboardCardConfig();
+
+  // ================= 사이드 패널(우측 캘린더/포스트잇) 폭 드래그 조절 =================
+  const SIDE_WIDTH_MIN = 260;
+  const SIDE_WIDTH_MAX = 560;
+  const SIDE_WIDTH_DEFAULT = 336;
+  let onResizerMove = null;
+  let onResizerUp = null;
+
+  async function initSideResizer() {
+    const layout = $('d-layout');
+    const resizer = $('d-resizer');
+    let width = SIDE_WIDTH_DEFAULT;
+    try {
+      const raw = await window.itda.settings.get('dashboard_side_width');
+      if (raw) width = Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, Number(raw) || SIDE_WIDTH_DEFAULT));
+    } catch (e) {
+      // 저장된 값이 없거나 깨졌으면 기본값 사용
+    }
+    layout.style.setProperty('--dash-side-w', `${width}px`);
+
+    let startX = 0;
+    let startWidth = width;
+    onResizerMove = (e) => {
+      const delta = startX - e.clientX; // 왼쪽으로 끌수록 사이드 패널이 넓어짐
+      const next = Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, startWidth + delta));
+      layout.style.setProperty('--dash-side-w', `${next}px`);
+    };
+    onResizerUp = () => {
+      document.removeEventListener('mousemove', onResizerMove);
+      document.removeEventListener('mouseup', onResizerUp);
+      resizer.classList.remove('dragging');
+      const finalWidth = parseInt(layout.style.getPropertyValue('--dash-side-w'), 10) || SIDE_WIDTH_DEFAULT;
+      window.itda.settings.set({ key: 'dashboard_side_width', value: String(finalWidth) }).catch(() => {});
+    };
+    resizer.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startX = e.clientX;
+      startWidth = parseInt(layout.style.getPropertyValue('--dash-side-w'), 10) || SIDE_WIDTH_DEFAULT;
+      resizer.classList.add('dragging');
+      document.addEventListener('mousemove', onResizerMove);
+      document.addEventListener('mouseup', onResizerUp);
+    });
+  }
+  await initSideResizer();
 
   // 일정 상세/수정 팝업 — 캘린더 화면으로 이동하지 않고 대시보드 안에서 바로 뜨도록
   // calendar.js와 동일한 모달을 재사용(renderer/shared/event-detail-modal.js)한다.
@@ -774,5 +820,7 @@ export async function mount(root) {
     eventDetailModal.destroy();
     clearTimeout(flushTimer);
     offDataChanged?.();
+    if (onResizerMove) document.removeEventListener('mousemove', onResizerMove);
+    if (onResizerUp) document.removeEventListener('mouseup', onResizerUp);
   };
 }

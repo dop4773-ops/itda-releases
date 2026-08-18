@@ -134,9 +134,12 @@ export async function mount(root) {
       return `
         <div class="kanban-card" data-id="${t.id}">
           <div class="kanban-card-top">
+            <input type="checkbox" class="kanban-card-check" data-action="toggle" data-id="${t.id}" ${t.is_done ? 'checked' : ''} title="완료" />
             <div class="kanban-card-badges">${catPill}${pri ? `<span class="badge badge-${pri.tone}">${pri.label}</span>` : ''}</div>
-            <span class="drag-handle" data-drag-id="${t.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
-            <button class="star-btn ${t.is_favorite ? 'active' : ''}" data-action="favorite" data-id="${t.id}" title="중요 표시">${t.is_favorite ? STAR_ICON : STAR_OUTLINE_ICON}</button>
+            <div class="kanban-card-top-right">
+              <span class="drag-handle" data-drag-id="${t.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
+              <button class="star-btn ${t.is_favorite ? 'active' : ''}" data-action="favorite" data-id="${t.id}" title="중요 표시">${t.is_favorite ? STAR_ICON : STAR_OUTLINE_ICON}</button>
+            </div>
           </div>
           <b class="kanban-card-title ${t.is_done ? 'done' : ''}">${escapeHtml(t.title)}</b>
           <div class="kanban-card-bottom">
@@ -238,7 +241,7 @@ export async function mount(root) {
         () => {
           const id = Number(card.dataset.id);
           const t = allTodos.find((x) => x.id === id);
-          return { type: 'todo', id, dueDate: t?.due_date || null };
+          return { type: 'todo', id, dueDate: t?.due_date || null, isDone: !!t?.is_done };
         },
         {
           onDeleted: (item) => {
