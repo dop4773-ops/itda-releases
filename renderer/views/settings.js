@@ -728,11 +728,27 @@ export async function mount(root) {
 
     if (!status.hasCredentialsFile) {
       panel.innerHTML = `
-        <p style="font-size:12.5px;color:var(--text-soft);">
-          연동 파일이 아직 없어요. Google Cloud Console에서 발급받은 OAuth 클라이언트 JSON을
-          <code style="background:var(--bg);padding:1px 5px;border-radius:4px;">config/google-credentials.json</code>
-          경로에 넣어주세요.
-        </p>`;
+        <p style="font-size:12.5px;color:var(--text-soft);margin:0 0 10px;">
+          연동 파일이 아직 없어요. Google Cloud Console에서 "데스크톱 앱" 타입으로 OAuth
+          클라이언트를 만들고 다운로드한 JSON 파일을 아래 버튼으로 선택해주세요.
+        </p>
+        <button class="btn-secondary" id="gcal-importBtn">인증 파일 선택…</button>
+      `;
+      $('gcal-importBtn').addEventListener('click', async () => {
+        $('gcal-importBtn').disabled = true;
+        try {
+          const result = await window.itda.googleCalendar.importCredentialsFile();
+          if (result.imported) {
+            toast('인증 파일을 가져왔어요');
+            await loadGcalPanel();
+          }
+        } catch (e) {
+          errorToast(e, '가져오지 못했어요');
+        } finally {
+          const btn = $('gcal-importBtn');
+          if (btn) btn.disabled = false;
+        }
+      });
       return;
     }
 

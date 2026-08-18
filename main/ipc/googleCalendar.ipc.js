@@ -1,6 +1,8 @@
+const fs = require('fs');
+const { dialog, BrowserWindow } = require('electron');
 const tokenStore = require('../google-calendar/token-store');
 const { runAuthFlow } = require('../google-calendar/oauth-flow');
-const { loadCredentials } = require('../google-calendar/credentials');
+const { loadCredentials, getCredentialsPath } = require('../google-calendar/credentials');
 const { getValidAccessToken } = require('../google-calendar/token-manager');
 const { syncNow, fetchCalendarList } = require('../google-calendar/sync');
 
@@ -12,6 +14,27 @@ module.exports = function registerGoogleCalendarIpc(ipcMain, repos) {
       lastSyncedAt: repos.googleCalendar.lastSyncedAt(),
       selectedCalendar: tokenStore.getSelectedCalendar(repos.settings),
     };
+  });
+
+  // Google Cloud Console에서 받은 OAuth 클라이언트 JSON을 사용자가 직접 골라서 userData로
+  // 복사해온다. 예전엔 "프로젝트 폴더의 config/에 파일을 넣어두세요"였는데, 패키징된 설치본은
+  // 그 폴더 자체가 없어서(읽기전용 앱 리소스) 실제로는 절대 인식될 수 없는 안내였다.
+  ipcMain.handle('googleCalendar:importCredentialsFile', async () => {
+    const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: 'Google OAuth 클라이언트 JSON 선택',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON 파일', extensions: ['json'] }],
+    });
+    if (canceled || !filePaths || !filePaths[0]) return { imported: false };
+
+    const raw = JSON.parse(fs.readFileSync(filePaths[0], 'utf-8'));
+    const cred = raw.installed || raw.web;
+    if (!cred || !cred.client_id || !cred.client_secret) {
+      throw new Error('올바른 Google OAuth 클라이언트 JSON이 아니에요.');
+    }
+    fs.copyFileSync(filePaths[0], getCredentialsPath());
+    return { imported: true };
   });
 
   ipcMain.handle('googleCalendar:connect', async () => {

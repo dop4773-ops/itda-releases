@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld('itda', {
     range: (payload) => ipcRenderer.invoke('googleCalendar:range', payload),
     listCalendars: () => ipcRenderer.invoke('googleCalendar:listCalendars'),
     selectCalendar: (payload) => ipcRenderer.invoke('googleCalendar:selectCalendar', payload),
+    importCredentialsFile: () => ipcRenderer.invoke('googleCalendar:importCredentialsFile'),
   },
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),

@@ -2,26 +2,19 @@
 
 이 폴더는 `.gitignore`에 등록되어 있어 절대 GitHub에 올라가지 않습니다(README.md만 예외).
 
-## google-credentials.json
+## google-credentials.json — 더 이상 여기 안 씁니다
 
-Google Calendar 연동을 쓰려면 이 폴더에 `google-credentials.json` 파일을 넣어주세요.
-Google Cloud Console에서 "데스크톱 앱" 타입으로 OAuth 클라이언트를 만들고 다운로드하면
-아래와 같은 구조의 JSON 파일을 받게 됩니다:
+⚠️ 예전엔 이 폴더에 `google-credentials.json`을 직접 넣어두는 방식이었는데,
+**패키징된 설치본(exe)에서는 이 폴더 자체가 앱 안에 없어서 실제로는 절대 인식되지
+않는 안내였습니다** (설치 폴더는 빌드 시점에 고정되는 읽기전용 리소스라, 설치 후에
+사용자가 새 파일을 넣을 방법이 없음). 2026-08-16에 이 버그를 고치면서 저장 위치를
+userData(`%APPDATA%\잇다\google-credentials.json`, 맥은 `~/Library/Application
+Support/itda/`)로 옮겼습니다 — `assistant.db`, 자동백업과 같은 위치라 앱을 업데이트해도
+유지됩니다.
 
-```json
-{
-  "installed": {
-    "client_id": "...",
-    "client_secret": "...",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "redirect_uris": ["http://localhost"]
-  }
-}
-```
+**지금은 이렇게 하면 됩니다:**
+1. Google Cloud Console에서 "데스크톱 앱" 타입 OAuth 클라이언트를 만들고 JSON을 다운로드
+2. 잇다 실행 → 설정 → Google Calendar 탭 → **"인증 파일 선택…"** 버튼 클릭 → 방금 받은
+   JSON 파일 선택
 
-다운로드한 파일을 이름만 `google-credentials.json`으로 바꿔서 이 폴더(`itda/config/`)에
-넣어두면, 설정 화면의 "Google Calendar 연결하기" 버튼이 자동으로 이 파일을 읽습니다.
-
-파일이 없으면 연결 버튼을 눌렀을 때 "연동 파일이 없습니다" 안내가 뜨고 아무 일도
-일어나지 않습니다 (에러로 앱이 죽지 않음).
+버튼이 알아서 올바른 위치로 파일을 복사해줍니다. 폴더 경로를 직접 찾아 들어갈 필요 없음.
