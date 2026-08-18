@@ -129,19 +129,33 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     return { status: 'ok' };
   });
 
+  // 설정(update_auto_check)을 매번 새로 읽는다 — 앱이 켜져 있는 동안 사용자가 이 설정을
+  // 바꿀 수도 있으니, 시작 시점에 한 번 캐시해두면 그 이후 변경을 못 따라간다.
+  const isAutoCheckEnabled = () => settings.get('update_auto_check') !== '0';
+
   // 앱 시작 몇 초 후 조용히 한 번 확인해둔다 — autoDownload=true라 새 버전이 있으면
   // 이 시점에 백그라운드 다운로드까지 바로 시작된다. 사용자가 나중에 설정 화면을 열어보면
-  // 이미 "다운로드 중/완료" 상태가 보이는 정도. 설정(update_auto_check)에서 꺼뒀으면
-  // 이 자동 확인만 건너뛴다 — "업데이트 확인" 버튼을 직접 누르는 건 이 설정과 무관하게
-  // 항상 동작한다(위 updater:checkNow 핸들러 참고).
-  const autoCheckEnabled = settings.get('update_auto_check') !== '0';
-  if (autoCheckEnabled) {
+  // 이미 "다운로드 중/완료" 상태가 보이는 정도. 설정에서 꺼뒀으면 이 자동 확인만 건너뛴다 —
+  // "업데이트 확인" 버튼을 직접 누르는 건 이 설정과 무관하게 항상 동작한다(위 updater:checkNow 핸들러 참고).
+  if (isAutoCheckEnabled()) {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch((err) => {
         console.error('[itda:updater] 시작 시 자동 확인 실패:', err);
       });
     }, 5000);
   }
+
+  // 시작할 때 한 번만 확인하고 끝나면, 트레이에 상주한 채 며칠씩 안 꺼지는 이 앱 특성상
+  // 그 사이에 나온 새 릴리스는 앱을 재시작하기 전까진 영영 모르게 된다 — 실제로 이것 때문에
+  // "분명 배포했는데 업데이트가 안 되는 것 같다"는 문제가 있었다. 그래서 켜져 있는 동안
+  // 주기적으로도 다시 확인한다.
+  const CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3시간마다
+  setInterval(() => {
+    if (!isAutoCheckEnabled()) return;
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('[itda:updater] 주기적 확인 실패:', err);
+    });
+  }, CHECK_INTERVAL_MS);
 }
 
 module.exports = { initUpdater };
