@@ -596,11 +596,12 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card{
   height:236px; /* 카드마다 내용 길이가 달라 들쭉날쭉하던 것을 고정 높이로 통일 — 넘치는 내용은 card-content가 스크롤 */
   border-radius:var(--radius-lg);padding:14px;min-width:0;
-  box-shadow:0 2px 6px rgba(16,24,40,.08);display:flex;flex-direction:column;gap:8px;
+  box-shadow:0 2px 6px rgba(16,24,40,.08);display:flex;flex-direction:column;gap:4px;
   transition:transform .15s ease, box-shadow .15s ease;
 }
 .sticky-card:hover{transform:rotate(0deg) !important;box-shadow:0 8px 20px rgba(16,24,40,.16);position:relative;z-index:2;}
-.sticky-card .card-top{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+/* 드래그핸들/서식툴바/핀을 한 줄로 합쳐서 본문 입력칸(card-content)이 세로 공간을 더 쓰게 함 */
+.sticky-card .card-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;}
 /* 포스트잇 배경(STICKY_COLORS)은 항상 밝은 파스텔 고정색이라 다크모드 여부와 무관함 —
    그런데 글자색을 var(--text)로 쓰면 다크모드에서 거의 흰색이 돼서 안 보이는 문제가 있었음.
    위젯창(widget.css)은 원래부터 고정 색을 썼는데 목록 화면(.sticky-card)만 테마 변수를 썼던
@@ -612,27 +613,16 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:rgba(0,0,0,.82);flex:1;line-height:1.5;overflow-wrap:break-word;overflow-y:auto;min-height:0;}
 .sticky-card .card-content:empty:before{content:attr(data-placeholder);color:rgba(0,0,0,.35);}
 .sticky-card .card-content b,.sticky-card .card-content strong{font-weight:700;}
-.rich-toolbar-mini{gap:1px;padding:2px 0 4px;}
+.rich-toolbar-mini{gap:1px;padding:0;}
 .rich-toolbar-mini .rich-btn{width:20px;height:20px;background:rgba(0,0,0,.05);}
 .rich-toolbar-mini .rich-btn:hover,.rich-toolbar-mini .rich-btn.active{background:rgba(0,0,0,.14);color:inherit;}
-.sticky-card .card-meta{font-size:10px;color:rgba(0,0,0,.5);opacity:.75;}
-/* 하단 컨트롤 줄(색상/태그/링크/위젯/삭제) — 한 줄에 다 못 들어가면 카드를 벗어나지 않고
+.sticky-card .card-meta{font-size:10px;color:rgba(0,0,0,.5);opacity:.75;white-space:nowrap;flex-shrink:0;}
+/* 하단 컨트롤 줄(색상/시간/링크/위젯/삭제) — 한 줄에 다 못 들어가면 카드를 벗어나지 않고
    자연스럽게 다음 줄로 넘어가게 한다(overflow 대신 flex-wrap). */
 .sticky-card .card-bottom-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;row-gap:6px;min-width:0;}
 .sticky-card .card-bottom-actions{display:flex;align-items:center;gap:1px;margin-left:auto;flex-shrink:0;}
 .sticky-card .card-bottom-actions .btn-icon{padding:3px 5px;}
 .sticky-card .color-swatch-row{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
-.cat-select-mini{
-  font-size:9.5px;line-height:1;color:rgba(0,0,0,.82);cursor:pointer; /* 흰 반투명 배경 위 고정 텍스트 — sticky-card 전용, 다크모드 무관 */
-  height:20px;max-width:56px;flex-shrink:1;min-width:0;
-  padding:0 15px 0 5px;border-radius:var(--radius-xs);border:1px solid rgba(0,0,0,.15);
-  background-color:rgba(255,255,255,.6);
-  /* 네이티브 select 화살표는 OS마다 크기·위치가 달라서 좁은 폭에선 삐뚤어 보이기 쉬움 —
-     아예 지우고 우리 아이콘으로 통일해서 크기/위치를 고정한다. */
-  appearance:none;-webkit-appearance:none;
-  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2.6'><path d='M6 9l6 6 6-6'/></svg>");
-  background-repeat:no-repeat;background-position:right 4px center;background-size:8px 8px;
-}
 .sticky-card .color-swatch{width:14px;height:14px;border-radius:5px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
 .sticky-card .color-swatch.selected{border-color:rgba(0,0,0,.6);}
 .new-sticky-card{

@@ -1,4 +1,4 @@
-import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
+import { toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { STICKY_COLORS, stickyRotation } from '../shared/theme.js';
 import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
@@ -31,15 +31,6 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
   let creating = false;
-  let categories = [];
-
-  async function loadCategories() {
-    try {
-      categories = await window.itda.categories.list();
-    } catch (e) {
-      categories = [];
-    }
-  }
 
   function bindNewCard() {
     const newCard = $('p-newCard');
@@ -62,7 +53,7 @@ export async function mount(root) {
     const grid = $('p-grid');
     let items;
     try {
-      [items] = await Promise.all([window.itda.postits.list(), loadCategories()]);
+      items = await window.itda.postits.list();
     } catch (e) {
       errorToast(e, '포스트잇을 불러오지 못했어요');
       grid.classList.add('empty');
@@ -86,19 +77,19 @@ export async function mount(root) {
         .map(
           (item) => `
         <div class="sticky-card" style="background:${item.color_hex};transform:rotate(${stickyRotation(item.id)}deg);" data-id="${item.id}">
-          <div class="card-top" style="justify-content:flex-end;">
-            <span class="drag-handle" data-drag-id="${item.id}" style="margin-right:auto;" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
+          <div class="card-top">
+            <span class="drag-handle" data-drag-id="${item.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
+            <div class="rich-toolbar rich-toolbar-mini">
+              <button class="rich-btn" data-action="bold" title="굵게">${BOLD_ICON}</button>
+              <button class="rich-btn" data-action="checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
+              <button class="rich-btn rich-size-btn" data-size="11" title="작게">가</button>
+              <button class="rich-btn rich-size-btn active" data-size="13" title="보통">가</button>
+              <button class="rich-btn rich-size-btn" data-size="16" title="크게">가</button>
+              <button class="rich-btn rich-color-trigger rich-color-trigger-mini" data-action="textColor" title="글자색">
+                <span>가</span><span class="rich-color-bar" style="background:#2B2E3A;"></span>
+              </button>
+            </div>
             <button class="pin-btn ${item.is_pinned ? 'pinned' : ''}" data-action="pin" title="${item.is_pinned ? '고정 해제' : '고정'}">${PIN_ICON}</button>
-          </div>
-          <div class="rich-toolbar rich-toolbar-mini">
-            <button class="rich-btn" data-action="bold" title="굵게">${BOLD_ICON}</button>
-            <button class="rich-btn" data-action="checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
-            <button class="rich-btn rich-size-btn" data-size="11" title="작게">가</button>
-            <button class="rich-btn rich-size-btn active" data-size="13" title="보통">가</button>
-            <button class="rich-btn rich-size-btn" data-size="16" title="크게">가</button>
-            <button class="rich-btn rich-color-trigger rich-color-trigger-mini" data-action="textColor" title="글자색">
-              <span>가</span><span class="rich-color-bar" style="background:#2B2E3A;"></span>
-            </button>
           </div>
           <div class="card-content" contenteditable="true" data-action="content" data-placeholder="내용을 입력하세요…">${sanitizeRichHtml(item.content)}</div>
           <div class="card-bottom-row">
@@ -107,10 +98,7 @@ export async function mount(root) {
                 (c) => `<span class="color-swatch ${c === item.color_hex ? 'selected' : ''}" data-color="${c}" style="background:${c}"></span>`
               ).join('')}
             </div>
-            <select class="cat-select-mini" data-action="category" title="태그">
-              <option value="">태그 없음</option>
-              ${categories.map((c) => `<option value="${c.id}" ${item.category_id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
-            </select>
+            <span class="card-meta">${formatRelative(item.updated_at)}</span>
             <div class="card-bottom-actions">
               <button class="btn-icon" data-action="toggle-links" title="연결된 항목">${LINK_ICON}</button>
               <button class="btn-icon" data-action="open-widget" title="위젯으로 열기 (독립된 작은 창)">${WIDGET_ICON}</button>
@@ -118,7 +106,6 @@ export async function mount(root) {
             </div>
           </div>
           <div class="card-links-section" data-links-section></div>
-          <div class="card-meta">${formatRelative(item.updated_at)}</div>
         </div>`
         )
         .join('') + `<div class="new-sticky-card" id="p-newCard">+ 새 포스트잇</div>`;
@@ -146,8 +133,6 @@ export async function mount(root) {
       bindHashtagAutoTag(contentArea, async (categoryId) => {
         try {
           await window.itda.postits.update({ id, categoryId });
-          const select = card.querySelector('.cat-select-mini');
-          if (select) select.value = String(categoryId); // 새 카테고리라 옵션이 아직 없으면 곧 category 브로드캐스트로 load()가 다시 돌면서 맞춰짐
         } catch (e) {
           errorToast(e, '태그를 저장하지 못했어요');
         }
@@ -196,16 +181,6 @@ export async function mount(root) {
         });
       });
 
-      card.querySelector('[data-action="category"]').addEventListener('change', async (e) => {
-        const categoryId = e.target.value ? Number(e.target.value) : null;
-        try {
-          await window.itda.postits.update({ id, categoryId });
-          toast(categoryId ? '태그를 지정했어요' : '태그를 해제했어요');
-        } catch (err) {
-          errorToast(err, '태그를 변경하지 못했어요');
-        }
-      });
-
       card.querySelector('[data-action="delete"]').addEventListener('click', async () => {
         try {
           await window.itda.postits.delete(id);
@@ -251,8 +226,7 @@ export async function mount(root) {
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
-    // category도 듣는 이유: 해시태그로 새 카테고리가 방금 생겼으면 태그 드롭다운 옵션 목록도 새로고침해야 함
-    if (entity !== 'postit' && entity !== 'category') return;
+    if (entity !== 'postit') return;
     if (isUserTyping()) return; // 지금 어떤 포스트잇 본문을 타이핑 중이면 커서가 끊기지 않게 미룸
     debouncedLoad();
   });

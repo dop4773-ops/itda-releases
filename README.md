@@ -290,7 +290,17 @@ Todo/일정의 카테고리 고정 팔레트(`--cat-*`)와는 의도적으로 �
   - 이 세 단계 전부 **사용자가 직접 눌러야만** 진행됩니다. 병원 PC에서 모르는 사이에
     네트워크를 쓰거나 갑자기 재시작되는 일이 없도록 의도적으로 이렇게 설계했습니다.
 
-**릴리스 배포 방법** (개발자용):
+**릴리스 배포 방법** (개발자용): `main` 브랜치에 푸시만 하면 됩니다.
+
+`.github/workflows/release.yml`이 push를 감지해서 GitHub Actions의
+`windows-latest` 러너에서 `npm run release:win`을 대신 실행하고, 저장소
+기본 제공 토큰(`GITHUB_TOKEN`)으로 Releases에 자동으로 올립니다. Windows PC를
+직접 켜서 빌드/배포할 필요가 없습니다 — 맥에서 `package.json`의 `version`을
+올리고 커밋/푸시하면, 잠시 후 GitHub Releases에 새 버전이 올라오고 각 PC의
+"업데이트 확인" 버튼에 바로 잡힙니다. Actions 진행 상황은 저장소의
+Actions 탭에서 확인할 수 있습니다.
+
+로컬에서 직접 빌드/배포하고 싶을 때만 아래처럼 수동으로도 가능합니다:
 
 ```bash
 # GitHub에 배포하려면 Personal Access Token(repo 권한)이 환경변수로 필요합니다

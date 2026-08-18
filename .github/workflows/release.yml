@@ -1,0 +1,31 @@
+name: Windows 릴리스 빌드/배포
+
+# main에 코드가 푸시될 때마다 Windows에서 수동으로 `npm run release:win`을 돌리던 걸
+# 대신 해준다 — 맥에서 커밋/푸시만 하면 GitHub Releases에 새 버전이 자동으로 올라가고,
+# 앱의 electron-updater(main/updater/index.js)가 그걸 그대로 감지한다.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'main/**'
+      - 'renderer/**'
+      - 'preload.js'
+      - 'schema/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run release:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
