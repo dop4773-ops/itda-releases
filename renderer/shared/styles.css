@@ -842,7 +842,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 
 /* ================= 대시보드 배치 프리셋 미리보기 팝오버 ================= */
 .preset-preview-pop{
-  position:fixed;z-index:200;padding:6px;
+  position:fixed;z-index:200;padding:6px;pointer-events:none;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
   box-shadow:0 12px 32px rgba(16,24,40,.18);
 }
@@ -968,6 +968,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-widget-resize{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;}
 .dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:2px solid var(--text-faint);border-bottom:2px solid var(--text-faint);opacity:.45;}
 .dash-widget-resize:hover::after,.dash-widget.dragging .dash-widget-resize::after{opacity:.9;border-color:var(--brand);}
+.dash-widget-resize-left{left:1px;right:auto;cursor:nesw-resize;}
+.dash-widget-resize-left::after{left:3px;right:auto;border-right:none;border-left:2px solid var(--text-faint);}
 /* 기본 .panel-head는 space-between(제목 vs 더보기 버튼 2개 기준)인데, 위젯엔 그립까지 3번째
    요소로 들어가서 그립+제목이 서로 멀어져버림 — 그립+제목을 붙이고 더보기만 오른쪽 끝으로 민다. */
 .dash-widget .panel-head{justify-content:flex-start;}

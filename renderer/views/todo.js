@@ -90,7 +90,7 @@ export async function mount(root) {
   let selectedTodoId = null;
   let doneSortMode = 'recent'; // '완료' 탭 전용 — 최근 완료순 vs 카테고리별 묶어보기
   const collapsedIds = new Set(); // 접어둔 카드(항목별 접기/펼치기) — 화면을 나가면 초기화되는 세션 상태
-  const collapsedColumns = new Set(); // 접어둔 보드 컬럼(해야 할 일/진행 중/완료) — 마찬가지로 세션 상태
+  const collapsedColumns = new Set(['done']); // 접어둔 보드 컬럼(해야 할 일/진행 중/완료) — 완료는 기본으로 접어둠(요청에 따름)
 
   async function loadCategories() {
     try {

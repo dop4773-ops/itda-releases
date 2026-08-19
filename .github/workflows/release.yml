@@ -29,3 +29,14 @@ jobs:
       - run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # electron-builder가 만드는 GitHub Release는 본문(notes)이 비어있어서, 앱의 "업데이트
+      # 로그"(설정 > 업데이트)에 아무 내용도 안 보이는 문제가 있었다 — 이 저장소는 버전을 올린
+      # 커밋 메시지 자체가 그 버전의 변경 내역이라, 그 메시지를 그대로 release notes로 채운다.
+      - name: 릴리스 노트를 방금 커밋 메시지로 채우기
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git log -1 --format=%B | sed '/^Co-Authored-By/d' > release-notes.txt
+          gh release edit "v$VERSION" --notes-file release-notes.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

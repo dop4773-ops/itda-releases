@@ -237,9 +237,10 @@ export async function mount(root) {
   }
   await applyDashboardCardConfig();
 
-  // 사이드 패널 접기/펼치기 버튼 — 접히면 .dash-main이 flex:1이라 자동으로 폭을 넘겨받고,
-  // 그 안의 상단 요약 카드(.summary-grid-5)는 grid에 fr 단위를 쓰고 있어서 컨테이너 폭이
-  // 바뀌는 순간 별도 계산 없이 그대로 비율이 재조정된다 — 리사이저로 폭을 드래그할 때도 동일.
+  // 사이드 패널 접기/펼치기 버튼 — 위젯 카드는 절대 좌표(x/y/w/h)로 고정돼 있어서 사이드바
+  // 폭 변화에 맞춰 자동으로 비율을 조정해봤지만(스케일링), 접었다 펼 때 위젯 크기가 조금씩
+  // 어긋난 채 누적돼 이상해지는 문제가 있어서 되돌렸다 — 사이드바를 접어도 위젯 배치는
+  // 그대로 고정. 필요하면 사용자가 직접 위젯 크기/위치를 다시 조절하면 된다.
   async function initSideToggle() {
     const btn = $('d-sideToggle');
     try {
@@ -257,10 +258,6 @@ export async function mount(root) {
       manualSideCollapsed = !manualSideCollapsed;
       updateIcon();
       updateSideCollapsedClass();
-      // 접기/펼치기로 .dash-main 폭이 바뀐 만큼 위젯 그리드도 같이 늘리고 줄인다.
-      // (initWidgetGrid는 이 함수보다 나중에 초기화되므로, 실제 클릭 시점엔 이미 준비돼 있다.)
-      widgetGrid?.rescaleToWidth($('d-widgetGrid').clientWidth);
-      widgetGrid?.persist();
       try {
         await window.itda.settings.set({ key: 'dashboard_side_collapsed', value: manualSideCollapsed ? '1' : '0' });
       } catch (e) {
@@ -280,8 +277,6 @@ export async function mount(root) {
 
     let presetId = 'flow';
     let positions = {};
-    let referenceWidth = 0; // positions의 x/w가 어느 폭 기준으로 저장됐는지 — 사이드바 접기/폭조절로
-    // 컨테이너 폭이 바뀌면 이 값 대비 비율만큼 위젯들을 같이 늘리고 줄인다(rescaleToWidth 참고).
     try {
       const raw = await window.itda.settings.get('dashboard_layout');
       if (raw) {
@@ -289,7 +284,6 @@ export async function mount(root) {
         if (parsed?.widgets) {
           presetId = parsed.preset || 'flow';
           positions = parsed.widgets;
-          referenceWidth = parsed.referenceWidth || 0;
         }
       }
     } catch (e) {
@@ -305,7 +299,6 @@ export async function mount(root) {
         positions[id] = computed[id];
       });
     }
-    if (!referenceWidth) referenceWidth = grid.clientWidth || 1000;
 
     function applyPosition(cardId) {
       const w = widgetById.get(cardId);
@@ -330,29 +323,9 @@ export async function mount(root) {
     recalcContainerHeight();
 
     function persist() {
-      window.itda.settings
-        .set({ key: 'dashboard_layout', value: JSON.stringify({ preset: presetId, widgets: positions, referenceWidth }) })
-        .catch(() => {});
+      window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: presetId, widgets: positions }) }).catch(() => {});
     }
     persist(); // 방금 새로 채운 기본 위치도 다음엔 그대로 이어서 보이도록 저장해둔다
-
-    // 사이드바 접기/펼치기, 사이드 패널 폭 드래그로 .dash-main 폭이 바뀔 때 호출 — 상단 요약
-    // 카드(grid + fr 단위)처럼 위젯들도 같이 늘어나고 줄어들게, 폭이 바뀐 비율만큼 각 위젯의
-    // x·width를 스케일한다(세로 위치/높이는 폭 변화와 무관하니 그대로 둔다).
-    function rescaleToWidth(newWidth) {
-      if (!newWidth || !referenceWidth) return;
-      const scale = newWidth / referenceWidth;
-      if (!isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 0.001) return;
-      widgets.forEach((w) => {
-        const p = positions[w.dataset.card];
-        if (!p) return;
-        p.x = Math.round(p.x * scale);
-        p.w = Math.max(260, Math.round(p.w * scale));
-      });
-      widgets.forEach((w) => applyPosition(w.dataset.card));
-      referenceWidth = newWidth;
-      recalcContainerHeight();
-    }
 
     // 이동/크기조절 둘 다 커서를 직접 따라가는 커스텀 드래그라(네이티브 CSS resize 아님),
     // 다른 카드와 가장자리/중심이 맞으면(파워포인트 스마트 가이드처럼) 점선을 보여주고
@@ -489,16 +462,57 @@ export async function mount(root) {
       });
     });
 
-    return {
-      disconnect: () => {
-        if (activeOnMove) document.removeEventListener('mousemove', activeOnMove);
-        if (activeOnUp) document.removeEventListener('mouseup', activeOnUp);
-      },
-      rescaleToWidth,
-      persist,
+    // 왼쪽 아래 모서리 핸들 — 오른쪽 핸들과 반대로, 오른쪽 가장자리는 고정한 채 왼쪽 가장자리(x)와
+    // 폭을 같이 움직인다. 좌측 카드도 오른쪽 카드처럼 자유롭게 크기 조절할 수 있게 해달라는 요청.
+    widgets.forEach((widget) => {
+      const handle = document.createElement('span');
+      handle.className = 'dash-widget-resize dash-widget-resize-left';
+      handle.title = '드래그해서 크기 조절';
+      widget.appendChild(handle);
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const cardId = widget.dataset.card;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = widget.offsetWidth;
+        const startH = widget.offsetHeight;
+        const right = widget.offsetLeft + startW; // 이 핸들을 끄는 동안 고정할 오른쪽 가장자리
+        const top = widget.offsetTop;
+        widget.classList.add('dragging');
+
+        startDrag(
+          (ev) => {
+            const desiredLeft = Math.max(0, Math.min(right - 260, right - startW + (ev.clientX - startX)));
+            const rawH = Math.max(140, startH + (ev.clientY - startY));
+            const snapX = findSnap(widget, [desiredLeft], otherXEdges);
+            const snapY = findSnap(widget, [top + rawH], otherYEdges);
+            const finalLeft = snapX ? desiredLeft + snapX.delta : desiredLeft;
+            widget.style.left = `${finalLeft}px`;
+            widget.style.width = `${right - finalLeft}px`;
+            widget.style.height = `${snapY ? rawH + snapY.delta : rawH}px`;
+            clearGuides();
+            if (snapX) showGuide('v', snapX.pos);
+            if (snapY) showGuide('h', snapY.pos);
+          },
+          () => {
+            widget.classList.remove('dragging');
+            clearGuides();
+            positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, w: widget.offsetWidth, h: widget.offsetHeight };
+            recalcContainerHeight();
+            persist();
+          }
+        );
+      });
+    });
+
+    return () => {
+      if (activeOnMove) document.removeEventListener('mousemove', activeOnMove);
+      if (activeOnUp) document.removeEventListener('mouseup', activeOnUp);
     };
   }
-  const widgetGrid = await initWidgetGrid();
+  const disconnectWidgetGrid = await initWidgetGrid();
 
   // ================= 사이드 패널(우측 캘린더/포스트잇) 폭 드래그 조절 =================
   const SIDE_WIDTH_MIN = 260;
@@ -525,9 +539,6 @@ export async function mount(root) {
       const delta = startX - e.clientX; // 왼쪽으로 끌수록 사이드 패널이 넓어짐
       const next = Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, startWidth + delta));
       layout.style.setProperty('--dash-side-w', `${next}px`);
-      // 사이드 패널 폭이 바뀌는 만큼 .dash-main 폭도 실시간으로 바뀌니, 위젯 그리드도 같이
-      // 늘리고 줄인다 — 상단 요약 카드(grid+fr)가 드래그 중 계속 반응하는 것과 같은 느낌.
-      widgetGrid.rescaleToWidth($('d-widgetGrid').clientWidth);
     };
     onResizerUp = () => {
       document.removeEventListener('mousemove', onResizerMove);
@@ -535,7 +546,6 @@ export async function mount(root) {
       resizer.classList.remove('dragging');
       const finalWidth = parseInt(layout.style.getPropertyValue('--dash-side-w'), 10) || SIDE_WIDTH_DEFAULT;
       window.itda.settings.set({ key: 'dashboard_side_width', value: String(finalWidth) }).catch(() => {});
-      widgetGrid.persist(); // 드래그 중엔 시각적으로만 반영하고, 끝났을 때 한 번만 저장
     };
     resizer.addEventListener('mousedown', (e) => {
       e.preventDefault();
@@ -1113,6 +1123,6 @@ export async function mount(root) {
     offDataChanged?.();
     if (onResizerMove) document.removeEventListener('mousemove', onResizerMove);
     if (onResizerUp) document.removeEventListener('mouseup', onResizerUp);
-    widgetGrid.disconnect();
+    disconnectWidgetGrid?.();
   };
 }
