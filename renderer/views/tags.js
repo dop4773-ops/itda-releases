@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
+import { registerEscClose } from '../shared/esc-close.js';
 
 export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -21,8 +22,8 @@ export async function mountTagsPanel(root) {
       <div class="panel-head">
         <h3>태그 관리</h3>
         <div class="view-toggle" id="tag-viewToggle">
-          <button class="view-toggle-btn active" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
-          <button class="view-toggle-btn" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
+          <button class="view-toggle-btn" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
+          <button class="view-toggle-btn active" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
         </div>
       </div>
       <p style="font-size:11.5px;color:var(--text-faint);margin:0 0 10px;">
@@ -53,7 +54,8 @@ export async function mountTagsPanel(root) {
   `;
 
   const $ = (id) => root.querySelector('#' + id);
-  let currentView = 'list';
+  let currentView = 'board'; // 기본값을 보드형으로 (요청에 따름)
+  $('tag-list').classList.add('board-view');
 
   root.querySelectorAll('#tag-viewToggle .view-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -101,6 +103,7 @@ export async function mountTagsPanel(root) {
   $('tag-browseOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'tag-browseOverlay') closeBrowse();
   });
+  const unsubscribeEsc = registerEscClose(() => $('tag-browseOverlay').classList.contains('open'), closeBrowse);
 
   async function load() {
     let categories;
@@ -239,5 +242,8 @@ export async function mountTagsPanel(root) {
     debouncedLoad();
   });
 
-  return () => offDataChanged?.();
+  return () => {
+    offDataChanged?.();
+    unsubscribeEsc();
+  };
 }

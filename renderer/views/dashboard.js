@@ -8,6 +8,7 @@ import { getUserName } from '../shared/shell.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { getPreset } from '../shared/dashboard-layouts.js';
+import { attachContextMenu } from '../shared/context-menu.js';
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
@@ -84,6 +85,7 @@ export async function mount(root) {
             </div>
             <span class="dash-time" id="d-timeNow"></span>
             ${widgetLaunchButtonHtml('d-ddayWidgetBtn', 'D-DAY 위젯 열기')}
+            <button class="btn-icon" id="d-sideToggle" title="사이드 패널 접기/펼치기">${CHEVRON_RIGHT}</button>
             <button class="btn" id="d-newBtn">+ 새로 만들기</button>
           </div>
         </div>
@@ -201,6 +203,16 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
 
+  // 사이드 패널이 접혀야 하는 이유는 두 가지 — (a) 사용자가 설정에서 사이드 카드를 둘 다
+  // 꺼놨거나(자동), (b) 헤더의 접기 버튼으로 직접 접었을 때(수동). 어느 쪽이든 접힌 걸로
+  // 취급한다(OR) — 카드가 둘 다 꺼진 상태에서 수동으로 "펼쳐도" 보여줄 내용이 없으니
+  // 자연스럽게 계속 접힌 채로 남는다(별도 가드 불필요).
+  let cardsHideSide = false;
+  let manualSideCollapsed = false;
+  function updateSideCollapsedClass() {
+    $('d-layout').classList.toggle('side-collapsed', cardsHideSide || manualSideCollapsed);
+  }
+
   // 카드 on/off (설정에서 저장한 JSON 하나로 관리) — 데이터를 안 불러오는 최적화는 하지 않고
   // 단순히 숨긴다(로컬 SQLite라 비용이 작아서 그정도 절약은 안 해도 됨).
   // 위젯 그리드(flex-wrap)라 일부만 숨겨도 나머지가 자연스럽게 채워져서 별도 열 계산이 필요 없다.
@@ -220,9 +232,39 @@ export async function mount(root) {
     };
     DASHBOARD_CARDS.forEach((c) => setVisible(`d-card-${c.id}`, config[c.id]));
 
-    $('d-layout').classList.toggle('side-collapsed', !(config.sideCalendar || config.sidePostit));
+    cardsHideSide = !(config.sideCalendar || config.sidePostit);
+    updateSideCollapsedClass();
   }
   await applyDashboardCardConfig();
+
+  // 사이드 패널 접기/펼치기 버튼 — 접히면 .dash-main이 flex:1이라 자동으로 폭을 넘겨받고,
+  // 그 안의 상단 요약 카드(.summary-grid-5)는 grid에 fr 단위를 쓰고 있어서 컨테이너 폭이
+  // 바뀌는 순간 별도 계산 없이 그대로 비율이 재조정된다 — 리사이저로 폭을 드래그할 때도 동일.
+  async function initSideToggle() {
+    const btn = $('d-sideToggle');
+    try {
+      manualSideCollapsed = (await window.itda.settings.get('dashboard_side_collapsed')) === '1';
+    } catch (e) {
+      manualSideCollapsed = false;
+    }
+    const updateIcon = () => {
+      btn.innerHTML = manualSideCollapsed ? CHEVRON_LEFT : CHEVRON_RIGHT;
+      btn.title = manualSideCollapsed ? '사이드 패널 펼치기' : '사이드 패널 접기';
+    };
+    updateIcon();
+    updateSideCollapsedClass();
+    btn.addEventListener('click', async () => {
+      manualSideCollapsed = !manualSideCollapsed;
+      updateIcon();
+      updateSideCollapsedClass();
+      try {
+        await window.itda.settings.set({ key: 'dashboard_side_collapsed', value: manualSideCollapsed ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '설정을 저장하지 못했어요');
+      }
+    });
+  }
+  await initSideToggle();
 
   // ================= 위젯 그리드: 자유 위치 이동 + 크기 조절 + 정렬 가이드 =================
   // 카드마다 {x,y,w,h}를 설정에 저장해서 다음에 열어도 유지한다. 처음 보거나(설치 직후) 새로
@@ -554,7 +596,7 @@ export async function mount(root) {
     listEl.innerHTML = todos
       .map(
         (t) => `
-        <div class="todo-row ${t.is_done ? 'done' : ''} dash-row-link" data-nav="#/todo">
+        <div class="todo-row ${t.is_done ? 'done' : ''} dash-row-link" data-nav="#/todo" data-id="${t.id}">
           <input type="checkbox" data-id="${t.id}" ${t.is_done ? 'checked' : ''} />
           <span class="cat" style="background:${t.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
           <span class="txt">${escapeHtml(t.title)}</span>
@@ -575,6 +617,16 @@ export async function mount(root) {
           errorToast(err, '상태를 변경하지 못했어요');
         }
       });
+    });
+    listEl.querySelectorAll('.todo-row').forEach((row) => {
+      attachContextMenu(
+        row,
+        () => {
+          const t = todos.find((x) => x.id === Number(row.dataset.id));
+          return { type: 'todo', id: Number(row.dataset.id), dueDate: t?.due_date || null, isDone: !!t?.is_done };
+        },
+        { onDeleted: () => loadTodos() }
+      );
     });
   }
 
@@ -611,6 +663,7 @@ export async function mount(root) {
         const evt = events.find((e) => e.id === Number(row.dataset.id));
         if (evt) eventDetailModal.openDetail({ ...evt, source: 'local' });
       });
+      attachContextMenu(row, () => ({ type: 'event', id: Number(row.dataset.id) }), { onDeleted: () => loadEvents() });
     });
   }
 
@@ -632,9 +685,12 @@ export async function mount(root) {
     }
     emptyEl.style.display = 'none';
     listEl.innerHTML = memos
-      .map((m) => `<div class="todo-row dash-row-link" data-nav="#/memo"><span class="txt">${escapeHtml(m.title || stripHtmlToPlainText(m.content))}</span></div>`)
+      .map((m) => `<div class="todo-row dash-row-link" data-nav="#/memo" data-id="${m.id}"><span class="txt">${escapeHtml(m.title || stripHtmlToPlainText(m.content))}</span></div>`)
       .join('');
     bindDashRowNav(listEl);
+    listEl.querySelectorAll('.dash-row-link').forEach((row) => {
+      attachContextMenu(row, () => ({ type: 'memo', id: Number(row.dataset.id) }), { onDeleted: () => loadMemos() });
+    });
   }
 
   // "고정 포스트잇" — 이미지의 상단 패널은 고정(핀)된 것만 보여준다(우측 사이드 패널과 역할 구분)
@@ -658,9 +714,17 @@ export async function mount(root) {
     emptyEl.style.display = 'none';
     listEl.innerHTML = pinned
       .slice(0, 5)
-      .map((p) => `<div class="todo-row dash-row-link" data-nav="#/postit"><span class="txt">${escapeHtml(p.title || stripHtmlToPlainText(p.content))}</span></div>`)
+      .map((p) => `<div class="todo-row dash-row-link" data-nav="#/postit" data-id="${p.id}"><span class="txt">${escapeHtml(p.title || stripHtmlToPlainText(p.content))}</span></div>`)
       .join('');
     bindDashRowNav(listEl);
+    listEl.querySelectorAll('.dash-row-link').forEach((row) => {
+      attachContextMenu(row, () => ({ type: 'postit', id: Number(row.dataset.id) }), {
+        onDeleted: () => {
+          loadPinnedPostits();
+          loadSidePostits();
+        },
+      });
+    });
   }
 
   let inboxBusy = false;
@@ -944,6 +1008,14 @@ export async function mount(root) {
         </a>`
       )
       .join('');
+    grid.querySelectorAll('.side-postit-card').forEach((card) => {
+      attachContextMenu(card, () => ({ type: 'postit', id: Number(card.dataset.id) }), {
+        onDeleted: () => {
+          loadSidePostits();
+          loadPinnedPostits();
+        },
+      });
+    });
   }
 
   // 알림 카드(요약)는 전역 상단바가 이미 계산하는 로직을 그대로 재사용

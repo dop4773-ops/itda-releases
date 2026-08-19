@@ -167,14 +167,26 @@ function initGlobalTopbar() {
     renderThemeIcon();
   });
 
-  bellBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
+  async function toggleBell() {
     const opening = !bellWrap.classList.contains('open');
     bellWrap.classList.toggle('open');
     if (opening) await refreshGlobalNotifications(); // 열 때마다 최신 상태로 갱신
+  }
+  bellBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await toggleBell();
   });
   document.addEventListener('click', (e) => {
     if (!bellWrap.contains(e.target)) bellWrap.classList.remove('open');
+  });
+  // 설정 > 단축키에서 바꿀 수 있음(기본 Cmd/Ctrl+Shift+N). 대시보드를 포함해 어느 화면에서든 동작.
+  document.addEventListener('keydown', (e) => {
+    if (matchesAccelerator(e, getCachedBinding('toggleNotifications'))) {
+      e.preventDefault();
+      toggleBell();
+      return;
+    }
+    if (e.key === 'Escape' && bellWrap.classList.contains('open')) bellWrap.classList.remove('open');
   });
 
   refreshGlobalNotifications(); // 처음 켰을 때도 빨간 점 표시를 위해 한 번 계산
