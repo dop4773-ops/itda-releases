@@ -720,7 +720,19 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ================= 메모 (Apple Notes 오마주) — 좌: 목록, 우: 상세 편집 ================= */
 .notes-app{display:grid;grid-template-columns:280px 1fr;gap:0;height:calc(100vh - 140px);min-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
 
-.notes-sidebar{display:flex;flex-direction:column;border-right:1px solid var(--divider);background:var(--bg);min-width:0;}
+.notes-sidebar{display:flex;flex-direction:column;border-right:1px solid var(--divider);background:var(--bg);min-width:0;min-height:0;}
+.notes-folder-rail{flex-shrink:0;padding:8px;border-bottom:1px solid var(--divider);display:flex;flex-direction:column;gap:1px;max-height:180px;overflow-y:auto;}
+.notes-folder-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-soft);font-size:12.5px;}
+.notes-folder-row:hover{background:var(--surface);}
+.notes-folder-row.active{background:var(--brand-soft);color:var(--brand);font-weight:600;}
+.notes-folder-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.notes-folder-count{font-size:11px;color:var(--text-faint);flex-shrink:0;}
+.notes-folder-row.active .notes-folder-count{color:var(--brand);}
+.notes-folder-del{width:18px;height:18px;flex-shrink:0;display:none;font-size:11px;}
+.notes-folder-row:hover .notes-folder-del{display:flex;}
+.notes-folder-add{display:flex;align-items:center;gap:5px;margin-top:2px;padding:6px 8px;border:none;background:transparent;color:var(--text-faint);font-size:12px;cursor:pointer;border-radius:var(--radius-sm);}
+.notes-folder-add:hover{background:var(--surface);color:var(--text);}
+.notes-folder-add svg{width:11px;height:11px;}
 .notes-sidebar-head{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--divider);}
 .notes-search-box{flex:1;display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-pill);padding:6px 10px;color:var(--text-faint);min-width:0;}
 .notes-search-box input{border:none;outline:none;background:transparent;font-size:12.5px;width:100%;color:var(--text);font-family:inherit;}
@@ -742,7 +754,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-list-item-meta{display:flex;gap:6px;font-size:11px;color:var(--text-faint);}
 .notes-list-item-snippet{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
 
-.notes-detail{display:flex;flex-direction:column;min-width:0;background:var(--surface);padding:0 28px 20px;overflow-y:auto;}
+/* min-height:0 필수 — .notes-app이 grid라서 이 열의 기본 min-height는 auto(=내용 높이만큼
+   커짐)라 overflow-y:auto가 무시되고 .notes-app의 overflow:hidden에 그냥 잘려버렸었다
+   (긴 메모의 앞부분을 스크롤로 볼 수 없던 버그). 사이드바 목록도 같은 이유로 함께 고침. */
+.notes-detail{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--surface);padding:0 28px 20px;overflow-y:auto;}
+.notes-detail.drag-over{outline:2px dashed var(--brand);outline-offset:-4px;background:var(--brand-soft);}
 .notes-detail-empty{margin:auto;text-align:center;color:var(--text-faint);font-size:13px;max-width:220px;}
 .notes-detail-toolbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0 4px;position:sticky;top:0;background:var(--surface);z-index:1;}
 .notes-detail-date{font-size:11px;color:var(--text-faint);}

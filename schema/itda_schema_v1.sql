@@ -160,12 +160,22 @@ CREATE INDEX idx_gcal_range ON google_calendar_events(start_at, end_at);
 -- 6. memos
 --    color_hex: 포스트잇과 동일한 개인화 팔레트를 공유 (스티커노트 감성)
 --    categories(고정 팔레트)와는 무관 — postits.color_hex와 같은 성격의 자유 색상
+--    folder_id: 애플 메모장처럼 폴더별 분류(카테고리 태그와는 별개 축) — 폴더 삭제 시 메모는
+--    삭제되지 않고 "미분류"로 남는다(SET NULL)
 -- ------------------------------------------------------------
+CREATE TABLE memo_folders (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
 CREATE TABLE memos (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
   title        TEXT,
   content      TEXT NOT NULL,
   category_id  INTEGER REFERENCES categories(id) ON DELETE SET NULL,  -- 선택적 태깅
+  folder_id    INTEGER REFERENCES memo_folders(id) ON DELETE SET NULL,
   color_hex    TEXT NOT NULL DEFAULT '#FBE28A',
   is_pinned    INTEGER NOT NULL DEFAULT 0,
   created_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
@@ -174,6 +184,7 @@ CREATE TABLE memos (
 );
 
 CREATE INDEX idx_memos_active ON memos(updated_at) WHERE deleted_at IS NULL;
+CREATE INDEX idx_memos_folder ON memos(folder_id) WHERE deleted_at IS NULL;
 
 -- 메모 파일/사진 첨부 — 실제 파일은 DB가 아니라 userData/attachments 폴더에 저장하고
 -- (stored_name = 그 폴더 안의 실제 파일명, 충돌 방지용 UUID), 여기엔 메타데이터만 둔다.

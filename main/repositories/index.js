@@ -10,6 +10,7 @@ const createSearchRepository = require('./search.repository');
 const createSettingsRepository = require('./settings.repository');
 const createGoogleCalendarRepository = require('./googleCalendar.repository');
 const createMemoAttachmentsRepository = require('./memoAttachments.repository');
+const createMemoFoldersRepository = require('./memoFolders.repository');
 
 // db(better-sqlite3 인스턴스) 하나로부터 도메인별 repository 묶음을 만든다.
 // ipc/index.js에서 한 번 호출해서 각 ipc 등록 함수에 나눠준다.
@@ -27,6 +28,7 @@ function createRepositories(db) {
     settings: createSettingsRepository(db),
     googleCalendar: createGoogleCalendarRepository(db),
     memoAttachments: createMemoAttachmentsRepository(db),
+    memoFolders: createMemoFoldersRepository(db),
   };
 }
 

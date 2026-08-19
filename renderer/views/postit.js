@@ -17,6 +17,10 @@ const WIDGET_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
 const BOLD_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
 const CHECKLIST_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="7" height="7" rx="1.5"/><path d="M4.5 6.5l1.3 1.3L8.5 5"/><path d="M13 5h8M13 12h8M13 19h8"/><rect x="3" y="13" width="7" height="7" rx="1.5"/></svg>`;
 
+// "새 포스트잇" 단축키 — 화면 전용 고정 단축키(설정 > 단축키 목록에 넣을 정도로 자주 바꿀 일은 없음).
+const isMac = navigator.platform?.toUpperCase().includes('MAC');
+const NEW_POSTIT_SHORTCUT_LABEL = isMac ? '⌘N' : 'Ctrl+N';
+
 export async function mount(root) {
   root.innerHTML = `
     <div class="page-head">
@@ -26,32 +30,56 @@ export async function mount(root) {
       </div>
       ${widgetLaunchButtonHtml('p-widgetBtn', '포스트잇 위젯 열기')}
     </div>
+    <div class="notes-bulk-bar" id="p-bulkBar" style="display:none;border-radius:var(--radius-md);margin-bottom:10px;">
+      <label class="checkbox-row"><input type="checkbox" id="p-selectAll" /> 전체선택</label>
+      <span class="search-selected-count" id="p-selectedCount"></span>
+      <button class="btn-secondary search-bulk-delete-btn" id="p-bulkDelete" disabled>${TRASH_ICON} 삭제</button>
+    </div>
     <div class="sticky-grid" id="p-grid"><div class="empty">불러오는 중…</div></div>
   `;
 
   const $ = (id) => root.querySelector('#' + id);
   let creating = false;
+  let items = [];
+  let selected = new Set(); // 선택삭제용 — 포스트잇 id 집합
+
+  function updateBulkBar() {
+    const bar = $('p-bulkBar');
+    if (!items.length) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    const ids = items.map((i) => i.id);
+    const selectAllCb = $('p-selectAll');
+    selectAllCb.checked = ids.length > 0 && ids.every((id) => selected.has(id));
+    selectAllCb.indeterminate = selected.size > 0 && !selectAllCb.checked;
+    $('p-selectedCount').textContent = selected.size > 0 ? `${selected.size}개` : '';
+    $('p-bulkDelete').disabled = selected.size === 0;
+  }
+
+  async function createNewPostit() {
+    if (creating) return;
+    creating = true;
+    try {
+      await window.itda.postits.add({ content: '새 포스트잇', colorHex: STICKY_COLORS[0] });
+      await load();
+    } catch (e) {
+      errorToast(e, '포스트잇을 추가하지 못했어요');
+    } finally {
+      creating = false;
+    }
+  }
 
   function bindNewCard() {
     const newCard = $('p-newCard');
     if (!newCard) return;
-    newCard.addEventListener('click', async () => {
-      if (creating) return;
-      creating = true;
-      try {
-        await window.itda.postits.add({ content: '새 포스트잇', colorHex: STICKY_COLORS[0] });
-        await load();
-      } catch (e) {
-        errorToast(e, '포스트잇을 추가하지 못했어요');
-      } finally {
-        creating = false;
-      }
-    });
+    newCard.title = `새 포스트잇 (${NEW_POSTIT_SHORTCUT_LABEL})`;
+    newCard.addEventListener('click', createNewPostit);
   }
 
   async function load() {
     const grid = $('p-grid');
-    let items;
     try {
       items = await window.itda.postits.list();
     } catch (e) {
@@ -67,6 +95,7 @@ export async function mount(root) {
         emptyStateBlock({ icon: POSTIT_ICON, title: '포스트잇이 없어요', subtitle: '중요한 내용을 자유로운 색으로 붙여보세요' }) +
         `<div class="new-sticky-card" id="p-newCard">+ 새 포스트잇</div>`;
       bindNewCard();
+      updateBulkBar();
       return;
     }
     grid.classList.remove('empty');
@@ -78,6 +107,7 @@ export async function mount(root) {
           (item) => `
         <div class="sticky-card" style="background:${item.color_hex};transform:rotate(${stickyRotation(item.id)}deg);" data-id="${item.id}">
           <div class="card-top">
+            <input type="checkbox" class="notes-list-item-check sticky-select-check" data-action="select" data-id="${item.id}" title="선택" />
             <span class="drag-handle" data-drag-id="${item.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
             <div class="rich-toolbar rich-toolbar-mini">
               <button class="rich-btn" data-action="bold" title="굵게">${BOLD_ICON}</button>
@@ -215,12 +245,56 @@ export async function mount(root) {
           mountLinksWidget(section, { type: 'postit', id });
         }
       });
+
+      const selectCb = card.querySelector('[data-action="select"]');
+      selectCb.checked = selected.has(id);
+      selectCb.addEventListener('click', (e) => e.stopPropagation());
+      selectCb.addEventListener('change', () => {
+        if (selectCb.checked) selected.add(id);
+        else selected.delete(id);
+        updateBulkBar();
+      });
     });
 
     bindNewCard();
+    updateBulkBar();
   }
 
   bindWidgetLaunchButton(root, 'p-widgetBtn', 'postit-board');
+
+  $('p-selectAll').addEventListener('change', (e) => {
+    const ids = items.map((i) => i.id);
+    if (e.target.checked) ids.forEach((id) => selected.add(id));
+    else selected.clear();
+    $('p-grid').querySelectorAll('[data-action="select"]').forEach((cb) => {
+      cb.checked = selected.has(Number(cb.dataset.id));
+    });
+    updateBulkBar();
+  });
+
+  $('p-bulkDelete').addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    const targets = [...selected];
+    $('p-bulkDelete').disabled = true;
+    try {
+      await Promise.all(targets.map((id) => window.itda.postits.delete(id)));
+      toast(`${targets.length}개 휴지통으로 이동했어요`);
+      selected.clear();
+      await load();
+    } catch (e) {
+      errorToast(e, '일부 포스트잇을 삭제하지 못했어요');
+      await load();
+    }
+  });
+
+  // 화면 전용 고정 단축키(⌘/Ctrl+N) — 이 화면이 떠 있는 동안만 반응, 언마운트 시 해제.
+  const handleNewPostitShortcut = (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      createNewPostit();
+    }
+  };
+  document.addEventListener('keydown', handleNewPostitShortcut);
 
   await load();
 
@@ -231,5 +305,8 @@ export async function mount(root) {
     debouncedLoad();
   });
 
-  return () => offDataChanged?.();
+  return () => {
+    document.removeEventListener('keydown', handleNewPostitShortcut);
+    offDataChanged?.();
+  };
 }

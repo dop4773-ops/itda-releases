@@ -219,6 +219,24 @@ function runLightweightMigrations(db) {
     `);
     console.log('[itda] 마이그레이션: memo_attachments 테이블 생성');
   }
+
+  // 메모 폴더(애플 메모장 스타일 분류) — 카테고리 태그와는 별개 축.
+  if (!hasTable('memo_folders')) {
+    db.exec(`
+      CREATE TABLE memo_folders (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        name        TEXT NOT NULL,
+        sort_order  INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+    console.log('[itda] 마이그레이션: memo_folders 테이블 생성');
+  }
+  if (!hasColumn('memos', 'folder_id')) {
+    db.exec(`ALTER TABLE memos ADD COLUMN folder_id INTEGER REFERENCES memo_folders(id) ON DELETE SET NULL`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_memos_folder ON memos(folder_id) WHERE deleted_at IS NULL`);
+    console.log('[itda] 마이그레이션: memos.folder_id 컬럼 추가');
+  }
 }
 
 module.exports = { initDb, runLightweightMigrations };

@@ -21,6 +21,7 @@ const registerCategoriesIpc = require('./categories.ipc');
 const registerTodosIpc = require('./todos.ipc');
 const registerEventsIpc = require('./events.ipc');
 const registerMemosIpc = require('./memos.ipc');
+const registerMemoFoldersIpc = require('./memoFolders.ipc');
 const registerPostitsIpc = require('./postits.ipc');
 const registerTrashIpc = require('./trash.ipc');
 const registerSearchIpc = require('./search.ipc');
@@ -52,6 +53,7 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerTodosIpc(ipcMain, repos);
   registerEventsIpc(ipcMain, repos);
   registerMemosIpc(ipcMain, repos);
+  registerMemoFoldersIpc(ipcMain, repos);
   registerPostitsIpc(ipcMain, repos, { closeWidgetIfOpen });
   registerSearchIpc(ipcMain, repos);
   registerSettingsIpc(ipcMain, repos);

@@ -7,6 +7,7 @@ import { sanitizeRichHtml, stripHtmlToPlainText, toggleBold, applyFontSize, appl
 import { openColorPicker } from '../shared/color-picker.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { promptText } from '../shared/text-prompt.js';
 
 const MEMO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`;
 const PIN_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
@@ -20,6 +21,12 @@ const PAPERCLIP_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="no
 const FILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`;
 const SMALL_X_ICON = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const LINK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07L12.5 19.5"/></svg>`;
+const FOLDER_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>`;
+
+// "새 메모" 단축키 — 화면 전체 커스터마이즈 대상인 설정 > 단축키(shortcuts.js)까지 갈 정도로
+// 자주 바꿀 일은 없는 화면 전용 동작이라, 고정 단축키로 두고 이 화면이 떠 있을 때만 반응한다.
+const isMac = navigator.platform?.toUpperCase().includes('MAC');
+const NEW_MEMO_SHORTCUT_LABEL = isMac ? '⌘N' : 'Ctrl+N';
 
 // 저장된 content(HTML)의 첫 줄을 "제목 없는 메모"의 표시용 제목으로 쓴다 (애플 메모장과 동일한 관습).
 function deriveTitle(memo) {
@@ -41,12 +48,13 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="notes-app">
       <div class="notes-sidebar">
+        <div class="notes-folder-rail" id="m-folderRail"></div>
         <div class="notes-sidebar-head">
           <div class="notes-search-box">
             ${SEARCH_ICON}
             <input type="text" id="m-search" placeholder="검색" />
           </div>
-          <button class="notes-new-btn" id="m-newBtn" title="새 메모">${PLUS_ICON}</button>
+          <button class="notes-new-btn" id="m-newBtn" title="새 메모 (${NEW_MEMO_SHORTCUT_LABEL})">${PLUS_ICON}</button>
           ${widgetLaunchButtonHtml('m-widgetBtn', '빠른 메모 위젯 열기')}
         </div>
         <div class="notes-bulk-bar" id="m-bulkBar" style="display:none;">
@@ -68,16 +76,107 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
   let memos = [];
+  let folders = [];
   let selectedId = null;
   let keyword = '';
   let selected = new Set(); // 선택삭제용 — 메모 id 집합
+  // undefined="전체 메모"(폴더 무관), null="미분류"(folder_id 없음), 숫자="그 폴더만"
+  let currentFolderId;
 
   function filteredMemos() {
-    if (!keyword.trim()) return memos;
+    let list = memos;
+    if (currentFolderId !== undefined) {
+      list = list.filter((m) => (currentFolderId === null ? !m.folder_id : m.folder_id === currentFolderId));
+    }
+    if (!keyword.trim()) return list;
     const k = keyword.trim().toLowerCase();
-    return memos.filter(
+    return list.filter(
       (m) => deriveTitle(m).toLowerCase().includes(k) || stripHtmlToPlainText(m.content || '').toLowerCase().includes(k)
     );
+  }
+
+  // ---------- 폴더 (애플 메모장 스타일 분류) ----------
+  async function loadFolders() {
+    try {
+      folders = await window.itda.memoFolders.list();
+    } catch (e) {
+      folders = [];
+    }
+    renderFolderRail();
+  }
+
+  function renderFolderRail() {
+    const rail = $('m-folderRail');
+    const totalCount = memos.length;
+    const unfiledCount = memos.filter((m) => !m.folder_id).length;
+    rail.innerHTML = `
+      <div class="notes-folder-row ${currentFolderId === undefined ? 'active' : ''}" data-folder="all">
+        ${FOLDER_ICON}<span class="notes-folder-name">전체 메모</span><span class="notes-folder-count">${totalCount}</span>
+      </div>
+      <div class="notes-folder-row ${currentFolderId === null ? 'active' : ''}" data-folder="unfiled">
+        ${FOLDER_ICON}<span class="notes-folder-name">미분류</span><span class="notes-folder-count">${unfiledCount}</span>
+      </div>
+      ${folders
+        .map(
+          (f) => `
+        <div class="notes-folder-row ${currentFolderId === f.id ? 'active' : ''}" data-folder="${f.id}">
+          ${FOLDER_ICON}<span class="notes-folder-name">${escapeHtml(f.name)}</span><span class="notes-folder-count">${f.memo_count}</span>
+          <button class="btn-icon notes-folder-del" data-rename-folder="${f.id}" title="이름 바꾸기">✎</button>
+          <button class="btn-icon notes-folder-del" data-delete-folder="${f.id}" title="폴더 삭제(메모는 안 지워지고 미분류로 이동)">${SMALL_X_ICON}</button>
+        </div>`
+        )
+        .join('')}
+      <button class="notes-folder-add" id="m-addFolderBtn">${PLUS_ICON} 새 폴더</button>
+    `;
+
+    rail.querySelectorAll('.notes-folder-row').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const key = row.dataset.folder;
+        currentFolderId = key === 'all' ? undefined : key === 'unfiled' ? null : Number(key);
+        renderFolderRail();
+        renderList();
+      });
+    });
+    rail.querySelectorAll('[data-rename-folder]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.renameFolder);
+        const folder = folders.find((f) => f.id === id);
+        const name = await promptText(btn, { title: '폴더 이름 바꾸기', placeholder: '폴더 이름', value: folder?.name });
+        if (!name) return;
+        try {
+          await window.itda.memoFolders.rename({ id, name });
+          await loadFolders();
+        } catch (err) {
+          errorToast(err, '폴더 이름을 바꾸지 못했어요');
+        }
+      });
+    });
+    rail.querySelectorAll('[data-delete-folder]').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.deleteFolder);
+        try {
+          await window.itda.memoFolders.delete(id);
+          if (currentFolderId === id) currentFolderId = undefined;
+          await loadFolders();
+          await load();
+        } catch (err) {
+          errorToast(err, '폴더를 삭제하지 못했어요');
+        }
+      });
+    });
+    $('m-addFolderBtn').addEventListener('click', async () => {
+      const name = await promptText($('m-addFolderBtn'), { title: '새 폴더', placeholder: '폴더 이름' });
+      if (!name) return;
+      try {
+        await window.itda.memoFolders.add({ name });
+        await loadFolders();
+      } catch (err) {
+        errorToast(err, '폴더를 추가하지 못했어요');
+      }
+    });
   }
 
   function updateBulkBar(allIds) {
@@ -95,6 +194,7 @@ export async function mount(root) {
   }
 
   function renderList() {
+    renderFolderRail(); // 메모 개수가 바뀌었을 수 있으니(추가/삭제/폴더 이동) 매번 같이 갱신
     const listEl = $('m-list');
     const items = [...filteredMemos()].sort((a, b) => {
       if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned;
@@ -180,6 +280,10 @@ export async function mount(root) {
       <div class="notes-detail-toolbar">
         <span class="notes-detail-date">${formatRelative(memo.updated_at)}</span>
         <div class="notes-detail-toolbar-actions">
+          <select id="m-folderSelect" class="select" title="폴더">
+            <option value="">미분류</option>
+            ${folders.map((f) => `<option value="${f.id}" ${memo.folder_id === f.id ? 'selected' : ''}>${escapeHtml(f.name)}</option>`).join('')}
+          </select>
           <div class="links-popover-wrap" id="m-linksWrap">
             <button class="btn-icon" id="m-linksBtn" title="연결된 항목">${LINK_ICON}</button>
             <div class="links-popover" id="m-linksPopover">
@@ -354,6 +458,49 @@ export async function mount(root) {
     $('m-attachBtn').addEventListener('click', addAttachments);
     renderAttachments();
 
+    // ---------- 첨부파일 드래그앤드롭 ----------
+    // dataTransfer.files의 각 File은 Electron 렌더러에서 .path(실제 파일 시스템 경로)를
+    // 그대로 들고 있다 — 그 경로만 메인 프로세스로 넘기면(addFromPaths) 파일선택 다이얼로그와
+    // 똑같은 복사+기록 로직을 그대로 재사용할 수 있다.
+    let dragDepth = 0; // dragenter/dragleave가 자식 요소를 넘나들며 여러 번 오가므로 카운터로 안정적으로 판정
+    detailEl.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragDepth += 1;
+      detailEl.classList.add('drag-over');
+    });
+    detailEl.addEventListener('dragover', (e) => e.preventDefault()); // 기본 동작(파일을 새 탭으로 여는 등)을 막아야 drop이 발생함
+    detailEl.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) detailEl.classList.remove('drag-over');
+    });
+    detailEl.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      detailEl.classList.remove('drag-over');
+      const filePaths = [...(e.dataTransfer?.files || [])].map((f) => f.path).filter(Boolean);
+      if (!filePaths.length) return;
+      try {
+        const result = await window.itda.memoAttachments.addFromPaths({ memoId: memo.id, filePaths });
+        if (result?.skipped?.length) {
+          toast(`${result.skipped.length}개 파일은 건너뛰었어요 (${result.skipped[0].reason})`);
+        }
+        await renderAttachments();
+      } catch (err) {
+        errorToast(err, '파일을 첨부하지 못했어요');
+      }
+    });
+
+    $('m-folderSelect').addEventListener('change', async (e) => {
+      const folderId = e.target.value ? Number(e.target.value) : null;
+      try {
+        await window.itda.memos.update({ id: memo.id, folderId });
+        memo.folder_id = folderId;
+        renderList();
+      } catch (err) {
+        errorToast(err, '폴더를 변경하지 못했어요');
+      }
+    });
+
     $('m-pinBtn').addEventListener('click', async () => {
       try {
         const result = await window.itda.memos.togglePin(memo.id);
@@ -413,16 +560,26 @@ export async function mount(root) {
     renderDetail();
   }
 
-  $('m-newBtn').addEventListener('click', async () => {
+  async function createNewMemo() {
     try {
-      const { id } = await window.itda.memos.add({ content: '' });
+      const folderId = currentFolderId ?? null; // "전체"/"미분류"에서 새로 만들면 미분류, 특정 폴더에서 만들면 그 폴더로
+      const { id } = await window.itda.memos.add({ content: '', folderId });
       await load();
       selectMemo(id);
       $('m-titleInput')?.focus();
     } catch (e) {
       errorToast(e, '메모를 추가하지 못했어요');
     }
-  });
+  }
+  $('m-newBtn').addEventListener('click', createNewMemo);
+  // 화면 전용 고정 단축키(⌘/Ctrl+N) — 이 화면이 떠 있는 동안만 반응, 언마운트 시 해제.
+  const handleNewMemoShortcut = (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      createNewMemo();
+    }
+  };
+  document.addEventListener('keydown', handleNewMemoShortcut);
 
   $('m-selectAll').addEventListener('change', (e) => {
     const ids = [...filteredMemos()].map((m) => m.id);
@@ -472,9 +629,14 @@ export async function mount(root) {
   document.addEventListener('click', closeOnOutsideClick);
 
   await load();
+  await loadFolders();
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
+    if (entity === 'memoFolder') {
+      loadFolders();
+      return;
+    }
     if (entity !== 'memo') return;
     if (isUserTyping()) return; // 지금 메모 본문/제목을 타이핑 중이면 커서가 끊기지 않게 미룸
     debouncedLoad();
@@ -482,6 +644,7 @@ export async function mount(root) {
 
   return () => {
     document.removeEventListener('click', closeOnOutsideClick);
+    document.removeEventListener('keydown', handleNewMemoShortcut);
     offDataChanged?.();
   };
 }

@@ -56,9 +56,16 @@ contextBridge.exposeInMainWorld('itda', {
   memoAttachments: {
     list: (memoId) => ipcRenderer.invoke('memoAttachments:list', memoId),
     add: (memoId) => ipcRenderer.invoke('memoAttachments:add', memoId),
+    addFromPaths: (payload) => ipcRenderer.invoke('memoAttachments:addFromPaths', payload),
     getImageData: (id) => ipcRenderer.invoke('memoAttachments:getImageData', id),
     open: (id) => ipcRenderer.invoke('memoAttachments:open', id),
     delete: (id) => ipcRenderer.invoke('memoAttachments:delete', id),
+  },
+  memoFolders: {
+    list: () => ipcRenderer.invoke('memoFolders:list'),
+    add: (payload) => ipcRenderer.invoke('memoFolders:add', payload),
+    rename: (payload) => ipcRenderer.invoke('memoFolders:rename', payload),
+    delete: (id) => ipcRenderer.invoke('memoFolders:delete', id),
   },
   postits: {
     list: () => ipcRenderer.invoke('postits:list'),
