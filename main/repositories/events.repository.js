@@ -4,26 +4,33 @@
  */
 module.exports = function createEventsRepository(db) {
   return {
+    // "오늘"이란 date(start_at) = 오늘뿐 아니라, 어제 이전에 시작해서 오늘까지 이어지는
+    // 하루종일 일정(휴가 등)도 포함해야 한다 — range()와 같은 이유로 같은 방식(구간 겹침)을 쓴다.
     today() {
       return db
         .prepare(
           `SELECT e.*, c.name AS category_name, c.color_hex, c.text_color
            FROM events e LEFT JOIN categories c ON c.id = e.category_id
-           WHERE e.deleted_at IS NULL AND date(e.start_at) = date('now','localtime')
+           WHERE e.deleted_at IS NULL
+             AND date(e.start_at) <= date('now','localtime') AND date(e.end_at) >= date('now','localtime')
            ORDER BY e.start_at ASC`
         )
         .all();
     },
 
+    // date(start_at) BETWEEN fromDate AND toDate로 필터하면 "시작일"만 그 구간에 있는지 보므로,
+    // 여러 날에 걸친 하루종일 일정(예: 8/13~15 휴가)을 8/14나 8/15만 조회할 때(일간 뷰 등)
+    // 시작일이 구간 밖이라 통째로 안 잡히는 버그가 있었다 — 이제 일정의 [start,end] 구간이
+    // 조회 구간 [fromDate,toDate]과 "겹치기만" 하면 포함시킨다(구간 겹침 조건).
     range(fromDate, toDate) {
       return db
         .prepare(
           `SELECT e.*, c.name AS category_name, c.color_hex, c.text_color
            FROM events e LEFT JOIN categories c ON c.id = e.category_id
-           WHERE e.deleted_at IS NULL AND date(e.start_at) BETWEEN date(?) AND date(?)
+           WHERE e.deleted_at IS NULL AND date(e.start_at) <= date(?) AND date(e.end_at) >= date(?)
            ORDER BY e.start_at ASC`
         )
-        .all(fromDate, toDate);
+        .all(toDate, fromDate);
     },
 
     getById(id) {
