@@ -1,4 +1,5 @@
-import { escapeHtml, toast, errorToast } from '../shared/ui-utils.js';
+import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
+import { registerEscClose } from '../shared/esc-close.js';
 import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
@@ -363,9 +364,26 @@ export async function mount(root) {
                 <div id="upd-version" class="settings-row-title">버전 확인 중…</div>
                 <div id="upd-status" class="settings-row-desc">-</div>
               </div>
-              <div id="upd-actions"></div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+                <div class="tabs" id="upd-modeToggle" style="margin-bottom:0;" title="자동: 새 버전을 조용히 받아서 창을 닫을 때 설치해요. 수동: 확인·다운로드·설치를 직접 버튼으로 진행해요.">
+                  <button class="tab" data-mode="auto">자동</button>
+                  <button class="tab" data-mode="manual">수동</button>
+                </div>
+                <button class="btn-secondary" id="upd-logBtn">업데이트 로그</button>
+                <div id="upd-actions"></div>
+              </div>
             </div>
             <div id="upd-releaseNotes" class="update-release-notes" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="upd-logOverlay">
+          <div class="modal-card" style="width:520px;">
+            <h3>업데이트 로그</h3>
+            <div id="upd-logList"><div class="empty">불러오는 중…</div></div>
+            <div class="modal-actions">
+              <button class="btn-secondary" id="upd-logClose">닫기</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1274,8 +1292,36 @@ export async function mount(root) {
   }
 
   // ================= 업데이트 (GitHub Releases 기반, main/updater 참고) =================
+  // 자동: 확인 후 새 버전이 있으면 바로 백그라운드 다운로드, 창을 닫으면 조용히 설치(기존 동작).
+  // 수동: 확인만 하고 멈춘다 — "업데이트" 버튼을 눌러야 다운로드가 시작되고, 다운로드가 끝나야
+  // "업데이트하고 재시작" 버튼이 활성화된다. main/updater/index.js가 이 설정(update_mode)을 보고
+  // electron-updater의 autoDownload/설치 시점을 그때그때 맞춘다.
+  let currentUpdateMode = 'auto';
+
   function renderUpdateActions(html) {
     $('upd-actions').innerHTML = html;
+  }
+
+  function updateModeToggleUi() {
+    root.querySelectorAll('#upd-modeToggle .tab').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.mode === currentUpdateMode);
+    });
+  }
+
+  function bindDownloadBtn() {
+    const btn = $('upd-downloadBtn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = '다운로드 중…';
+      try {
+        await window.itda.updater.downloadUpdate();
+      } catch (e) {
+        errorToast(e, '다운로드에 실패했어요');
+        btn.disabled = false;
+        btn.textContent = '업데이트';
+      }
+    });
   }
 
   function applyUpdateStatus(data) {
@@ -1296,28 +1342,46 @@ export async function mount(root) {
         break;
       case 'not-available':
         statusEl.textContent = '최신 버전을 사용하고 있어요.';
-        renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">다시 확인</button>`);
+        renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">업데이트 확인</button>`);
         bindCheckBtn();
         break;
       case 'available':
-        // autoDownload가 켜져 있어서(main/updater/index.js) 이 상태는 잠깐 보이고 바로
-        // 'downloading'으로 넘어간다 — 사용자가 따로 누를 다운로드 버튼은 필요 없다.
-        statusEl.textContent = `새 버전 ${data.version}이(가) 있어요. 백그라운드에서 자동으로 받는 중…`;
-        renderUpdateActions('');
+        if (currentUpdateMode === 'manual') {
+          statusEl.textContent = `새 버전 ${data.version}이(가) 있어요.`;
+          renderUpdateActions(`
+            <button class="btn" id="upd-downloadBtn">업데이트</button>
+            <button class="btn" id="upd-installBtn" disabled>업데이트하고 재시작</button>
+          `);
+          bindDownloadBtn();
+        } else {
+          // 자동 모드는 autoDownload=true라 이 상태가 잠깐 보이고 바로 'downloading'으로 넘어간다.
+          statusEl.textContent = `새 버전 ${data.version}이(가) 있어요. 백그라운드에서 자동으로 받는 중…`;
+          renderUpdateActions('');
+        }
         if (data.releaseNotes) {
           notesEl.textContent = data.releaseNotes;
           notesEl.style.display = 'block';
         }
         break;
       case 'downloading':
-        statusEl.textContent = `자동으로 다운로드하는 중… ${data.percent ?? 0}%`;
-        renderUpdateActions('');
+        statusEl.textContent = `다운로드하는 중… ${data.percent ?? 0}%`;
+        if (currentUpdateMode === 'manual') {
+          renderUpdateActions(`
+            <button class="btn" id="upd-downloadBtn" disabled>다운로드 중…</button>
+            <button class="btn" id="upd-installBtn" disabled>업데이트하고 재시작</button>
+          `);
+        } else {
+          renderUpdateActions('');
+        }
         break;
       case 'downloaded':
-        // main/updater/index.js가 창을 닫는(트레이로 내려가는) 시점을 감지해서 조용히
-        // 설치+재시작한다 — 굳이 지금 누르지 않아도 창만 닫으면 알아서 적용된다.
-        statusEl.textContent = `버전 ${data.version} 다운로드 완료. 창을 닫으면 자동으로 설치되고 다시 켜져요.`;
-        renderUpdateActions(`<button class="btn" id="upd-installBtn">지금 재시작해서 설치</button>`);
+        statusEl.textContent =
+          currentUpdateMode === 'manual'
+            ? `버전 ${data.version} 다운로드 완료.`
+            // main/updater/index.js가 창을 닫는(트레이로 내려가는) 시점을 감지해서 조용히
+            // 설치+재시작한다(자동 모드에서만) — 굳이 지금 누르지 않아도 창만 닫으면 알아서 적용된다.
+            : `버전 ${data.version} 다운로드 완료. 창을 닫으면 자동으로 설치되고 다시 켜져요.`;
+        renderUpdateActions(`<button class="btn" id="upd-installBtn">업데이트하고 재시작</button>`);
         $('upd-installBtn').addEventListener('click', () => window.itda.updater.quitAndInstall());
         break;
       case 'error':
@@ -1347,17 +1411,78 @@ export async function mount(root) {
   }
 
   async function initUpdatePanel() {
+    currentUpdateMode = (await window.itda.settings.get('update_mode')) === 'manual' ? 'manual' : 'auto';
+    updateModeToggleUi();
+    root.querySelectorAll('#upd-modeToggle .tab').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const mode = btn.dataset.mode;
+        if (mode === currentUpdateMode) return;
+        currentUpdateMode = mode;
+        updateModeToggleUi();
+        try {
+          await window.itda.settings.set({ key: 'update_mode', value: mode });
+        } catch (e) {
+          errorToast(e, '업데이트 모드를 저장하지 못했어요');
+        }
+      });
+    });
+
     try {
       const version = await window.itda.updater.getVersion();
       $('upd-version').textContent = `현재 버전 v${version}`;
     } catch (e) {
       $('upd-version').textContent = '버전 정보를 불러오지 못했어요';
     }
+
     renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">업데이트 확인</button>`);
     bindCheckBtn();
+
+    $('upd-logBtn').addEventListener('click', openUpdateLog);
+    $('upd-logClose').addEventListener('click', closeUpdateLog);
+    $('upd-logOverlay').addEventListener('click', (e) => {
+      if (e.target.id === 'upd-logOverlay') closeUpdateLog();
+    });
+  }
+
+  // ---------- 업데이트 로그 (GitHub Releases 목록) ----------
+  function closeUpdateLog() {
+    $('upd-logOverlay').classList.remove('open');
+  }
+
+  function renderReleaseLogHtml(releases) {
+    if (!releases.length) return emptyStateBlock({ title: '업데이트 로그가 없어요' });
+    return releases
+      .map(
+        (r) => `
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+          <b>${escapeHtml(r.version)}</b>
+          <span class="settings-row-desc">${escapeHtml((r.publishedAt || '').slice(0, 10))}</span>
+        </div>
+        <div class="update-release-notes" style="margin-top:4px;">${escapeHtml(r.notes || '(내용 없음)')}</div>
+      </div>`
+      )
+      .join('');
+  }
+
+  async function openUpdateLog() {
+    $('upd-logOverlay').classList.add('open');
+    $('upd-logList').innerHTML = `<div class="empty">불러오는 중…</div>`;
+    try {
+      const releases = await window.itda.updater.getReleaseLog();
+      // 응답이 오기 전에 다른 화면으로 이동했을 수 있다 — 그러면 root의 내용이 이미 바뀌어서
+      // #upd-logList가 더 이상 없으므로(null), 조용히 무시한다(에러 아님).
+      const listEl = $('upd-logList');
+      if (listEl) listEl.innerHTML = renderReleaseLogHtml(releases);
+    } catch (e) {
+      errorToast(e, '업데이트 로그를 불러오지 못했어요');
+      const listEl = $('upd-logList');
+      if (listEl) listEl.innerHTML = emptyStateBlock({ title: '업데이트 로그를 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
+    }
   }
 
   const unsubscribeUpdater = window.itda.updater.onStatus(applyUpdateStatus);
+  const unsubscribeUpdateLogEsc = registerEscClose(() => $('upd-logOverlay').classList.contains('open'), closeUpdateLog);
 
   await initUserPanel();
   await initDisplayPanel();
@@ -1375,6 +1500,7 @@ export async function mount(root) {
 
   return () => {
     if (typeof unsubscribeUpdater === 'function') unsubscribeUpdater();
+    unsubscribeUpdateLogEsc();
     if (typeof unmountTagsPanel === 'function') unmountTagsPanel();
   };
 }

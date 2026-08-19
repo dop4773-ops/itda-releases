@@ -172,7 +172,13 @@ export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 
   return `<div class="compact-agenda ${dayCount === 7 ? 'is-week' : ''}">${dayBlocks}</div>`;
 }
 
-export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true } = {}) {
+// 하루종일 일정이 이보다 많은 날에 "펼침" 상태여도 접을 수 있는 칩을 보여준다(기본은 항상 펼침 —
+// 접었을 때만 이 개수로 잘라서 보여준다). 기존엔 주/일 뷰 모두 개수 제한 없이 전부 쌓기만 해서,
+// 하루종일 일정이 아주 많은 날은 시간대 그리드가 화면 아래로 한참 밀려 "잘린 것처럼" 보인다는
+// 피드백이 있었다 — 그래서 접기 기능을 추가했다(기본값은 여전히 전부 보이는 펼침 상태).
+const ALLDAY_COLLAPSE_LIMIT = 3;
+
+export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, alldayExpanded = true } = {}) {
   const today = new Date();
   const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
   const hourCount = HOUR_END - HOUR_START;
@@ -191,7 +197,9 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true }
     .map((d) => {
       const key = toKey(d);
       const allDayEvents = (byDate.get(key) || []).filter((e) => e.all_day);
-      const bars = allDayEvents
+      const visibleEvents = alldayExpanded ? allDayEvents : allDayEvents.slice(0, ALLDAY_COLLAPSE_LIMIT);
+      const hiddenCount = allDayEvents.length - visibleEvents.length;
+      const bars = visibleEvents
         .map((e) => {
           const isGoogle = e.source === 'google';
           return `
@@ -201,7 +209,14 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true }
           </div>`;
         })
         .join('');
-      return `<div class="allday-cell ${isSameDay(d, today) ? 'is-today-col' : ''}">${bars}</div>`;
+      // 접혀서 안 보이는 게 있으면 "+N개 더보기"(펼치기), 이 칸이 접을 만큼 길면 마지막에 "접기" —
+      // 월 뷰의 "+N개 더보기" 칩과 같은 스타일(.month-more)을 그대로 재사용한다.
+      const moreChip = hiddenCount > 0 ? `<button class="month-more allday-toggle-btn" data-action="toggle-allday">+${hiddenCount}개 더보기</button>` : '';
+      const collapseChip =
+        alldayExpanded && allDayEvents.length > ALLDAY_COLLAPSE_LIMIT
+          ? `<button class="month-more allday-toggle-btn" data-action="toggle-allday">접기</button>`
+          : '';
+      return `<div class="allday-cell ${isSameDay(d, today) ? 'is-today-col' : ''}">${bars}${moreChip}${collapseChip}</div>`;
     })
     .join('');
 
@@ -413,6 +428,7 @@ export async function mount(root) {
   let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
   let miniOpen = false;
   let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
+  let alldayExpanded = true; // 종일 일정 접기/펼치기(주/일 뷰) — 기본은 펼침(전부 보임)
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
   async function loadCategories() {
@@ -477,7 +493,15 @@ export async function mount(root) {
   }
 
   function renderTimeGrid(container, byDate, dayCount) {
-    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true });
+    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true, alldayExpanded });
+
+    container.querySelectorAll('[data-action="toggle-allday"]').forEach((btn) => {
+      btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        alldayExpanded = !alldayExpanded;
+        renderTimeGrid(container, byDate, dayCount);
+      });
+    });
 
     container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {

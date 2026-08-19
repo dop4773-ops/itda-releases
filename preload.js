@@ -174,6 +174,7 @@ contextBridge.exposeInMainWorld('itda', {
   },
   updater: {
     getVersion: () => ipcRenderer.invoke('updater:getVersion'),
+    getReleaseLog: () => ipcRenderer.invoke('updater:getReleaseLog'),
     checkNow: () => ipcRenderer.invoke('updater:checkNow'),
     downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),

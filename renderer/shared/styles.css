@@ -444,6 +444,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .month-event-pill{font-size:10px;padding:2px 5px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .month-event-pill.is-google{border:1px dashed rgba(255,255,255,.7);}
 .month-more{font-size:10px;color:var(--text-faint);padding-left:2px;}
+/* 주/일 뷰의 "종일" 행에서 하루종일 일정이 많을 때 접기/펼치기(+N개 더보기 ↔ 접기) 버튼.
+   .month-more와 같은 톤이되, 클릭 가능한 <button>이라 브라우저 기본 버튼 스타일을 걷어낸다. */
+.allday-toggle-btn{all:unset;cursor:pointer;font-size:10px;color:var(--text-faint);padding:2px 2px 2px 4px;text-decoration:underline;align-self:flex-start;}
+.allday-toggle-btn:hover{color:var(--text-soft);}
 
 .time-grid{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--surface);}
 .time-header-row{display:grid;flex-shrink:0;}

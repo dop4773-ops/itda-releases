@@ -28,14 +28,56 @@
  *   window.itda.updater.checkNow()        → 업데이트 확인 시작 (결과는 아래 이벤트로 옴)
  *   window.itda.updater.downloadUpdate()  → 'available' 상태일 때 다운로드 시작
  *   window.itda.updater.quitAndInstall()  → 'downloaded' 상태일 때 재시작 후 설치
+ *   window.itda.updater.getReleaseLog()   → GitHub Releases 목록(버전/날짜/노트) — electron-updater와
+ *                                          무관하게 순수 조회라 개발 모드에서도 동작한다.
  *   window.itda.updater.onStatus(cb)      → 상태 변경을 실시간으로 받음
  *       cb({ status, version?, percent?, message? })
  *       status: 'dev-mode' | 'checking' | 'available' | 'not-available'
  *              | 'downloading' | 'downloaded' | 'error'
  */
 
+const https = require('https');
+
+// package.json의 build.publish(owner/repo)와 동일한 저장소 — GitHub Releases 공개 API는
+// 인증 없이 조회 가능하고, User-Agent 헤더가 없으면 GitHub가 403으로 거부하므로 꼭 넣는다.
+const RELEASES_API_URL = 'https://api.github.com/repos/dop4773-ops/itda-releases/releases?per_page=15';
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, { headers: { 'User-Agent': 'itda-app', Accept: 'application/vnd.github+json' } }, (res) => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          res.resume();
+          reject(new Error(`GitHub API 오류 (${res.statusCode})`));
+          return;
+        }
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (err) {
+            reject(new Error('응답을 해석하지 못했어요.'));
+          }
+        });
+      })
+      .on('error', reject);
+  });
+}
+
 function initUpdater(app, ipcMain, mainWindow, settings) {
   ipcMain.handle('updater:getVersion', () => app.getVersion());
+
+  // GitHub Releases 목록 조회는 electron-updater(패키징 전용)와 무관한 순수 HTTP 조회라
+  // dev/packaged 모드 구분 없이 항상 동작한다 — 그래서 아래 dev-mode 분기보다 앞에 둔다.
+  ipcMain.handle('updater:getReleaseLog', async () => {
+    const releases = await fetchJson(RELEASES_API_URL);
+    return releases.map((r) => ({
+      version: r.tag_name || r.name || '',
+      publishedAt: r.published_at || '',
+      notes: r.body || '',
+    }));
+  });
 
   // 개발 모드에서는 electron-updater를 아예 로드하지 않는다.
   // (패키징된 앱이 아니면 업데이트 메타데이터 URL 자체가 없어서 계속 에러만 남기 때문)
@@ -58,7 +100,13 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   // electron-updater는 패키징된 빌드에서만 의미가 있으므로 여기서(dev 모드 분기 이후)
   // 지연 require한다 — 개발 중에는 이 줄 자체가 실행되지 않는다.
   const { autoUpdater } = require('electron-updater');
-  autoUpdater.autoDownload = true; // 새 버전이 확인되면 바로 백그라운드에서 다운로드
+  // 설정(update_mode)에 따라 "자동"(다운로드까지 조용히 자동 진행) / "수동"(확인만 하고 다운로드는
+  // 사용자가 버튼을 눌러야 시작) 을 고른다. electron-updater는 checkForUpdates() 시점의
+  // autoDownload 값으로 동작을 정하므로, 확인을 시작하기 직전마다 이 값을 최신 설정으로 맞춰둔다.
+  const syncAutoDownloadFlag = () => {
+    autoUpdater.autoDownload = settings.get('update_mode') !== 'manual';
+  };
+  syncAutoDownloadFlag();
   // autoInstallOnAppQuit(기본값 true)은 일부러 꺼둔다 — 아래 mainWindow 'close' 리스너가
   // isSilent=true로 직접 quitAndInstall을 호출하는데, 둘 다 켜져 있으면 app.quit() 시퀀스
   // 중에 electron-updater 내부의 기본(비-silent) 설치 경로가 같이 걸려서 설치창이 잠깐
@@ -101,6 +149,9 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   if (mainWindow) {
     mainWindow.on('close', () => {
       if (!updateReadyToInstall) return;
+      // 수동 모드는 다운로드뿐 아니라 설치 시점도 사용자가 버튼으로 직접 결정하길 원해서
+      // 만든 모드라, 여기서 조용히 설치해버리면 그 의도와 어긋난다 — 자동 모드에서만 적용.
+      if (settings.get('update_mode') === 'manual') return;
       app.isQuittingItda = true;
       autoUpdater.quitAndInstall(true, true);
     });
@@ -108,6 +159,7 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
 
   ipcMain.handle('updater:checkNow', async () => {
     try {
+      syncAutoDownloadFlag();
       await autoUpdater.checkForUpdates();
       return { status: 'checked' };
     } catch (err) {
@@ -133,12 +185,13 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   // 바꿀 수도 있으니, 시작 시점에 한 번 캐시해두면 그 이후 변경을 못 따라간다.
   const isAutoCheckEnabled = () => settings.get('update_auto_check') !== '0';
 
-  // 앱 시작 몇 초 후 조용히 한 번 확인해둔다 — autoDownload=true라 새 버전이 있으면
-  // 이 시점에 백그라운드 다운로드까지 바로 시작된다. 사용자가 나중에 설정 화면을 열어보면
-  // 이미 "다운로드 중/완료" 상태가 보이는 정도. 설정에서 꺼뒀으면 이 자동 확인만 건너뛴다 —
+  // 앱 시작 몇 초 후 조용히 한 번 확인해둔다 — 이 시점의 업데이트 모드가 "자동"이면 새 버전을
+  // 백그라운드 다운로드까지 바로 시작하고, "수동"이면 확인만 하고 멈춘다(사용자가 설정 화면에서
+  // 직접 "업데이트" 버튼을 눌러야 다운로드가 시작됨). 설정에서 꺼뒀으면 이 자동 확인만 건너뛴다 —
   // "업데이트 확인" 버튼을 직접 누르는 건 이 설정과 무관하게 항상 동작한다(위 updater:checkNow 핸들러 참고).
   if (isAutoCheckEnabled()) {
     setTimeout(() => {
+      syncAutoDownloadFlag();
       autoUpdater.checkForUpdates().catch((err) => {
         console.error('[itda:updater] 시작 시 자동 확인 실패:', err);
       });
@@ -152,6 +205,7 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   const CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3시간마다
   setInterval(() => {
     if (!isAutoCheckEnabled()) return;
+    syncAutoDownloadFlag();
     autoUpdater.checkForUpdates().catch((err) => {
       console.error('[itda:updater] 주기적 확인 실패:', err);
     });
