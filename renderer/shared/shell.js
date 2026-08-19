@@ -3,6 +3,7 @@ import { computeNotifications, NOTIF_ICON } from './notifications.js';
 import { initCommandPalette } from './command-palette.js';
 import { SHORTCUTS, preloadShortcuts, getCachedBinding, matchesAccelerator, labelForAccelerator } from './shortcuts.js';
 import { initEventReminders, getActiveReminders, snoozeReminder } from './event-reminders.js';
+import { initUpdateOverlay } from './update-overlay.js';
 
 // 사이드바 접기/펼치기 — app_settings 테이블에 상태 저장 (localStorage 대신 SQLite로 통일)
 async function initSidebarCollapse() {
@@ -511,6 +512,7 @@ export async function initShell() {
   initQuickCapture();
   initGlobalTopbar();
   initEventReminders(refreshGlobalNotifications); // 일정 전 알림(설정 > 편의 기능) — 30초마다 확인
+  initUpdateOverlay(); // 수동 업데이트 모드의 다운로드 진행/재시작 확인을 화면과 무관하게 전역으로 표시
   initErrorSafetyNet();
   initCommandPalette({ openQuickCapture }); // Ctrl/Cmd+Shift+P — 어느 화면에서든 주요 동작을 키보드로 바로 실행
   initAltShortcutOverlay();

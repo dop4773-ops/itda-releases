@@ -175,8 +175,8 @@ contextBridge.exposeInMainWorld('itda', {
   updater: {
     getVersion: () => ipcRenderer.invoke('updater:getVersion'),
     getReleaseLog: () => ipcRenderer.invoke('updater:getReleaseLog'),
+    getReleasesRepo: () => ipcRenderer.invoke('updater:getReleasesRepo'),
     checkNow: () => ipcRenderer.invoke('updater:checkNow'),
-    downloadUpdate: () => ipcRenderer.invoke('updater:downloadUpdate'),
     quitAndInstall: () => ipcRenderer.invoke('updater:quitAndInstall'),
     // renderer는 ipcRenderer를 직접 다루면 안 되므로, 콜백만 넘겨받아 내부에서 연결해준다.
     // (ipcRenderer.removeListener까지 캡슐화 — renderer 쪽에서 이벤트 이름/객체를 몰라도 됨)

@@ -207,16 +207,6 @@ export async function mount(root) {
             <div class="panel-head"><h3>편의 기능</h3></div>
             <div class="update-row">
               <div>
-                <div class="settings-row-title">업데이트 자동 확인</div>
-                <div class="settings-row-desc">앱을 켤 때마다 새 버전이 있는지 조용히 한 번 확인해요(다운로드는 안 함). 꺼도 설정 → 업데이트에서 직접 확인할 수 있어요.</div>
-              </div>
-              <label class="switch">
-                <input type="checkbox" id="conv-autoUpdateToggle" />
-                <span class="switch-track"><span class="switch-thumb"></span></span>
-              </label>
-            </div>
-            <div class="update-row" style="margin-top:10px;">
-              <div>
                 <div class="settings-row-title">윈도우 시작 시 자동 실행</div>
                 <div class="settings-row-desc">컴퓨터를 켜면 잇다가 자동으로 함께 실행돼요(트레이로 시작). 패키징된 설치 버전에서만 켤 수 있어요.</div>
               </div>
@@ -359,18 +349,34 @@ export async function mount(root) {
         <div class="settings-panel" data-panel="update">
           <div class="panel">
             <div class="panel-head"><h3>업데이트</h3></div>
-            <div class="update-row">
-              <div>
-                <div id="upd-version" class="settings-row-title">버전 확인 중…</div>
-                <div id="upd-status" class="settings-row-desc">-</div>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-                <div class="tabs" id="upd-modeToggle" style="margin-bottom:0;" title="자동: 새 버전을 조용히 받아서 창을 닫을 때 설치해요. 수동: 확인·다운로드·설치를 직접 버튼으로 진행해요.">
-                  <button class="tab" data-mode="auto">자동</button>
-                  <button class="tab" data-mode="manual">수동</button>
+            <div class="settings-row-title">현재 버전 <span id="upd-version">확인 중…</span></div>
+
+            <div style="margin-top:14px;">
+              <label class="data-action-row" style="cursor:pointer;">
+                <div>
+                  <b>자동</b>
+                  <span>새 버전이 있으면 알아서 받아서 프로그램을 껐다 켭니다</span>
                 </div>
-                <button class="btn-secondary" id="upd-logBtn">업데이트 로그</button>
+                <input type="radio" name="upd-mode" id="upd-modeAuto" value="auto" />
+              </label>
+              <label class="data-action-row" style="cursor:pointer;">
+                <div>
+                  <b>수동 <span class="badge badge-neutral">기본값·권장</span></b>
+                  <span>내가 아래 「지금 확인」 버튼을 눌렀을 때만 업데이트합니다 — 진료·업무 중 갑자기 꺼졌다 켜지는 일이 없습니다</span>
+                </div>
+                <input type="radio" name="upd-mode" id="upd-modeManual" value="manual" />
+              </label>
+            </div>
+
+            <label class="panel-section-label">업데이트 소스</label>
+            <div class="update-source-box" id="upd-source">-</div>
+            <div class="settings-row-desc">새 버전은 GitHub에서만 받아옵니다. 손댈 필요 없고, 「지금 확인」만 누르면 됩니다.</div>
+
+            <div class="update-row" style="margin-top:14px;">
+              <div id="upd-status" class="settings-row-desc">-</div>
+              <div style="display:flex;gap:8px;flex-shrink:0;">
                 <div id="upd-actions"></div>
+                <button class="btn-secondary" id="upd-logBtn">업데이트 로그</button>
               </div>
             </div>
             <div id="upd-releaseNotes" class="update-release-notes" style="display:none;"></div>
@@ -685,20 +691,9 @@ export async function mount(root) {
     }
   }
 
-  // ================= 편의 기능 (업데이트 자동확인 / 윈도우 자동실행 / 관련 항목 자동추천) =================
+  // ================= 편의 기능 (윈도우 자동실행 / 관련 항목 자동추천) =================
+  // 업데이트 자동 확인 여부는 설정 > 업데이트의 자동/수동 모드 하나로 합쳤다(중복 스위치 제거).
   async function initConveniencePanel() {
-    const autoUpdateToggle = $('conv-autoUpdateToggle');
-    // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — main/updater/index.js의 기본값과 맞춤
-    autoUpdateToggle.checked = (await window.itda.settings.get('update_auto_check')) !== '0';
-    autoUpdateToggle.addEventListener('change', async () => {
-      try {
-        await window.itda.settings.set({ key: 'update_auto_check', value: autoUpdateToggle.checked ? '1' : '0' });
-      } catch (e) {
-        errorToast(e, '저장하지 못했어요');
-        autoUpdateToggle.checked = !autoUpdateToggle.checked;
-      }
-    });
-
     const autoLaunchToggle = $('conv-autoLaunchToggle');
     let autoLaunchStatus;
     try {
@@ -1292,36 +1287,20 @@ export async function mount(root) {
   }
 
   // ================= 업데이트 (GitHub Releases 기반, main/updater 참고) =================
-  // 자동: 확인 후 새 버전이 있으면 바로 백그라운드 다운로드, 창을 닫으면 조용히 설치(기존 동작).
-  // 수동: 확인만 하고 멈춘다 — "업데이트" 버튼을 눌러야 다운로드가 시작되고, 다운로드가 끝나야
-  // "업데이트하고 재시작" 버튼이 활성화된다. main/updater/index.js가 이 설정(update_mode)을 보고
-  // electron-updater의 autoDownload/설치 시점을 그때그때 맞춘다.
-  let currentUpdateMode = 'auto';
+  // 확인이 시작되면(수동 클릭이든 자동 주기든) 다운로드까지는 항상 자동으로 진행된다 — 자동/수동
+  // 모드가 가르는 건 "확인이 언제 시작되는가"(자동 주기적 vs 수동 클릭)와 "다운로드 완료 후
+  // 설치가 조용히 되는가, 재시작 확인을 받는가"뿐. 다운로드 진행 화면과 재시작 확인 팝업은
+  // 화면과 무관하게 전역으로 뜨므로(renderer/shared/update-overlay.js) 여기서는 상태 텍스트와
+  // "지금 확인"/"업데이트 로그" 버튼, 다운로드 완료 후의 대체 재시작 버튼 정도만 다룬다.
+  let currentUpdateMode = 'manual';
 
   function renderUpdateActions(html) {
     $('upd-actions').innerHTML = html;
   }
 
-  function updateModeToggleUi() {
-    root.querySelectorAll('#upd-modeToggle .tab').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.mode === currentUpdateMode);
-    });
-  }
-
-  function bindDownloadBtn() {
-    const btn = $('upd-downloadBtn');
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      btn.textContent = '다운로드 중…';
-      try {
-        await window.itda.updater.downloadUpdate();
-      } catch (e) {
-        errorToast(e, '다운로드에 실패했어요');
-        btn.disabled = false;
-        btn.textContent = '업데이트';
-      }
-    });
+  function updateModeRadioUi() {
+    $('upd-modeAuto').checked = currentUpdateMode === 'auto';
+    $('upd-modeManual').checked = currentUpdateMode === 'manual';
   }
 
   function applyUpdateStatus(data) {
@@ -1342,37 +1321,21 @@ export async function mount(root) {
         break;
       case 'not-available':
         statusEl.textContent = '최신 버전을 사용하고 있어요.';
-        renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">업데이트 확인</button>`);
+        renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">지금 확인</button>`);
         bindCheckBtn();
         break;
       case 'available':
-        if (currentUpdateMode === 'manual') {
-          statusEl.textContent = `새 버전 ${data.version}이(가) 있어요.`;
-          renderUpdateActions(`
-            <button class="btn" id="upd-downloadBtn">업데이트</button>
-            <button class="btn" id="upd-installBtn" disabled>업데이트하고 재시작</button>
-          `);
-          bindDownloadBtn();
-        } else {
-          // 자동 모드는 autoDownload=true라 이 상태가 잠깐 보이고 바로 'downloading'으로 넘어간다.
-          statusEl.textContent = `새 버전 ${data.version}이(가) 있어요. 백그라운드에서 자동으로 받는 중…`;
-          renderUpdateActions('');
-        }
+        statusEl.textContent = `새 버전 ${data.version}이(가) 있어요. 받는 중…`;
+        renderUpdateActions('');
         if (data.releaseNotes) {
           notesEl.textContent = data.releaseNotes;
           notesEl.style.display = 'block';
         }
         break;
       case 'downloading':
+        // 진행 상황은 전역 오버레이(수동 모드) 또는 조용히(자동 모드) — 여기는 짧은 텍스트만.
         statusEl.textContent = `다운로드하는 중… ${data.percent ?? 0}%`;
-        if (currentUpdateMode === 'manual') {
-          renderUpdateActions(`
-            <button class="btn" id="upd-downloadBtn" disabled>다운로드 중…</button>
-            <button class="btn" id="upd-installBtn" disabled>업데이트하고 재시작</button>
-          `);
-        } else {
-          renderUpdateActions('');
-        }
+        renderUpdateActions('');
         break;
       case 'downloaded':
         statusEl.textContent =
@@ -1381,6 +1344,8 @@ export async function mount(root) {
             // main/updater/index.js가 창을 닫는(트레이로 내려가는) 시점을 감지해서 조용히
             // 설치+재시작한다(자동 모드에서만) — 굳이 지금 누르지 않아도 창만 닫으면 알아서 적용된다.
             : `버전 ${data.version} 다운로드 완료. 창을 닫으면 자동으로 설치되고 다시 켜져요.`;
+        // 수동 모드는 전역 재시작 확인 팝업이 이미 떴을 텐데, "나중에"를 눌렀을 수도 있으니
+        // 여기서도 다시 시도할 수 있는 버튼을 남겨둔다.
         renderUpdateActions(`<button class="btn" id="upd-installBtn">업데이트하고 재시작</button>`);
         $('upd-installBtn').addEventListener('click', () => window.itda.updater.quitAndInstall());
         break;
@@ -1411,16 +1376,14 @@ export async function mount(root) {
   }
 
   async function initUpdatePanel() {
-    currentUpdateMode = (await window.itda.settings.get('update_mode')) === 'manual' ? 'manual' : 'auto';
-    updateModeToggleUi();
-    root.querySelectorAll('#upd-modeToggle .tab').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const mode = btn.dataset.mode;
-        if (mode === currentUpdateMode) return;
-        currentUpdateMode = mode;
-        updateModeToggleUi();
+    currentUpdateMode = (await window.itda.settings.get('update_mode')) === 'auto' ? 'auto' : 'manual';
+    updateModeRadioUi();
+    root.querySelectorAll('input[name="upd-mode"]').forEach((radio) => {
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        currentUpdateMode = radio.value;
         try {
-          await window.itda.settings.set({ key: 'update_mode', value: mode });
+          await window.itda.settings.set({ key: 'update_mode', value: currentUpdateMode });
         } catch (e) {
           errorToast(e, '업데이트 모드를 저장하지 못했어요');
         }
@@ -1429,12 +1392,18 @@ export async function mount(root) {
 
     try {
       const version = await window.itda.updater.getVersion();
-      $('upd-version').textContent = `현재 버전 v${version}`;
+      $('upd-version').textContent = `v${version}`;
     } catch (e) {
-      $('upd-version').textContent = '버전 정보를 불러오지 못했어요';
+      $('upd-version').textContent = '확인 못 함';
+    }
+    try {
+      const repo = await window.itda.updater.getReleasesRepo();
+      $('upd-source').textContent = `https://github.com/${repo}`;
+    } catch (e) {
+      $('upd-source').textContent = '확인하지 못했어요';
     }
 
-    renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">업데이트 확인</button>`);
+    renderUpdateActions(`<button class="btn-secondary" id="upd-checkBtn">지금 확인</button>`);
     bindCheckBtn();
 
     $('upd-logBtn').addEventListener('click', openUpdateLog);
