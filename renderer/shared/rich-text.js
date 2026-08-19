@@ -145,6 +145,16 @@ export function stripHtmlToPlainText(html) {
   return (container.textContent || '').replace(/\n{2,}/g, '\n').trim();
 }
 
+/** stripHtmlToPlainText의 반대 방향 — 순수 텍스트를 메모/포스트잇 content(HTML)로 저장할 때 줄바꿈을 <br>로 보존한다. */
+export function plainTextToHtml(text) {
+  const div = document.createElement('div');
+  (text || '').split('\n').forEach((line, i) => {
+    if (i > 0) div.appendChild(document.createElement('br'));
+    div.appendChild(document.createTextNode(line));
+  });
+  return div.innerHTML;
+}
+
 /**
  * contenteditable 요소에 볼드/글씨크기를 적용하는 헬퍼.
  * document.execCommand는 deprecated 표시가 붙어있지만 Electron(Chromium)에서 여전히

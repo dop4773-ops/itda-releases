@@ -17,9 +17,9 @@ module.exports = function registerInboxIpc(ipcMain, repos, { deleteLinksFor } = 
     return inbox.list(onlyUnprocessed);
   });
 
-  // Inbox 항목을 todo/event/memo로 전환 처리 표시 (실제 레코드 생성은 각 :add를 호출한 뒤 이걸 호출)
+  // Inbox 항목을 todo/event/memo/postit로 전환 처리 표시 (실제 레코드 생성은 각 :add를 호출한 뒤 이걸 호출)
   ipcMain.handle('inbox:markProcessed', (event, { id, type, refId }) => {
-    if (!['todo', 'event', 'memo'].includes(type)) throw new Error('알 수 없는 처리 타입입니다.');
+    if (!['todo', 'event', 'memo', 'postit'].includes(type)) throw new Error('알 수 없는 처리 타입입니다.');
     inbox.markProcessed({ id, type, refId });
     broadcastDataChanged('inbox', id);
     return { id };

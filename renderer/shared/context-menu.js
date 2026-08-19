@@ -1,6 +1,11 @@
 import { toast, errorToast } from './ui-utils.js';
 import { mountLinksWidget } from './links-ui.js';
 import { todayStr, dateKey, addDays } from './date-utils.js';
+import { stripHtmlToPlainText } from './rich-text.js';
+import { openCreateEventModal } from './create-event-modal.js';
+import { openCreateTodoModal } from './create-todo-modal.js';
+import { openCreateMemoModal } from './create-memo-modal.js';
+import { openCreatePostitModal } from './create-postit-modal.js';
 
 // 항목 타입별 삭제(소프트삭제) API. links-ui.js의 LINK_TYPE_LABEL과 동일한 타입 키를 쓴다.
 const DELETE_API = {
@@ -9,6 +14,70 @@ const DELETE_API = {
   memo: (id) => window.itda.memos.delete(id),
   postit: (id) => window.itda.postits.delete(id),
 };
+
+// "다른 타입으로 만들기" 우클릭 메뉴 항목. 타입별로 등록 팝업(openXModal)만 있으면
+// 여기 한 줄 추가하는 것만으로 새 방향을 열 수 있다.
+// todo/event/memo/postit는 서로 완전히 양방향(자기 자신 제외 전부)이고, inbox는 나머지 4개로만
+// 갈 수 있다(반대 방향은 없음 — Inbox는 "정리 전 임시 수집함"이라 다른 항목을 다시 Inbox로
+// 되돌리는 흐름은 제품 개념상 의미가 없어서 뺐다).
+const EVENT_TARGET = { type: 'event', label: '📅 일정 만들기', open: openCreateEventModal };
+const TODO_TARGET = { type: 'todo', label: '☑️ Todo로 만들기', open: openCreateTodoModal };
+const MEMO_TARGET = { type: 'memo', label: '📝 메모로 만들기', open: openCreateMemoModal };
+const POSTIT_TARGET = { type: 'postit', label: '📌 포스트잇으로 만들기', open: openCreatePostitModal };
+
+const CONVERT_TARGETS = {
+  todo: [EVENT_TARGET, MEMO_TARGET, POSTIT_TARGET],
+  event: [TODO_TARGET, MEMO_TARGET, POSTIT_TARGET],
+  memo: [TODO_TARGET, EVENT_TARGET, POSTIT_TARGET],
+  postit: [TODO_TARGET, EVENT_TARGET, MEMO_TARGET],
+  inbox: [EVENT_TARGET, TODO_TARGET, MEMO_TARGET, POSTIT_TARGET],
+};
+
+// 전환 시 팝업에 미리 채울 제목/메모/날짜를 항목 타입별로 가져온다.
+async function fetchConvertSource(item) {
+  if (item.type === 'todo') {
+    const t = await window.itda.todos.get(item.id);
+    return { title: t?.title || '', memo: t?.memo || '', dueDate: t?.due_date || null };
+  }
+  if (item.type === 'event') {
+    const e = await window.itda.events.get(item.id);
+    return { title: e?.title || '', memo: e?.memo || '', dueDate: e?.start_at ? e.start_at.slice(0, 10) : null };
+  }
+  if (item.type === 'memo') {
+    const m = await window.itda.memos.get(item.id);
+    return { title: m?.title || '', memo: stripHtmlToPlainText(m?.content || ''), dueDate: null };
+  }
+  if (item.type === 'postit') {
+    const p = await window.itda.postits.get(item.id);
+    return { title: p?.title || '', memo: stripHtmlToPlainText(p?.content || ''), dueDate: null };
+  }
+  if (item.type === 'inbox') {
+    const items = await window.itda.inbox.list({ onlyUnprocessed: false });
+    const found = items.find((i) => i.id === item.id);
+    return { title: found?.content || '', memo: '', dueDate: null };
+  }
+  return { title: '', memo: '', dueDate: null };
+}
+
+async function convertItem(item, target) {
+  closeMenu();
+  let source;
+  try {
+    source = await fetchConvertSource(item);
+  } catch (e) {
+    errorToast(e, '내용을 불러오지 못했어요');
+    return;
+  }
+  const created = await target.open({ title: source.title, memo: source.memo, dueDate: source.dueDate });
+  if (!created) return; // 취소
+  try {
+    // Inbox는 소프트 삭제 대상이 아니라 자체 "처리됨" 상태로 관리되므로 링크 대신 markProcessed를 쓴다.
+    if (item.type === 'inbox') await window.itda.inbox.markProcessed({ id: item.id, type: target.type, refId: created.id });
+    else await window.itda.links.add({ aType: item.type, aId: item.id, bType: target.type, bId: created.id });
+  } catch (e) {
+    errorToast(e, '전환한 항목과 연결하지 못했어요');
+  }
+}
 
 let activeEl = null;
 let outsideHandlersBound = false;
@@ -72,9 +141,26 @@ function openMenu(x, y, item, opts) {
   ensureOutsideHandlers();
   closeMenu();
 
-  // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"만 있는 축소 메뉴
+  const convertTargets = CONVERT_TARGETS[item.type] || [];
+
+  // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"(+ 전환 가능하면 전환)만 있는 축소 메뉴
   if (opts.linkOnly) {
-    openLinkPopover(x, y, item);
+    if (convertTargets.length === 0) {
+      openLinkPopover(x, y, item);
+      return;
+    }
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = `
+      ${convertTargets.map((c) => `<button class="ctx-menu-item" data-convert="${c.type}">${c.label}</button>`).join('')}
+      <button class="ctx-menu-item" data-action="link">🔗 연결</button>
+    `;
+    activeEl = menu;
+    const pos = placeAt(menu, x, y);
+    convertTargets.forEach((c) => {
+      menu.querySelector(`[data-convert="${c.type}"]`).addEventListener('click', () => convertItem(item, c));
+    });
+    menu.querySelector('[data-action="link"]').addEventListener('click', () => openLinkPopover(pos.left, pos.top, item));
     return;
   }
 
@@ -95,16 +181,26 @@ function openMenu(x, y, item, opts) {
     <div class="ctx-menu-divider"></div>`
     : '';
 
+  const convertItems = convertTargets.length
+    ? convertTargets.map((c) => `<button class="ctx-menu-item" data-convert="${c.type}">${c.label}</button>`).join('') +
+      `<div class="ctx-menu-divider"></div>`
+    : '';
+
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
   menu.innerHTML = `
     ${todoItems}
+    ${convertItems}
     <button class="ctx-menu-item" data-action="link">🔗 연결</button>
     <button class="ctx-menu-item" data-action="widget">🗗 위젯으로 보기</button>
     <button class="ctx-menu-item ctx-menu-danger" data-action="delete">🗑 삭제</button>
   `;
   activeEl = menu;
   const pos = placeAt(menu, x, y);
+
+  convertTargets.forEach((c) => {
+    menu.querySelector(`[data-convert="${c.type}"]`).addEventListener('click', () => convertItem(item, c));
+  });
 
   if (isDatelessTodo) {
     menu.querySelector('[data-action="due-today"]').addEventListener('click', async () => {
