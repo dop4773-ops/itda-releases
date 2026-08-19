@@ -1,4 +1,4 @@
-import { toast, errorToast } from './ui-utils.js';
+import { toast, errorToast, escapeHtml } from './ui-utils.js';
 import { mountLinksWidget } from './links-ui.js';
 import { todayStr, dateKey, addDays } from './date-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
@@ -137,11 +137,47 @@ function openLinkPopover(x, y, item) {
   mountLinksWidget(pop.querySelector('.ctx-link-mount'), { type: item.type, id: item.id });
 }
 
+// 메모 우클릭 → "폴더로 이동" 서브메뉴 (애플 메모장처럼 목록에서 바로 폴더 옮기기)
+async function openMoveFolderSubmenu(x, y, item, opts) {
+  let folders = [];
+  try {
+    folders = await window.itda.memoFolders.list();
+  } catch (e) {
+    /* 폴더 목록 실패해도 "미분류"는 계속 고를 수 있게 조용히 무시 */
+  }
+  closeMenu();
+  const menu = document.createElement('div');
+  menu.className = 'ctx-menu';
+  menu.innerHTML = `
+    <button class="ctx-menu-item" data-folder="">📄 미분류</button>
+    ${folders.map((f) => `<button class="ctx-menu-item" data-folder="${f.id}">📁 ${escapeHtml(f.name)}</button>`).join('')}
+  `;
+  activeEl = menu;
+  placeAt(menu, x, y);
+  menu.querySelectorAll('[data-folder]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      closeMenu();
+      const folderId = btn.dataset.folder ? Number(btn.dataset.folder) : null;
+      try {
+        await window.itda.memos.update({ id: item.id, folderId });
+        opts.onMoved?.(item, folderId);
+      } catch (e) {
+        errorToast(e, '폴더를 변경하지 못했어요');
+      }
+    });
+  });
+}
+
 function openMenu(x, y, item, opts) {
   ensureOutsideHandlers();
   closeMenu();
 
   const convertTargets = CONVERT_TARGETS[item.type] || [];
+  const isMemo = item.type === 'memo';
+  const memoItems = isMemo
+    ? `<button class="ctx-menu-item" data-action="pin">${item.isPinned ? '📌 고정 해제' : '📌 상단 고정'}</button>
+    <button class="ctx-menu-item" data-action="move-folder">🗂 폴더로 이동</button>`
+    : '';
 
   // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"(+ 전환 가능하면 전환)만 있는 축소 메뉴
   if (opts.linkOnly) {
@@ -190,6 +226,7 @@ function openMenu(x, y, item, opts) {
   menu.className = 'ctx-menu';
   menu.innerHTML = `
     ${todoItems}
+    ${memoItems}
     ${convertItems}
     <button class="ctx-menu-item" data-action="link">🔗 연결</button>
     <button class="ctx-menu-item" data-action="widget">🗗 위젯으로 보기</button>
@@ -236,6 +273,21 @@ function openMenu(x, y, item, opts) {
       } catch (e) {
         errorToast(e, '완료 처리하지 못했어요');
       }
+    });
+  }
+
+  if (isMemo) {
+    menu.querySelector('[data-action="pin"]').addEventListener('click', async () => {
+      closeMenu();
+      try {
+        const result = await window.itda.memos.togglePin(item.id);
+        opts.onPinToggled?.(item, result.is_pinned);
+      } catch (e) {
+        errorToast(e, '고정 상태를 변경하지 못했어요');
+      }
+    });
+    menu.querySelector('[data-action="move-folder"]').addEventListener('click', () => {
+      openMoveFolderSubmenu(pos.left, pos.top, item, opts);
     });
   }
 

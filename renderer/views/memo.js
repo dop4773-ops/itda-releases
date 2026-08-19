@@ -34,6 +34,22 @@ function deriveTitle(memo) {
   const firstLine = stripHtmlToPlainText(memo.content || '').split('\n')[0].trim();
   return firstLine || '새로운 메모';
 }
+// 애플 메모장처럼 목록을 오늘/지난 7일/이번 해의 월별/지난 해의 연도별로 자동 묶는다.
+// (핀 고정된 메모는 이 그룹과 별도로 맨 위 "고정된 메모" 섹션에 모인다)
+function dateGroupLabel(updatedAt) {
+  const d = new Date((updatedAt || '').replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return '이전';
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfToday - startOfDay) / dayMs);
+  if (diffDays <= 0) return '오늘';
+  if (diffDays <= 7) return '지난 7일';
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}월`;
+  return `${d.getFullYear()}년`;
+}
+
 function deriveSnippet(memo) {
   const lines = stripHtmlToPlainText(memo.content || '')
     .split('\n')
@@ -48,7 +64,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="notes-app">
       <div class="notes-sidebar">
-        <div class="notes-folder-rail" id="m-folderRail"></div>
+        <details class="notes-folder-rail" id="m-folderRail" open></details>
         <div class="notes-sidebar-head">
           <div class="notes-search-box">
             ${SEARCH_ICON}
@@ -110,6 +126,8 @@ export async function mount(root) {
     const totalCount = memos.length;
     const unfiledCount = memos.filter((m) => !m.folder_id).length;
     rail.innerHTML = `
+      <summary class="notes-folder-summary">폴더<span class="notes-folder-toggle-icon">▾</span></summary>
+      <div class="notes-folder-rows">
       <div class="notes-folder-row ${currentFolderId === undefined ? 'active' : ''}" data-folder="all">
         ${FOLDER_ICON}<span class="notes-folder-name">전체 메모</span><span class="notes-folder-count">${totalCount}</span>
       </div>
@@ -127,6 +145,7 @@ export async function mount(root) {
         )
         .join('')}
       <button class="notes-folder-add" id="m-addFolderBtn">${PLUS_ICON} 새 폴더</button>
+      </div>
     `;
 
     rail.querySelectorAll('.notes-folder-row').forEach((row) => {
@@ -193,27 +212,8 @@ export async function mount(root) {
     $('m-bulkDelete').disabled = selected.size === 0;
   }
 
-  function renderList() {
-    renderFolderRail(); // 메모 개수가 바뀌었을 수 있으니(추가/삭제/폴더 이동) 매번 같이 갱신
-    const listEl = $('m-list');
-    const items = [...filteredMemos()].sort((a, b) => {
-      if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned;
-      return (b.updated_at || '').localeCompare(a.updated_at || '');
-    });
-
-    if (items.length === 0) {
-      listEl.innerHTML = emptyStateBlock({
-        icon: MEMO_ICON,
-        title: keyword ? '검색 결과가 없어요' : '메모가 없어요',
-        subtitle: keyword ? '다른 검색어로 시도해보세요' : '+ 버튼을 눌러 새 메모를 만들어보세요',
-      });
-      updateBulkBar([]);
-      return;
-    }
-
-    listEl.innerHTML = items
-      .map(
-        (m) => `
+  function renderItemRow(m) {
+    return `
       <div class="notes-list-item ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
         <div class="notes-list-item-title-row">
           <input type="checkbox" class="notes-list-item-check" data-action="select" data-id="${m.id}" />
@@ -225,9 +225,43 @@ export async function mount(root) {
           <span>${formatRelative(m.updated_at)}</span>
           <span class="notes-list-item-snippet">${escapeHtml(deriveSnippet(m))}</span>
         </div>
-      </div>`
-      )
-      .join('');
+      </div>`;
+  }
+
+  function renderList() {
+    renderFolderRail(); // 메모 개수가 바뀌었을 수 있으니(추가/삭제/폴더 이동) 매번 같이 갱신
+    const listEl = $('m-list');
+    const byUpdatedDesc = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
+    const all = filteredMemos();
+
+    if (all.length === 0) {
+      listEl.innerHTML = emptyStateBlock({
+        icon: MEMO_ICON,
+        title: keyword ? '검색 결과가 없어요' : '메모가 없어요',
+        subtitle: keyword ? '다른 검색어로 시도해보세요' : '+ 버튼을 눌러 새 메모를 만들어보세요',
+      });
+      updateBulkBar([]);
+      return;
+    }
+
+    const pinned = all.filter((m) => m.is_pinned).sort(byUpdatedDesc);
+    const rest = all.filter((m) => !m.is_pinned).sort(byUpdatedDesc);
+
+    let html = '';
+    if (pinned.length) {
+      html += `<div class="notes-list-group-label">📌 고정된 메모</div>` + pinned.map(renderItemRow).join('');
+    }
+    let lastGroup = null;
+    rest.forEach((m) => {
+      const group = dateGroupLabel(m.updated_at);
+      if (group !== lastGroup) {
+        html += `<div class="notes-list-group-label">${group}</div>`;
+        lastGroup = group;
+      }
+      html += renderItemRow(m);
+    });
+    listEl.innerHTML = html;
+    const items = [...pinned, ...rest];
 
     listEl.querySelectorAll('.notes-list-item').forEach((row) => {
       row.addEventListener('click', (e) => {
@@ -236,7 +270,10 @@ export async function mount(root) {
       });
       attachContextMenu(
         row,
-        () => ({ type: 'memo', id: Number(row.dataset.id) }),
+        () => {
+          const id = Number(row.dataset.id);
+          return { type: 'memo', id, isPinned: !!memos.find((m) => m.id === id)?.is_pinned };
+        },
         {
           onDeleted: (item) => {
             memos = memos.filter((m) => m.id !== item.id);
@@ -244,6 +281,18 @@ export async function mount(root) {
             if (selectedId === item.id) selectedId = null;
             renderList();
             renderDetail();
+          },
+          onMoved: (item, folderId) => {
+            const memo = memos.find((m) => m.id === item.id);
+            if (memo) memo.folder_id = folderId;
+            renderList();
+            if (selectedId === item.id) renderDetail();
+          },
+          onPinToggled: (item, isPinned) => {
+            const memo = memos.find((m) => m.id === item.id);
+            if (memo) memo.is_pinned = isPinned;
+            renderList();
+            if (selectedId === item.id) renderDetail();
           },
         }
       );
@@ -295,8 +344,6 @@ export async function mount(root) {
           <button class="btn-icon" id="m-deleteBtn" title="삭제">${TRASH_ICON}</button>
         </div>
       </div>
-      <input type="text" id="m-titleInput" class="notes-title-input" placeholder="제목" value="${escapeHtml(memo.title || '')}" />
-
       <div class="rich-toolbar">
         <button class="rich-btn" id="m-boldBtn" title="굵게">${BOLD_ICON}</button>
         <button class="rich-btn" id="m-checklistBtn" title="체크박스 추가">${CHECKLIST_ICON}</button>
@@ -322,13 +369,8 @@ export async function mount(root) {
       saveTimer = setTimeout(async () => {
         try {
           const cleanContent = sanitizeRichHtml(bodyEl.innerHTML); // 저장 직전에도 한 번 더 정화(붙여넣기 등 대비, a 태그는 여기서 자동으로 벗겨짐)
-          await window.itda.memos.update({
-            id: memo.id,
-            title: $('m-titleInput').value.trim() || null,
-            content: cleanContent,
-          });
+          await window.itda.memos.update({ id: memo.id, content: cleanContent });
           // 목록의 제목/미리보기/정렬도 즉시 반영되도록 로컬 상태 갱신 후 리스트만 다시 그림(상세는 그대로 유지)
-          memo.title = $('m-titleInput').value.trim() || null;
           memo.content = cleanContent;
           memo.updated_at = new Date().toISOString();
           renderList();
@@ -337,7 +379,6 @@ export async function mount(root) {
         }
       }, 500);
     };
-    $('m-titleInput').addEventListener('input', scheduleSave);
     bodyEl.addEventListener('input', scheduleSave);
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);
@@ -566,7 +607,7 @@ export async function mount(root) {
       const { id } = await window.itda.memos.add({ content: '', folderId });
       await load();
       selectMemo(id);
-      $('m-titleInput')?.focus();
+      $('m-bodyInput')?.focus();
     } catch (e) {
       errorToast(e, '메모를 추가하지 못했어요');
     }

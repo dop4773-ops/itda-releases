@@ -721,7 +721,12 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-app{display:grid;grid-template-columns:280px 1fr;gap:0;height:calc(100vh - 140px);min-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
 
 .notes-sidebar{display:flex;flex-direction:column;border-right:1px solid var(--divider);background:var(--bg);min-width:0;min-height:0;}
-.notes-folder-rail{flex-shrink:0;padding:8px;border-bottom:1px solid var(--divider);display:flex;flex-direction:column;gap:1px;max-height:180px;overflow-y:auto;}
+.notes-folder-rail{flex-shrink:0;border-bottom:1px solid var(--divider);max-height:220px;overflow-y:auto;}
+.notes-folder-summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;font-size:11px;font-weight:600;color:var(--text-faint);user-select:none;}
+.notes-folder-summary::-webkit-details-marker{display:none;}
+.notes-folder-toggle-icon{transition:transform .12s;}
+.notes-folder-rail:not([open]) .notes-folder-toggle-icon{transform:rotate(-90deg);}
+.notes-folder-rows{display:flex;flex-direction:column;gap:1px;padding:0 8px 8px;}
 .notes-folder-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-soft);font-size:12.5px;}
 .notes-folder-row:hover{background:var(--surface);}
 .notes-folder-row.active{background:var(--brand-soft);color:var(--brand);font-weight:600;}
@@ -753,6 +758,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-list-item-title{font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0;}
 .notes-list-item-meta{display:flex;gap:6px;font-size:11px;color:var(--text-faint);}
 .notes-list-item-snippet{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;}
+.notes-list-group-label{padding:10px 14px 4px;font-size:11px;font-weight:700;color:var(--text-faint);}
 
 /* min-height:0 필수 — .notes-app이 grid라서 이 열의 기본 min-height는 auto(=내용 높이만큼
    커짐)라 overflow-y:auto가 무시되고 .notes-app의 overflow:hidden에 그냥 잘려버렸었다
@@ -764,9 +770,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-detail-date{font-size:11px;color:var(--text-faint);}
 .notes-detail-toolbar-actions{display:flex;gap:4px;}
 .notes-detail-toolbar-actions .active-pin{color:var(--brand);}
-.notes-title-input{border:none;outline:none;background:transparent;font-size:20px;font-weight:700;color:var(--text);font-family:inherit;padding:10px 0 2px;width:100%;}
-.notes-title-input::placeholder{color:var(--text-faint);}
-.notes-body-input{border:none;outline:none;background:transparent;resize:none;font-size:14px;line-height:1.7;color:var(--text);font-family:inherit;width:100%;flex:1 1 auto;min-height:280px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;}
+.notes-body-input{border:none;outline:none;background:transparent;resize:none;font-size:14px;line-height:1.7;color:var(--text);font-family:inherit;width:100%;flex:1 1 auto;min-height:280px;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;padding-top:14px;}
 .notes-body-input::placeholder{color:var(--text-faint);}
 .notes-body-input[contenteditable]:empty:before{content:attr(data-placeholder);color:var(--text-faint);pointer-events:none;}
 .notes-body-input b,.notes-body-input strong{font-weight:700;}
