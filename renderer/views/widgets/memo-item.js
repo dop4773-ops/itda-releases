@@ -1,10 +1,41 @@
-import { renderBoardWidgetShell, fitWidgetToContent } from '../../shared/widget-ui.js';
-import { escapeHtml } from '../../shared/ui-utils.js';
-import { stripHtmlToPlainText } from '../../shared/rich-text.js';
+/**
+ * 메모 낱개 위젯 — 바탕화면에 카드 형태로 띄워서 그 자리에서 바로 편집할 수 있다.
+ * renderer/views/postit-widget.js(포스트잇 낱개 위젯)와 동일한 패턴: 프레임 없는 투명 창에
+ * widget-card를 그리고, contenteditable 본문을 직접 편집 + 자동저장한다.
+ */
+import { toast, errorToast } from '../../shared/ui-utils.js';
+import {
+  sanitizeRichHtml,
+  toggleBold,
+  toggleUnderline,
+  applyAlign,
+  insertChecklistItem,
+  bindChecklistToggle,
+  bindChecklistEnterKey,
+  bindChecklistBackspaceKey,
+  linkifyUrls,
+} from '../../shared/rich-text.js';
 import { STICKY_COLORS } from '../../shared/theme.js';
+
+const BOLD_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
+const UNDERLINE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 4v7a6 6 0 0012 0V4"/><path d="M4 20h16"/></svg>`;
+const CHECKLIST_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="7" height="7" rx="1.5"/><path d="M4.5 6.5l1.3 1.3L8.5 5"/><path d="M13 5h8M13 12h8M13 19h8"/><rect x="3" y="13" width="7" height="7" rx="1.5"/></svg>`;
+const LOCK_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>`;
+const LOCK_OPEN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 017.8-1.3"/></svg>`;
+const MINIMIZE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg>`;
+const CLOSE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+
+const isMac = navigator.platform?.toUpperCase().includes('MAC');
+const MOD_LABEL = isMac ? '⌘' : 'Ctrl+';
+const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
 
 function getIdFromQuery() {
   return Number(new URLSearchParams(location.search).get('id'));
+}
+
+function bindWindowControls() {
+  document.getElementById('w-minimize')?.addEventListener('click', () => window.itda.widgetControls.minimize());
+  document.getElementById('w-close')?.addEventListener('click', () => window.close()); // 창만 닫힘 — 데이터는 그대로
 }
 
 async function mount() {
@@ -28,22 +59,26 @@ async function mount() {
     return;
   }
 
+  // 잠긴 메모는 위젯에서 비밀번호를 입력받는 UI가 없으므로(메인 화면에만 있음) 편집 화면 대신
+  // 안내만 보여주고, 잠금을 풀려면 메인 화면으로 가라고 안내한다.
   if (memo.is_locked) {
-    renderBoardWidgetShell(root, {
-      title: '메모',
-      bodyHtml: `<div style="font-size:12px;color:var(--bw-soft);text-align:center;padding:12px 0;">🔒 잠긴 메모예요<br/>메모 화면에서 열어주세요</div>`,
-      footerLabel: '메모에서 열기',
-      footerRoute: '#/memo',
-    });
-    fitWidgetToContent(root);
+    root.innerHTML = `
+      <div class="widget-card" style="background:#E8E8EC;">
+        <div class="widget-titlebar widget-controls-hover">
+          <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+          <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-size:12px;color:rgba(0,0,0,.6);">
+          <div>🔒 잠긴 메모예요</div>
+          <div id="w-openMain" style="text-decoration:underline;cursor:pointer;-webkit-app-region:no-drag;">메모 화면에서 열기</div>
+        </div>
+      </div>`;
+    bindWindowControls();
+    document.getElementById('w-openMain')?.addEventListener('click', () => window.itda.widgets.openMainApp('#/memo'));
     return;
   }
 
-  const plain = stripHtmlToPlainText(memo.content || '');
-  const title = (memo.title && memo.title.trim()) || plain.split('\n')[0].trim() || '새로운 메모';
-  const bodyText = memo.title && memo.title.trim() ? plain : plain.split('\n').slice(1).join(' ');
-
-  // 첨부된 첫 번째 사진 — 메모 목록의 썸네일과 같은 원칙(첫 사진만, 지연 로드)으로 위젯에도 보여준다.
+  // 첨부된 첫 번째 사진 — 위젯에서 사진을 새로 추가/삭제하는 기능은 없다(메인 메모 화면에서만).
   let attachments = [];
   try {
     attachments = await window.itda.memoAttachments.list(id);
@@ -52,64 +87,140 @@ async function mount() {
   }
   const firstImage = attachments.find((a) => a.mime_type?.startsWith('image/'));
 
-  // 포스트잇과 같은 개인화 팔레트(STICKY_COLORS)를 위젯 배경색으로도 고를 수 있게 —
-  // memos.color_hex 컬럼은 이미 있었지만 지금까지 메모 화면/위젯 어디에도 UI가 없었다.
-  const colorRowHtml = `
-    <div class="mi-color-row">
-      ${STICKY_COLORS.map(
-        (c) => `<span class="mi-color-swatch ${c === memo.color_hex ? 'selected' : ''}" data-color="${c}" style="background:${c};"></span>`
-      ).join('')}
+  root.innerHTML = `
+    <div class="widget-card" style="background:${memo.color_hex || '#FBE28A'}">
+      <div class="widget-titlebar widget-controls-hover">
+        <button class="widget-btn" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
+        <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
+        <button class="widget-btn" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
+        <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
+        <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+        <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+      </div>
+      <div class="mi-color-row">
+        ${STICKY_COLORS.map(
+          (c) => `<span class="mi-color-swatch ${c === memo.color_hex ? 'selected' : ''}" data-color="${c}" style="background:${c};"></span>`
+        ).join('')}
+      </div>
+      ${firstImage ? `<div class="mi-photo" id="mi-photo"></div>` : ''}
+      <div id="w-content" class="widget-textarea" contenteditable="true" data-placeholder="메모를 입력하세요…">${sanitizeRichHtml(memo.content || '')}</div>
     </div>
+    <div class="toast" id="toast"></div>
   `;
 
-  const bodyHtml = `
-    ${colorRowHtml}
-    ${firstImage ? `<div class="mi-photo" id="mi-photo"></div>` : ''}
-    <div style="font-size:12px;font-weight:600;color:var(--bw-text);margin-bottom:4px;">${escapeHtml(title)}</div>
-    <div style="font-size:11.5px;line-height:1.5;color:var(--bw-soft);white-space:pre-wrap;word-break:break-word;">${escapeHtml(bodyText) || '<span style="color:var(--bw-faint);">내용 없음</span>'}</div>
-  `;
+  const shell = root.querySelector('.widget-card');
+  const contentEl = document.getElementById('w-content');
+  linkifyUrls(contentEl); // 불러올 때 한 번만 — 입력 중엔 호출 금지(커서 깨짐)
 
-  renderBoardWidgetShell(root, {
-    title: '메모',
-    bodyHtml,
-    footerLabel: '메모에서 열기',
-    footerRoute: '#/memo',
+  if (firstImage) {
+    try {
+      const dataUrl = await window.itda.memoAttachments.getImageData(firstImage.id);
+      const photoEl = root.querySelector('#mi-photo');
+      if (dataUrl && photoEl) photoEl.innerHTML = `<img src="${dataUrl}" alt="" />`;
+    } catch (e) {
+      /* 사진 하나 실패해도 나머지 위젯 표시에는 영향 없게 조용히 무시 */
+    }
+  }
+
+  let saveTimer = null;
+  const scheduleSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        const cleanContent = sanitizeRichHtml(contentEl.innerHTML);
+        await window.itda.memos.update({ id, content: cleanContent });
+      } catch (err) {
+        errorToast(err, '저장하지 못했어요');
+      }
+    }, 500);
+  };
+  contentEl.addEventListener('input', scheduleSave);
+  bindChecklistToggle(contentEl, scheduleSave);
+  bindChecklistEnterKey(contentEl);
+  bindChecklistBackspaceKey(contentEl, scheduleSave);
+
+  // 엑셀/워드처럼 서식 단축키 — 메인 메모 화면(renderer/views/memo.js)과 동일한 조합.
+  contentEl.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const key = e.key.toLowerCase();
+    if (!e.shiftKey && key === 'b') {
+      e.preventDefault();
+      toggleBold(contentEl);
+      scheduleSave();
+    } else if (!e.shiftKey && key === 'u') {
+      e.preventDefault();
+      toggleUnderline(contentEl);
+      scheduleSave();
+    } else if (e.shiftKey && key === 'l') {
+      e.preventDefault();
+      applyAlign(contentEl, 'left');
+      scheduleSave();
+    } else if (e.shiftKey && key === 'e') {
+      e.preventDefault();
+      applyAlign(contentEl, 'center');
+      scheduleSave();
+    } else if (e.shiftKey && key === 'r') {
+      e.preventDefault();
+      applyAlign(contentEl, 'right');
+      scheduleSave();
+    }
   });
 
-  const shell = root.querySelector('.board-widget');
-  if (shell) shell.style.setProperty('--bw-bg', memo.color_hex || '#FBE28A');
+  document.getElementById('w-bold').addEventListener('click', () => {
+    toggleBold(contentEl);
+    scheduleSave();
+  });
+  document.getElementById('w-underline').addEventListener('click', () => {
+    toggleUnderline(contentEl);
+    scheduleSave();
+  });
+  document.getElementById('w-checklist').addEventListener('click', () => {
+    insertChecklistItem(contentEl);
+    scheduleSave();
+  });
+
+  document.getElementById('w-lock').addEventListener('click', async () => {
+    try {
+      const status = await window.itda.auth.getStatus();
+      if (!status.enabled) {
+        toast('먼저 설정 > 보안에서 비밀번호를 설정해주세요');
+        return;
+      }
+      await window.itda.memos.toggleLock(id);
+      mount(); // 잠금 화면으로 다시 그림 — 위젯에는 잠금 해제용 비밀번호 입력 UI가 없음(메인 화면 전용)
+    } catch (err) {
+      errorToast(err, '잠금 상태를 변경하지 못했어요');
+    }
+  });
 
   root.querySelectorAll('.mi-color-swatch').forEach((sw) => {
     sw.addEventListener('click', async () => {
       const colorHex = sw.dataset.color;
       try {
         await window.itda.memos.update({ id, colorHex });
-        if (shell) shell.style.setProperty('--bw-bg', colorHex);
+        shell.style.background = colorHex;
         root.querySelectorAll('.mi-color-swatch').forEach((s) => s.classList.toggle('selected', s === sw));
-      } catch (e) {
-        /* 위젯은 별도 토스트 UI가 없으므로 실패해도 조용히 무시 — 다음에 다시 시도 가능 */
+      } catch (err) {
+        errorToast(err, '색상을 바꾸지 못했어요');
       }
     });
   });
 
-  fitWidgetToContent(root);
-
-  if (firstImage) {
-    try {
-      const dataUrl = await window.itda.memoAttachments.getImageData(firstImage.id);
-      const photoEl = root.querySelector('#mi-photo');
-      if (dataUrl && photoEl) {
-        photoEl.innerHTML = `<img src="${dataUrl}" alt="" />`;
-        fitWidgetToContent(root); // 사진이 로드되면서 높이가 늘어났으니 다시 맞춘다
-      }
-    } catch (e) {
-      /* 사진 하나 실패해도 나머지 위젯 표시에는 영향 없게 조용히 무시 */
-    }
-  }
+  bindWindowControls();
 }
 
 mount();
 
+// 위젯 창은 항상 "지금 열려있는 창 자체"가 곧 닫을 대상이라 조건 없이 Esc=닫기
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') window.close();
+});
+
+// 메인 창(또는 다른 위젯)에서 이 메모가 바뀌면 위젯도 반영한다. 지금 이 위젯 안에서 타이핑
+// 중이면(방금 자기 자신이 저장해서 온 브로드캐스트일 수도 있음) 건드리지 않는다 — 안 그러면
+// 커서가 끊기거나 입력 중인 글자가 덮어써질 수 있다.
 window.itda.onDataChanged(({ entity, id: changedId }) => {
-  if (entity === 'memo' && changedId === getIdFromQuery()) mount();
+  if (entity !== 'memo' || changedId !== getIdFromQuery()) return;
+  if (document.activeElement?.id === 'w-content') return;
+  mount();
 });

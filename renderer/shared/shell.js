@@ -424,6 +424,17 @@ export async function setFontFamily(key) {
 // 윈도우에서 Alt 키를 두 번 연달아 누르거나 누르고 있으면 단축키 목록을 보여준다
 // (main.js가 네이티브 메뉴를 꺼둬서 Alt가 메뉴 포커스로 뺏기지 않고 여기로 온다).
 // 다른 키와 조합해서 누른 거면(=진짜 단축키 사용) 오버레이 대상이 아니다.
+// 지금 열려있는 화면이 자기 화면 전용 단축키(예: 메모의 굵게/정렬)를 등록해두면
+// Alt 오버레이가 전역 단축키 목록 아래에 이어서 보여준다. rebind 대상이 아닌 하드코딩된 단축키라
+// SHORTCUTS(shortcuts.js)의 id/accelerator 체계 대신 {label, keys}만 받는 훨씬 단순한 형태.
+// 화면이 바뀔 때마다 그 화면의 mount()가 등록하고 언마운트 시 반드시 비워야 다른 화면에서도 안 남는다.
+let screenShortcutsTitle = '';
+let screenShortcuts = [];
+export function setScreenShortcuts(title, list) {
+  screenShortcutsTitle = title || '';
+  screenShortcuts = list || [];
+}
+
 function initAltShortcutOverlay() {
   let overlayEl = null;
   let holdTimer = null;
@@ -448,6 +459,22 @@ function initAltShortcutOverlay() {
             </div>`
           ).join('')}
         </div>
+        ${
+          screenShortcuts.length
+            ? `<div class="alt-shortcuts-subhead">${escapeHtml(screenShortcutsTitle)}</div>
+               <div class="alt-shortcuts-list">
+                 ${screenShortcuts
+                   .map(
+                     (s) => `
+                   <div class="alt-shortcuts-row">
+                     <span>${escapeHtml(s.label)}</span>
+                     <kbd>${escapeHtml(s.keys)}</kbd>
+                   </div>`
+                   )
+                   .join('')}
+               </div>`
+            : ''
+        }
         <p class="alt-shortcuts-hint">Alt를 떼거나 Esc를 누르면 닫혀요</p>
       </div>`;
     return el;

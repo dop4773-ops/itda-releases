@@ -19,6 +19,7 @@ import {
   linkifyUrls,
 } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
+import { setScreenShortcuts } from '../shared/shell.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 import { promptText } from '../shared/text-prompt.js';
@@ -52,6 +53,15 @@ const isMac = navigator.platform?.toUpperCase().includes('MAC');
 const NEW_MEMO_SHORTCUT_LABEL = isMac ? '⌘N' : 'Ctrl+N';
 const MOD_LABEL = isMac ? '⌘' : 'Ctrl+';
 const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
+// Alt를 누르고 있으면 뜨는 전역 단축키 오버레이(shell.js)에 이 화면 전용 단축키를 얹어서 보여준다.
+const MEMO_SCREEN_SHORTCUTS = [
+  { label: '새 메모', keys: NEW_MEMO_SHORTCUT_LABEL },
+  { label: '굵게', keys: `${MOD_LABEL}B` },
+  { label: '밑줄', keys: `${MOD_LABEL}U` },
+  { label: '왼쪽 정렬', keys: `${MOD_SHIFT_LABEL}L` },
+  { label: '가운데 정렬', keys: `${MOD_SHIFT_LABEL}E` },
+  { label: '오른쪽 정렬', keys: `${MOD_SHIFT_LABEL}R` },
+];
 
 // 저장된 content(HTML)의 첫 줄을 "제목 없는 메모"의 표시용 제목으로 쓴다 (애플 메모장과 동일한 관습).
 function deriveTitle(memo) {
@@ -876,6 +886,7 @@ export async function mount(root) {
   }
   await load();
   await loadFolders();
+  setScreenShortcuts('메모', MEMO_SCREEN_SHORTCUTS);
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
@@ -892,5 +903,6 @@ export async function mount(root) {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
     offDataChanged?.();
+    setScreenShortcuts(null, []); // 다른 화면으로 이동하면 이 화면 전용 단축키는 오버레이에서 빠져야 함
   };
 }

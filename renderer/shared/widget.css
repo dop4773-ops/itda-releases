@@ -73,8 +73,8 @@ body {
 .widget-textarea::placeholder { color: rgba(0, 0, 0, 0.35); }
 .widget-textarea[contenteditable]:empty:before { content: attr(data-placeholder); color: rgba(0, 0, 0, 0.35); }
 .widget-textarea b, .widget-textarea strong { font-weight: 700; }
-.widget-textarea .mc-item{display:flex;align-items:flex-start;gap:5px;margin:2px 0;}
-.widget-textarea .mc-item input[type="checkbox"]{margin-top:2px;flex-shrink:0;cursor:pointer;}
+.widget-textarea .mc-item{display:flex;align-items:center;gap:5px;margin:2px 0;}
+.widget-textarea .mc-item input[type="checkbox"]{flex-shrink:0;cursor:pointer;}
 .widget-textarea .mc-item .mc-text{flex:1;min-width:0;word-break:break-word;white-space:pre-wrap;}
 .widget-textarea .mc-item.mc-item-done{color:rgba(0,0,0,.4);text-decoration:line-through;}
 .widget-textarea a{color:#2255cc;text-decoration:underline;cursor:pointer;}
@@ -282,12 +282,14 @@ body {
 .bw-mini-cal .month-event-pill,
 .bw-mini-cal .month-more { display: none; } /* 공간이 좁아 숫자/오늘 표시만, 개별 일정 pill은 생략 */
 
-/* ================= 메모 낱개 위젯 — 포스트잇처럼 배경색을 고를 수 있는 팔레트 ================= */
-.mi-color-row { display: flex; gap: 5px; margin-bottom: 8px; }
+/* ================= 메모 낱개 위젯 — 포스트잇처럼 배경색을 고를 수 있는 팔레트 =================
+   widget-card 전체가 기본 -webkit-app-region:drag라서, 클릭이 실제로 먹혀야 하는 이 안의
+   조작 요소들(색상 스와치 등)엔 widget-btn/widget-textarea처럼 no-drag를 따로 걸어줘야 한다. */
+.mi-color-row { display: flex; gap: 5px; margin-bottom: 8px; -webkit-app-region: no-drag; }
 .mi-color-swatch { width: 14px; height: 14px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; }
 .mi-color-swatch.selected { border-color: rgba(0, 0, 0, .5); }
 /* object-fit:contain(자르지 않고 비율 유지) + width:100%로 위젯 너비에 맞춰 사진 자체가
    줄어들고, height:auto라 세로 크기는 사진 비율을 따라간다(가로 사진은 낮게, 세로 사진은
    높게) — 다만 세로로 너무 길어지지 않게 max-height로만 상한을 둔다. */
-.mi-photo { width: 100%; max-height: 160px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: rgba(0, 0, 0, .04); display: flex; align-items: center; justify-content: center; }
+.mi-photo { width: 100%; max-height: 160px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: rgba(0, 0, 0, .04); display: flex; align-items: center; justify-content: center; -webkit-app-region: no-drag; }
 .mi-photo img { width: 100%; height: auto; max-height: 160px; object-fit: contain; display: block; }
