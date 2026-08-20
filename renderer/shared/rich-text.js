@@ -3,23 +3,31 @@
  * 절대 원칙: 허용 목록(whitelist) 방식만 쓴다 — 위험한 태그를 나열해서 막는 게 아니라,
  * 허용된 몇 개 태그·속성 외에는 전부 벗겨내거나 삭제한다.
  *
- * 허용 태그: b, strong, i, em, u, span(font-size/color만 / item-mention 칩), div, p, br,
+ * 허용 태그: a(href가 http(s):로 시작할 때만, 링크 삽입 버튼으로 명시적으로 넣은 것만 — 아래 설명 참고),
+ *           b, strong, i, em, u, span(font-size/color만 / item-mention 칩), div/p(text-align만), br,
  *           input(type=checkbox만, 체크리스트 전용 — contenteditable=false로 고정해서 텍스트 편집과 분리)
- * 허용 속성: span의 style 중 font-size(10~28px 범위로 클램프)와 color(#RRGGBB 형식만) 둘만,
+ * 허용 속성: a의 href(http/https만) + target/rel/contenteditable은 항상 강제로 다시 부여,
+ *           span의 style 중 font-size(10~28px 범위로 클램프)와 color(#RRGGBB 형식만) 둘만,
+ *           div/p의 style 중 text-align(left/center/right/justify만),
  *           input의 type/checked만,
  *           span.item-mention의 data-type/data-id(연결된 항목 칩 — @검색으로 삽입, contenteditable=false로 고정)
- * 그 외 모든 태그/속성/이벤트핸들러/href/src 등은 제거된다.
- * a(링크)는 저장 시 항상 벗겨진다 — 하이퍼링크는 저장 데이터가 아니라 "열 때마다" linkifyUrls()로
- * 화면에만 입히는 방식이라(아래 설명 참고), href를 그대로 신뢰해서 저장할 필요가 없다.
+ * 그 외 모든 태그/속성/이벤트핸들러/src 등은 제거된다.
+ * a(링크)는 두 가지 경로로만 생긴다: (1) 링크 삽입 버튼(insertLink)으로 직접 넣은 것 — href를
+ * 검증한 뒤 그대로 저장한다. (2) 본문에 타이핑/붙여넣기된 URL 문자열 — 이건 저장 시 순수
+ * 텍스트로만 남고, 열 때마다 linkifyUrls()가 화면에만 클릭 가능한 링크를 입힌다(href를 저장/신뢰할
+ * 필요 없음). 붙여넣기 등으로 들어온 <a>는 href가 안전한 http(s) 형식일 때만 살아남고, 아니면
+ * 태그만 벗겨져 텍스트만 남는다(javascript: 등 위험한 href 방지).
  */
 
-const ALLOWED_TAGS = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'P', 'BR']);
+const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'P', 'BR']);
 // script/style/iframe 등은 "태그만 벗기기"가 아니라 내용까지 통째로 삭제한다
 // (벗기면 스크립트 원문이 그냥 텍스트로 노출되어 지저분해짐)
 const REMOVE_ENTIRELY_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'SVG', 'IMG']);
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 28;
 const SAFE_HEX_COLOR = /^#[0-9a-f]{6}$/i; // style에 CSS 인젝션(expression/url 등) 못 들어오게 이 형식만 허용
+const SAFE_HREF = /^https?:\/\//i; // javascript:/data: 등 위험한 스킴 차단
+const SAFE_TEXT_ALIGN = new Set(['left', 'center', 'right', 'justify']);
 const MENTION_LINK_TYPES = new Set(['todo', 'event', 'memo', 'postit']);
 
 // 브라우저는 style.color에 뭘 넣든(hex, named color 등) "rgb(r, g, b)"로 정규화해서 돌려준다 —
@@ -69,6 +77,25 @@ function sanitizeElement(el) {
       continue;
     }
 
+    // 링크(a) — href가 안전한 http(s) 형식일 때만 살아남는다(체크박스/멘션 칩과 마찬가지로
+    // 원자적 요소라 자식까지 재귀검사하지 않는다). target/rel/contenteditable은 항상 강제로
+    // 다시 부여해서, 개발자도구 등으로 지웠거나 붙여넣기로 이상한 값이 들어와도 클릭 시
+    // 항상 새 창(외부 브라우저)으로 열리고 텍스트 편집 대상이 아니게 보장한다.
+    if (child.tagName === 'A') {
+      const href = child.getAttribute('href') || '';
+      if (!SAFE_HREF.test(href)) {
+        while (child.firstChild) el.insertBefore(child.firstChild, child);
+        el.removeChild(child);
+        continue;
+      }
+      Array.from(child.attributes).forEach((attr) => child.removeAttribute(attr.name));
+      child.setAttribute('href', href);
+      child.setAttribute('target', '_blank');
+      child.setAttribute('rel', 'noopener noreferrer');
+      child.setAttribute('contenteditable', 'false');
+      continue;
+    }
+
     // "@검색" 연결 칩(span.item-mention) — data-type/data-id가 유효할 때만 속성을 보존하고,
     // 체크박스와 마찬가지로 "원자적" 요소라 자식(텍스트)까지 재귀검사하지 않고 그대로 둔다.
     // data-type이 유효하지 않으면(오염된 데이터) 칩 취급을 포기하고 태그만 벗겨 텍스트만 남긴다.
@@ -93,6 +120,7 @@ function sanitizeElement(el) {
     // 체크리스트 줄(div.mc-item) · 체크리스트 텍스트칸(span.mc-text)의 클래스만 검증 후 재부여
     const fontSize = child.tagName === 'SPAN' ? child.style.fontSize : '';
     const color = child.tagName === 'SPAN' ? child.style.color : '';
+    const textAlign = child.tagName === 'DIV' || child.tagName === 'P' ? child.style.textAlign : '';
     const isChecklistLine = child.tagName === 'DIV' && child.classList.contains('mc-item');
     const isChecklistText = child.tagName === 'SPAN' && child.classList.contains('mc-text');
     Array.from(child.attributes).forEach((attr) => child.removeAttribute(attr.name));
@@ -108,6 +136,7 @@ function sanitizeElement(el) {
       const hex = rgbStringToHex(color);
       if (hex && SAFE_HEX_COLOR.test(hex)) child.style.color = hex;
     }
+    if (textAlign && SAFE_TEXT_ALIGN.has(textAlign)) child.style.textAlign = textAlign;
     if (isChecklistLine) child.classList.add('mc-item');
     // 체크리스트 줄의 텍스트칸은 flexbox에서 flex:1로 늘어나야 체크박스 옆에서 자연스럽게
     // 줄바꿈되므로(순수 텍스트 노드는 CSS로 flex:1을 줄 수 없어 이 span이 꼭 필요함) 클래스를 보존한다
@@ -167,6 +196,52 @@ export function toggleBold(editableEl) {
   document.execCommand('bold');
 }
 
+export function toggleUnderline(editableEl) {
+  if (typeof document.execCommand !== 'function') return;
+  editableEl.focus();
+  document.execCommand('underline');
+}
+
+const ALIGN_COMMANDS = { left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight' };
+export function applyAlign(editableEl, align) {
+  if (typeof document.execCommand !== 'function') return;
+  const cmd = ALIGN_COMMANDS[align];
+  if (!cmd) return;
+  editableEl.focus();
+  document.execCommand(cmd);
+}
+
+/**
+ * 커서/선택 영역에 링크를 삽입한다. 텍스트를 선택한 채로 호출하면 그 텍스트가 링크의
+ * 표시 문구가 되고, 선택 없이 호출하면 URL 자체를 문구로 쓴다. 링크는 체크박스/멘션 칩과
+ * 같은 "원자적" 요소(contenteditable=false)라 삽입 뒤 폭 0 문자를 하나 더 심어서
+ * 캐럿이 링크 바로 뒤에서 이어 타이핑할 자리를 만들어준다.
+ */
+export function insertLink(editableEl, url) {
+  editableEl.focus();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const displayText = range.toString() || url;
+  range.deleteContents();
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.setAttribute('contenteditable', 'false');
+  a.textContent = displayText;
+  range.insertNode(a);
+
+  const caretAnchor = document.createTextNode('\u200B');
+  a.after(caretAnchor);
+  const newRange = document.createRange();
+  newRange.setStart(caretAnchor, 1);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+}
+
 export function applyFontSize(editableEl, px) {
   if (typeof document.execCommand !== 'function') return;
   editableEl.focus();
@@ -199,41 +274,54 @@ export function applyTextColor(editableEl, hex) {
 }
 
 /**
- * 커서 위치에 체크리스트 한 줄을 삽입한다. 체크박스는 contenteditable=false라서
+ * 커서/선택이 속한 "줄"(블록) 전체를 체크리스트 줄로 바꾼다. 체크박스는 contenteditable=false라서
  * 클릭하면 텍스트 편집 없이 바로 체크만 토글된다.
  *
- * execCommand('insertHTML', ...)로 통째로 문자열을 넣던 예전 방식은 삽입 직후 캐럿이
- * 어디에 놓이는지가 브라우저마다/삽입 위치마다 불안정해서, "체크박스를 만들고 바로 타이핑하면
- * 글자가 체크박스보다 앞에 써지고 체크박스가 뒤로 밀리는" 문제가 있었다. 그래서 DOM 노드를
- * 직접 만들고 Range/Selection API로 캐럿 위치를 명시적으로 지정하는 방식으로 바꿨다.
- * 텍스트가 들어갈 자리를 별도 <span class="mc-text">로 감싸는 이유는, flexbox에서
- * flex:1을 줄 수 있는 대상이 element뿐이라서다(순수 텍스트 노드는 flex:1을 못 받아서
- * 체크박스 옆에서 자연스럽게 줄바꿈되지 않고 좁은 칸에 눌린 것처럼 보이는 문제가 있었음).
+ * 예전엔 range.deleteContents()로 커서/선택 위치의 내용을 지우고 그 자리에 빈 체크박스를
+ * 끼워넣었는데, 그러면 (1) 텍스트를 드래그해서 선택한 채로 누르면 그 텍스트가 통째로
+ * 사라지고, (2) 문장 중간에 커서만 두고 눌러도 그 지점에서 문장이 반으로 쪼개지는 문제가
+ * 있었다(애플 메모장은 항상 줄 전체 앞에 체크박스가 붙지 커서 위치에서 쪼개지지 않음).
+ * 그래서 커서/선택이 어디에 있든 "그 줄 전체"를 찾아서(div/p 블록, 아직 줄바꿈이 없는
+ * 첫 줄이면 지금까지 입력된 내용 전체) 원래 서식(굵게/색 등)까지 그대로 유지한 채
+ * mc-text로 옮기고 체크박스만 맨 앞에 붙인다 — 텍스트는 절대 지워지지 않는다.
  */
 export function insertChecklistItem(editableEl) {
   editableEl.focus();
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  range.deleteContents();
+  const anchorNode = sel.anchorNode;
+  const startEl = anchorNode && anchorNode.nodeType === 1 ? anchorNode : anchorNode && anchorNode.parentElement;
+  if (!startEl || !editableEl.contains(startEl)) return;
 
-  const line = document.createElement('div');
-  line.className = 'mc-item';
+  let lineEl = startEl.closest('div, p');
+  if (!lineEl || lineEl === editableEl) {
+    // 아직 줄바꿈으로 나뉜 블록이 없는 첫 줄 — 지금까지 입력된 내용 전체를 한 줄로 감싼다.
+    lineEl = document.createElement('div');
+    while (editableEl.firstChild) lineEl.appendChild(editableEl.firstChild);
+    editableEl.appendChild(lineEl);
+  }
+  if (lineEl.classList.contains('mc-item')) return; // 이미 체크리스트 줄이면 중복 적용 안 함
+
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.setAttribute('contenteditable', 'false');
   const textSpan = document.createElement('span');
   textSpan.className = 'mc-text';
-  const caretAnchor = document.createTextNode('\u200B'); // 캐럿이 실제로 앉을 자리(폭 0 문자, 화면엔 안 보임)
-  textSpan.appendChild(caretAnchor);
-  line.appendChild(checkbox);
-  line.appendChild(textSpan);
+  while (lineEl.firstChild) textSpan.appendChild(lineEl.firstChild); // 서식(굵게/색 등) 그대로 유지한 채 옮김
 
-  range.insertNode(line);
+  if (textSpan.textContent.replace(/\u200B/g, '').trim() === '') {
+    // 원래 빈 줄이었으면(<br>만 있었거나 완전히 빈 줄) 캐럿이 앉을 자리만 남긴다
+    textSpan.innerHTML = '';
+    textSpan.appendChild(document.createTextNode('\u200B'));
+  }
+
+  lineEl.classList.add('mc-item');
+  lineEl.appendChild(checkbox);
+  lineEl.appendChild(textSpan);
 
   const newRange = document.createRange();
-  newRange.setStart(caretAnchor, 1); // 폭 0 문자 바로 뒤 — 여기서부터 타이핑하면 span 안에 이어서 써짐
-  newRange.collapse(true);
+  newRange.selectNodeContents(textSpan);
+  newRange.collapse(false); // 캐럿은 옮겨진 텍스트 맨 끝에 — 바로 이어서 타이핑 가능
   sel.removeAllRanges();
   sel.addRange(newRange);
 }
@@ -308,6 +396,52 @@ export function bindChecklistEnterKey(editableEl) {
     r.collapse(true);
     sel.removeAllRanges();
     sel.addRange(r);
+  });
+}
+
+// 커서가 체크리스트 텍스트칸(mc-text)의 맨 앞(실제 글자가 하나도 없는 위치)에 있는지 검사한다.
+// 폭 0 문자(\u200B)는 화면에 안 보이는 캐럿 자리표시일 뿐이라 "글자"로 치지 않는다.
+function isCaretAtTextSpanStart(range, textSpan) {
+  const preRange = document.createRange();
+  preRange.selectNodeContents(textSpan);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  return preRange.toString().replace(/\u200B/g, '').length === 0;
+}
+
+/**
+ * 체크리스트 줄의 맨 앞에서 Backspace를 누르면(애플 메모장처럼) 한 번에 체크박스만 떼고
+ * 텍스트는 그대로 살아있는 일반 줄로 되돌린다. 원래는 체크박스가 contenteditable=false
+ * "원자적" 섬이라 브라우저 기본 삭제 동작이 애매하게 걸려서 두 번 눌러야 했다.
+ * @param {HTMLElement} editableEl
+ * @param {() => void} [onChange] - DOM을 직접 조작하는 처리라 브라우저의 기본 input 이벤트가
+ *   안 뜬다 — 저장이 필요하면 호출부에서 scheduleSave 등을 넘겨야 한다.
+ */
+export function bindChecklistBackspaceKey(editableEl, onChange) {
+  editableEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Backspace') return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const startEl = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+    const textSpan = startEl?.closest?.('.mc-text');
+    if (!textSpan || !editableEl.contains(textSpan)) return;
+    if (!isCaretAtTextSpanStart(range, textSpan)) return;
+
+    e.preventDefault();
+    const line = textSpan.closest('.mc-item');
+    if (!line) return;
+
+    line.querySelector('input[type="checkbox"]')?.remove();
+    line.classList.remove('mc-item', 'mc-item-done');
+    while (textSpan.firstChild) line.insertBefore(textSpan.firstChild, textSpan);
+    textSpan.remove();
+
+    const r = document.createRange();
+    r.selectNodeContents(line);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+    onChange?.();
   });
 }
 

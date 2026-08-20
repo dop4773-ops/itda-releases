@@ -237,6 +237,10 @@ function runLightweightMigrations(db) {
     db.exec(`CREATE INDEX IF NOT EXISTS idx_memos_folder ON memos(folder_id) WHERE deleted_at IS NULL`);
     console.log('[itda] 마이그레이션: memos.folder_id 컬럼 추가');
   }
+  if (!hasColumn('memos', 'is_locked')) {
+    db.exec(`ALTER TABLE memos ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0`);
+    console.log('[itda] 마이그레이션: memos.is_locked 컬럼 추가');
+  }
 }
 
 module.exports = { initDb, runLightweightMigrations };

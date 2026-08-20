@@ -3,7 +3,21 @@ import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { bindHashtagAutoTag } from '../shared/hashtag.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
-import { sanitizeRichHtml, stripHtmlToPlainText, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
+import {
+  sanitizeRichHtml,
+  stripHtmlToPlainText,
+  toggleBold,
+  toggleUnderline,
+  applyAlign,
+  insertLink,
+  applyFontSize,
+  applyTextColor,
+  insertChecklistItem,
+  bindChecklistToggle,
+  bindChecklistEnterKey,
+  bindChecklistBackspaceKey,
+  linkifyUrls,
+} from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
@@ -22,11 +36,22 @@ const FILE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" s
 const SMALL_X_ICON = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const LINK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07L12.5 19.5"/></svg>`;
 const FOLDER_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>`;
+const UNDERLINE_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 4v7a6 6 0 0012 0V4"/><path d="M4 20h16"/></svg>`;
+const ALIGN_LEFT_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M4 12h10M4 18h14"/></svg>`;
+const ALIGN_CENTER_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M7 12h10M5 18h14"/></svg>`;
+const ALIGN_RIGHT_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 6h16M10 12h10M6 18h14"/></svg>`;
+const URL_LINK_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07L12.5 19.5"/></svg>`;
+const PHOTO_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 20"/></svg>`;
+const LOCK_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>`;
+const LOCK_OPEN_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 017.8-1.3"/></svg>`;
+const CLIP_BADGE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21.44 11.05l-9.19 9.19a5 5 0 01-7.07-7.07l9.19-9.19a3.5 3.5 0 014.95 4.95l-9.19 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>`;
 
 // "새 메모" 단축키 — 화면 전체 커스터마이즈 대상인 설정 > 단축키(shortcuts.js)까지 갈 정도로
 // 자주 바꿀 일은 없는 화면 전용 동작이라, 고정 단축키로 두고 이 화면이 떠 있을 때만 반응한다.
 const isMac = navigator.platform?.toUpperCase().includes('MAC');
 const NEW_MEMO_SHORTCUT_LABEL = isMac ? '⌘N' : 'Ctrl+N';
+const MOD_LABEL = isMac ? '⌘' : 'Ctrl+';
+const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
 
 // 저장된 content(HTML)의 첫 줄을 "제목 없는 메모"의 표시용 제목으로 쓴다 (애플 메모장과 동일한 관습).
 function deriveTitle(memo) {
@@ -64,7 +89,7 @@ export async function mount(root) {
   root.innerHTML = `
     <div class="notes-app">
       <div class="notes-sidebar">
-        <details class="notes-folder-rail" id="m-folderRail" open></details>
+        <details class="notes-folder-rail" id="m-folderRail"></details>
         <div class="notes-sidebar-head">
           <div class="notes-search-box">
             ${SEARCH_ICON}
@@ -98,6 +123,8 @@ export async function mount(root) {
   let selected = new Set(); // 선택삭제용 — 메모 id 집합
   // undefined="전체 메모"(폴더 무관), null="미분류"(folder_id 없음), 숫자="그 폴더만"
   let currentFolderId;
+  let lockListMode = 'hidden'; // 설정 > 보안의 "잠긴 메모 표시 방식" — 'hidden'(잠긴 메모로만 표시) | 'title'(제목만 표시)
+  const unlockedIds = new Set(); // 이번 화면 세션 동안 비밀번호로 이미 연 잠긴 메모 id — 다시 클릭할 때마다 또 묻지 않으려고
 
   function filteredMemos() {
     let list = memos;
@@ -213,19 +240,41 @@ export async function mount(root) {
   }
 
   function renderItemRow(m) {
+    const locked = m.is_locked && !unlockedIds.has(m.id);
+    const showThumb = !locked && m.first_image_id;
+    const title = locked && lockListMode === 'hidden' ? '🔒 잠긴 메모' : escapeHtml(deriveTitle(m));
+    const snippet = locked ? '' : escapeHtml(deriveSnippet(m));
     return `
       <div class="notes-list-item ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
-        <div class="notes-list-item-title-row">
-          <input type="checkbox" class="notes-list-item-check" data-action="select" data-id="${m.id}" />
-          ${m.is_pinned ? `<span class="notes-pin-dot">${PIN_ICON}</span>` : ''}
-          <span class="notes-list-item-title">${escapeHtml(deriveTitle(m))}</span>
-          <span class="drag-handle" data-drag-id="${m.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
-        </div>
-        <div class="notes-list-item-meta">
-          <span>${formatRelative(m.updated_at)}</span>
-          <span class="notes-list-item-snippet">${escapeHtml(deriveSnippet(m))}</span>
+        ${showThumb ? `<div class="notes-list-item-thumb" id="thumb-${m.id}" data-image-id="${m.first_image_id}"></div>` : ''}
+        <div class="notes-list-item-body">
+          <div class="notes-list-item-title-row">
+            <input type="checkbox" class="notes-list-item-check" data-action="select" data-id="${m.id}" />
+            ${m.is_pinned ? `<span class="notes-pin-dot">${PIN_ICON}</span>` : ''}
+            ${locked ? `<span class="notes-lock-dot">${LOCK_ICON}</span>` : ''}
+            <span class="notes-list-item-title">${title}</span>
+            ${!locked && m.attachment_count > 0 ? `<span class="notes-attach-badge" title="첨부 ${m.attachment_count}개">${CLIP_BADGE_ICON}</span>` : ''}
+            <span class="drag-handle" data-drag-id="${m.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
+          </div>
+          <div class="notes-list-item-meta">
+            <span>${formatRelative(m.updated_at)}</span>
+            <span class="notes-list-item-snippet">${snippet}</span>
+          </div>
         </div>
       </div>`;
+  }
+
+  // 목록의 첫 사진 썸네일은 base64라 무거워서, 실제로 그려진 행에 대해서만 지연 로드한다.
+  function loadListThumbnails(listEl) {
+    listEl.querySelectorAll('.notes-list-item-thumb[data-image-id]').forEach(async (el) => {
+      const imageId = Number(el.dataset.imageId);
+      try {
+        const dataUrl = await window.itda.memoAttachments.getImageData(imageId);
+        if (dataUrl) el.innerHTML = `<img src="${dataUrl}" alt="" />`;
+      } catch (e) {
+        /* 썸네일 하나 실패해도 나머지 목록에 영향 없게 조용히 무시 */
+      }
+    });
   }
 
   function renderList() {
@@ -261,18 +310,20 @@ export async function mount(root) {
       html += renderItemRow(m);
     });
     listEl.innerHTML = html;
+    loadListThumbnails(listEl);
     const items = [...pinned, ...rest];
 
     listEl.querySelectorAll('.notes-list-item').forEach((row) => {
       row.addEventListener('click', (e) => {
         if (e.target.closest('[data-action="select"]') || e.target.closest('.drag-handle')) return;
-        selectMemo(Number(row.dataset.id));
+        openMemoMaybeLocked(Number(row.dataset.id), row);
       });
       attachContextMenu(
         row,
         () => {
           const id = Number(row.dataset.id);
-          return { type: 'memo', id, isPinned: !!memos.find((m) => m.id === id)?.is_pinned };
+          const memo = memos.find((m) => m.id === id);
+          return { type: 'memo', id, isPinned: !!memo?.is_pinned, isLocked: !!memo?.is_locked };
         },
         {
           onDeleted: (item) => {
@@ -293,6 +344,15 @@ export async function mount(root) {
             if (memo) memo.is_pinned = isPinned;
             renderList();
             if (selectedId === item.id) renderDetail();
+          },
+          onLockToggled: (item, isLocked) => {
+            const memo = memos.find((m) => m.id === item.id);
+            if (memo) memo.is_locked = isLocked;
+            if (isLocked) unlockedIds.delete(item.id); // 방금 잠갔으면 이번 세션 기록도 지워서 목록에서 바로 숨겨지게
+            else unlockedIds.add(item.id); // 방금 풀었으면 다시 클릭할 때 또 묻지 않게
+            if (selectedId === item.id) selectedId = null; // 잠근 메모가 지금 열려 있었다면 상세 패널도 닫아서 내용이 계속 보이지 않게
+            renderList();
+            renderDetail();
           },
         }
       );
@@ -325,6 +385,17 @@ export async function mount(root) {
       return;
     }
 
+    // 방어적 잠금 가드 — 지금은 openMemoMaybeLocked()를 거쳐야만 selectMemo()가 불리지만,
+    // 혹시 다른 경로로 selectedId가 잠긴 메모로 바뀌어도 여기서 한 번 더 막는다.
+    if (memo.is_locked && !unlockedIds.has(memo.id)) {
+      detailEl.innerHTML = `
+        <div class="notes-detail-empty" id="m-detailEmpty">
+          <div class="page-head-icon tone-yellow" style="margin:0 auto 10px;">${LOCK_ICON}</div>
+          🔒 잠긴 메모예요<br />목록에서 다시 눌러 비밀번호를 입력해주세요
+        </div>`;
+      return;
+    }
+
     detailEl.innerHTML = `
       <div class="notes-detail-toolbar">
         <span class="notes-detail-date">${formatRelative(memo.updated_at)}</span>
@@ -341,13 +412,20 @@ export async function mount(root) {
             </div>
           </div>
           <button class="btn-icon ${memo.is_pinned ? 'active-pin' : ''}" id="m-pinBtn" title="${memo.is_pinned ? '고정 해제' : '고정'}">${memo.is_pinned ? PIN_ICON : PIN_OUTLINE_ICON}</button>
+          <button class="btn-icon ${memo.is_locked ? 'active-pin' : ''}" id="m-lockBtn" title="${memo.is_locked ? '잠금 해제' : '잠금'}">${memo.is_locked ? LOCK_ICON : LOCK_OPEN_ICON}</button>
           <button class="btn-icon" id="m-deleteBtn" title="삭제">${TRASH_ICON}</button>
         </div>
       </div>
       <div class="rich-toolbar">
-        <button class="rich-btn" id="m-boldBtn" title="굵게">${BOLD_ICON}</button>
+        <button class="rich-btn" id="m-boldBtn" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
+        <button class="rich-btn" id="m-underlineBtn" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
+        <button class="rich-btn" id="m-alignLeftBtn" title="왼쪽 정렬 (${MOD_SHIFT_LABEL}L)">${ALIGN_LEFT_ICON}</button>
+        <button class="rich-btn" id="m-alignCenterBtn" title="가운데 정렬 (${MOD_SHIFT_LABEL}E)">${ALIGN_CENTER_ICON}</button>
+        <button class="rich-btn" id="m-alignRightBtn" title="오른쪽 정렬 (${MOD_SHIFT_LABEL}R)">${ALIGN_RIGHT_ICON}</button>
         <button class="rich-btn" id="m-checklistBtn" title="체크박스 추가">${CHECKLIST_ICON}</button>
-        <button class="rich-btn" id="m-attachBtn" title="파일/사진 첨부">${PAPERCLIP_ICON}</button>
+        <button class="rich-btn" id="m-linkBtn" title="링크 삽입">${URL_LINK_ICON}</button>
+        <button class="rich-btn" id="m-photoBtn" title="사진 삽입">${PHOTO_ICON}</button>
+        <button class="rich-btn" id="m-attachBtn" title="파일 첨부">${PAPERCLIP_ICON}</button>
         <span class="rich-divider"></span>
         <button class="rich-btn rich-size-btn" data-size="12" title="작게">가</button>
         <button class="rich-btn rich-size-btn active" data-size="14" title="보통">가</button>
@@ -382,6 +460,36 @@ export async function mount(root) {
     bodyEl.addEventListener('input', scheduleSave);
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);
+    bindChecklistBackspaceKey(bodyEl, scheduleSave);
+
+    // 엑셀/워드처럼 서식을 단축키로 — Cmd/Ctrl+B/U는 크로미움이 contenteditable에 기본으로도
+    // 걸어주지만, 여기서 직접 가로채 처리해야 정렬(Cmd/Ctrl+Shift+L/E/R, 브라우저 기본 단축키가
+    // 없음)까지 한 자리에서 일관되게 다루고, B/U도 브라우저 기본 처리와 중복 토글되지 않는다.
+    bodyEl.addEventListener('keydown', (e) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (!e.shiftKey && key === 'b') {
+        e.preventDefault();
+        toggleBold(bodyEl);
+        scheduleSave();
+      } else if (!e.shiftKey && key === 'u') {
+        e.preventDefault();
+        toggleUnderline(bodyEl);
+        scheduleSave();
+      } else if (e.shiftKey && key === 'l') {
+        e.preventDefault();
+        applyAlign(bodyEl, 'left');
+        scheduleSave();
+      } else if (e.shiftKey && key === 'e') {
+        e.preventDefault();
+        applyAlign(bodyEl, 'center');
+        scheduleSave();
+      } else if (e.shiftKey && key === 'r') {
+        e.preventDefault();
+        applyAlign(bodyEl, 'right');
+        scheduleSave();
+      }
+    });
     bindMentionAutocomplete(bodyEl, { type: 'memo', id: memo.id }); // "@검색"으로 빠르게 다른 항목과 연결
     bindHashtagAutoTag(bodyEl, async (categoryId) => {
       try {
@@ -396,10 +504,42 @@ export async function mount(root) {
       toggleBold(bodyEl);
       scheduleSave();
     });
+    $('m-underlineBtn').addEventListener('click', () => {
+      toggleUnderline(bodyEl);
+      scheduleSave();
+    });
+    $('m-alignLeftBtn').addEventListener('click', () => {
+      applyAlign(bodyEl, 'left');
+      scheduleSave();
+    });
+    $('m-alignCenterBtn').addEventListener('click', () => {
+      applyAlign(bodyEl, 'center');
+      scheduleSave();
+    });
+    $('m-alignRightBtn').addEventListener('click', () => {
+      applyAlign(bodyEl, 'right');
+      scheduleSave();
+    });
     $('m-checklistBtn').addEventListener('click', () => {
       insertChecklistItem(bodyEl);
       scheduleSave();
     });
+    $('m-linkBtn').addEventListener('click', async () => {
+      // promptText가 팝오버 입력창에 포커스를 주는 순간 body의 텍스트 선택이 사라지므로
+      // (포커스가 옮겨가면 contenteditable의 Range가 날아감), 팝오버를 띄우기 전에 선택
+      // 범위를 미리 복제해두고 확인을 누른 뒤 다시 복원한다.
+      const sel = window.getSelection();
+      const savedRange = sel && sel.rangeCount > 0 && bodyEl.contains(sel.anchorNode) ? sel.getRangeAt(0).cloneRange() : null;
+      const url = await promptText($('m-linkBtn'), { title: '링크 삽입', placeholder: 'https://...' });
+      if (!url) return;
+      if (savedRange) {
+        sel.removeAllRanges();
+        sel.addRange(savedRange);
+      }
+      insertLink(bodyEl, /^https?:\/\//i.test(url) ? url : `https://${url}`);
+      scheduleSave();
+    });
+    $('m-photoBtn').addEventListener('click', () => addAttachments());
     root.querySelectorAll('.rich-size-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         applyFontSize(bodyEl, Number(btn.dataset.size));
@@ -553,6 +693,29 @@ export async function mount(root) {
       }
     });
 
+    // 지금 열려 있는 메모를 잠글 때는 이미 앱 안에서 보고 있던 내용이라 비밀번호를 다시
+    // 묻지 않는다(우회 경로가 아니라 진짜 소유자 액션) — 목록/우클릭 메뉴에서 잠긴 메모를 다시
+    // 열 때만 비밀번호를 확인한다(openMemoMaybeLocked/context-menu.js의 잠금 해제 참고).
+    $('m-lockBtn').addEventListener('click', async () => {
+      try {
+        if (!memo.is_locked) {
+          const status = await window.itda.auth.getStatus();
+          if (!status.enabled) {
+            toast('먼저 설정 > 보안에서 비밀번호를 설정해주세요');
+            return;
+          }
+        }
+        const result = await window.itda.memos.toggleLock(memo.id);
+        memo.is_locked = result.is_locked;
+        if (result.is_locked) unlockedIds.delete(memo.id);
+        else unlockedIds.add(memo.id);
+        renderList();
+        renderDetail();
+      } catch (e) {
+        errorToast(e, '잠금 상태를 변경하지 못했어요');
+      }
+    });
+
     $('m-deleteBtn').addEventListener('click', async () => {
       try {
         await window.itda.memos.delete(memo.id);
@@ -587,6 +750,43 @@ export async function mount(root) {
     if (window.matchMedia('(max-width: 900px)').matches) {
       root.querySelector('.notes-app')?.classList.add('detail-open');
     }
+  }
+
+  // 잠긴 메모는 앱 비밀번호(설정 > 보안)로 확인한 뒤에만 상세를 연다 — 비밀번호가 아예
+  // 설정 안 돼 있으면(잠금 기능 자체를 안 쓰는 경우) 설정으로 가서 먼저 켜라고 안내한다.
+  async function verifyLockPassword(anchorEl) {
+    let status;
+    try {
+      status = await window.itda.auth.getStatus();
+    } catch (e) {
+      errorToast(e, '잠금 상태를 확인하지 못했어요');
+      return false;
+    }
+    if (!status.enabled) {
+      toast('먼저 설정 > 보안에서 비밀번호를 설정해주세요');
+      return false;
+    }
+    const pw = await promptText(anchorEl, { title: '🔒 잠긴 메모예요', placeholder: '비밀번호', password: true });
+    if (!pw) return false;
+    try {
+      const ok = await window.itda.auth.verify(pw);
+      if (!ok) toast('비밀번호가 일치하지 않아요');
+      return ok;
+    } catch (e) {
+      errorToast(e, '확인하지 못했어요');
+      return false;
+    }
+  }
+
+  async function openMemoMaybeLocked(id, anchorEl) {
+    const memo = memos.find((m) => m.id === id);
+    if (memo?.is_locked && !unlockedIds.has(id)) {
+      const ok = await verifyLockPassword(anchorEl);
+      if (!ok) return;
+      unlockedIds.add(id);
+      renderList(); // 잠금 배지/미리보기가 방금 풀렸으니 목록 표시도 같이 갱신
+    }
+    selectMemo(id);
   }
 
   async function load() {
@@ -669,6 +869,11 @@ export async function mount(root) {
   };
   document.addEventListener('click', closeOnOutsideClick);
 
+  try {
+    lockListMode = (await window.itda.settings.get('memo_lock_list_mode')) === 'title' ? 'title' : 'hidden';
+  } catch (e) {
+    lockListMode = 'hidden';
+  }
   await load();
   await loadFolders();
 

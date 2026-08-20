@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('itda', {
     add: (payload) => ipcRenderer.invoke('memos:add', payload),
     update: (payload) => ipcRenderer.invoke('memos:update', payload),
     togglePin: (id) => ipcRenderer.invoke('memos:togglePin', id),
+    toggleLock: (id) => ipcRenderer.invoke('memos:toggleLock', id),
     delete: (id) => ipcRenderer.invoke('memos:delete', id),
   },
   memoAttachments: {

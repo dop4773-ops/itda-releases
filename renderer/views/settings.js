@@ -200,6 +200,29 @@ export async function mount(root) {
             </p>
             <div id="security-panelBody">불러오는 중…</div>
           </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>잠긴 메모 목록 표시</h3></div>
+            <p class="settings-panel-desc">
+              메모를 개별로 잠그면(메모 화면에서 🔒) 목록에서 이 방식으로 보여요. 열 때는 위 비밀번호로 확인해요.
+            </p>
+            <div style="margin-top:10px;">
+              <label class="data-action-row" style="cursor:pointer;">
+                <div>
+                  <b>잠긴 메모로 표시 <span class="badge badge-neutral">기본값</span></b>
+                  <span>제목·내용 모두 가리고 "🔒 잠긴 메모"라고만 보여요</span>
+                </div>
+                <input type="radio" name="memo-lock-mode" id="memlock-hidden" value="hidden" />
+              </label>
+              <label class="data-action-row" style="cursor:pointer;">
+                <div>
+                  <b>제목만 표시</b>
+                  <span>제목은 보이고 내용 미리보기만 가려요</span>
+                </div>
+                <input type="radio" name="memo-lock-mode" id="memlock-title" value="title" />
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="settings-panel" data-panel="convenience">
@@ -689,6 +712,23 @@ export async function mount(root) {
         }
       });
     }
+  }
+
+  // ================= 잠긴 메모 목록 표시 방식 =================
+  async function initMemoLockPanel() {
+    const mode = (await window.itda.settings.get('memo_lock_list_mode')) === 'title' ? 'title' : 'hidden';
+    $('memlock-hidden').checked = mode === 'hidden';
+    $('memlock-title').checked = mode === 'title';
+    root.querySelectorAll('input[name="memo-lock-mode"]').forEach((radio) => {
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        try {
+          await window.itda.settings.set({ key: 'memo_lock_list_mode', value: radio.value });
+        } catch (e) {
+          errorToast(e, '표시 방식을 저장하지 못했어요');
+        }
+      });
+    });
   }
 
   // ================= 편의 기능 (윈도우 자동실행 / 관련 항목 자동추천) =================
@@ -1384,6 +1424,13 @@ export async function mount(root) {
         currentUpdateMode = radio.value;
         try {
           await window.itda.settings.set({ key: 'update_mode', value: currentUpdateMode });
+          // main/updater/index.js는 시작 5초 후 1회 + 이후 3시간마다만 자동으로 확인하므로,
+          // "자동"으로 막 바꾼 시점에는 아무 것도 안 하면 최대 3시간 동안 전혀 반응이 없는
+          // 것처럼 보였다("선택해도 자동으로 업데이트 안 됨"). 켜는 순간 바로 한 번 확인해서
+          // 자동 모드가 실제로 살아있다는 걸 즉시 체감할 수 있게 한다.
+          if (currentUpdateMode === 'auto') {
+            await window.itda.updater.checkNow();
+          }
         } catch (e) {
           errorToast(e, '업데이트 모드를 저장하지 못했어요');
         }
@@ -1461,6 +1508,7 @@ export async function mount(root) {
   await loadWidgetsPanel();
   await initShortcutsPanel();
   await loadSecurityPanel();
+  await initMemoLockPanel();
   await initConveniencePanel();
   await initAutoBackupPanel();
   initDataPanel();

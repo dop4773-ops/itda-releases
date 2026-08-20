@@ -1,4 +1,5 @@
 import { toast, errorToast, escapeHtml } from './ui-utils.js';
+import { promptText } from './text-prompt.js';
 import { mountLinksWidget } from './links-ui.js';
 import { todayStr, dateKey, addDays } from './date-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
@@ -176,7 +177,8 @@ function openMenu(x, y, item, opts) {
   const isMemo = item.type === 'memo';
   const memoItems = isMemo
     ? `<button class="ctx-menu-item" data-action="pin">${item.isPinned ? '📌 고정 해제' : '📌 상단 고정'}</button>
-    <button class="ctx-menu-item" data-action="move-folder">🗂 폴더로 이동</button>`
+    <button class="ctx-menu-item" data-action="move-folder">🗂 폴더로 이동</button>
+    <button class="ctx-menu-item" data-action="lock">${item.isLocked ? '🔓 잠금 해제' : '🔒 잠금'}</button>`
     : '';
 
   // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"(+ 전환 가능하면 전환)만 있는 축소 메뉴
@@ -288,6 +290,38 @@ function openMenu(x, y, item, opts) {
     });
     menu.querySelector('[data-action="move-folder"]').addEventListener('click', () => {
       openMoveFolderSubmenu(pos.left, pos.top, item, opts);
+    });
+    menu.querySelector('[data-action="lock"]').addEventListener('click', async () => {
+      closeMenu();
+      try {
+        if (item.isLocked) {
+          // 잠금을 푸는 쪽만 비밀번호를 확인한다 — 잠그는 건 이미 열려 있는 앱 안에서 하는
+          // 동작이라 굳이 다시 물을 필요가 없고, 여기서 물어도 우회 경로만 늘어난다.
+          const status = await window.itda.auth.getStatus();
+          if (!status.enabled) {
+            toast('먼저 설정 > 보안에서 비밀번호를 설정해주세요');
+            return;
+          }
+          const anchor = { getBoundingClientRect: () => ({ left: pos.left, top: pos.top, bottom: pos.top, right: pos.left, width: 0, height: 0 }) };
+          const pw = await promptText(anchor, { title: '🔒 잠긴 메모예요', placeholder: '비밀번호', password: true });
+          if (!pw) return;
+          const ok = await window.itda.auth.verify(pw);
+          if (!ok) {
+            toast('비밀번호가 일치하지 않아요');
+            return;
+          }
+        } else {
+          const status = await window.itda.auth.getStatus();
+          if (!status.enabled) {
+            toast('먼저 설정 > 보안에서 비밀번호를 설정해주세요');
+            return;
+          }
+        }
+        const result = await window.itda.memos.toggleLock(item.id);
+        opts.onLockToggled?.(item, !!result.is_locked);
+      } catch (e) {
+        errorToast(e, '잠금 상태를 변경하지 못했어요');
+      }
     });
   }
 

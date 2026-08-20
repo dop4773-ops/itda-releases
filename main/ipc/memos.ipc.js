@@ -50,6 +50,15 @@ module.exports = function registerMemosIpc(ipcMain, repos) {
     return { id, is_pinned: next };
   });
 
+  ipcMain.handle('memos:toggleLock', (event, id) => {
+    const memo = memos.getById(id);
+    if (!memo) return null;
+    const next = memo.is_locked ? 0 : 1;
+    memos.setLocked(id, next);
+    broadcastDataChanged('memo', id);
+    return { id, is_locked: next };
+  });
+
   ipcMain.handle('memos:delete', (event, id) => {
     memos.softDelete(id);
     broadcastDataChanged('memo', id);

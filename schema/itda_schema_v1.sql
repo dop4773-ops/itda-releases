@@ -178,6 +178,7 @@ CREATE TABLE memos (
   folder_id    INTEGER REFERENCES memo_folders(id) ON DELETE SET NULL,
   color_hex    TEXT NOT NULL DEFAULT '#FBE28A',
   is_pinned    INTEGER NOT NULL DEFAULT 0,
+  is_locked    INTEGER NOT NULL DEFAULT 0,  -- 켜져 있으면 설정>보안 비밀번호로 열어야 내용을 볼 수 있음
   created_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   deleted_at   TEXT

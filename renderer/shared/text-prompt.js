@@ -13,8 +13,8 @@ function closePopover() {
 
 /**
  * @param {HTMLElement} anchorEl - 팝오버를 붙일 기준 엘리먼트
- * @param {{title?: string, placeholder?: string, value?: string}} [opts] - value를 주면 이름 바꾸기처럼
- *   기존 값을 미리 채우고 전체 선택해서 바로 덮어쓸 수 있게 한다.
+ * @param {{title?: string, placeholder?: string, value?: string, password?: boolean}} [opts] - value를 주면 이름 바꾸기처럼
+ *   기존 값을 미리 채우고 전체 선택해서 바로 덮어쓸 수 있게 한다. password를 주면 입력이 가려진다(비밀번호 확인 등).
  * @returns {Promise<string|null>} null이면 취소(바깥 클릭/Esc/빈 값)
  */
 export function promptText(anchorEl, opts = {}) {
@@ -24,7 +24,7 @@ export function promptText(anchorEl, opts = {}) {
     pop.className = 'text-prompt-pop';
     pop.innerHTML = `
       ${opts.title ? `<div class="text-prompt-title">${opts.title}</div>` : ''}
-      <input type="text" class="input" placeholder="${opts.placeholder || ''}" value="${(opts.value || '').replace(/"/g, '&quot;')}" />
+      <input type="${opts.password ? 'password' : 'text'}" class="input" placeholder="${opts.placeholder || ''}" value="${(opts.value || '').replace(/"/g, '&quot;')}" />
       <div class="text-prompt-actions">
         <button type="button" class="btn-secondary" data-action="cancel">취소</button>
         <button type="button" class="btn" data-action="confirm">확인</button>

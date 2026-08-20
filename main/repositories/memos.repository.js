@@ -17,8 +17,15 @@ module.exports = function createMemosRepository(db) {
         clauses.push('(title LIKE ? OR content LIKE ?)');
         params.push(`%${keyword}%`, `%${keyword}%`);
       }
+      // 목록에 "첨부 있음" 표시 + 첫 번째 사진 썸네일을 보여주기 위한 경량 집계.
+      // 이미지 바이트 자체는 안 실어서(별도 IPC로 필요할 때만 지연 로드) 목록 조회가 무거워지지 않는다.
       return db
-        .prepare(`SELECT * FROM memos WHERE ${clauses.join(' AND ')} ORDER BY is_pinned DESC, updated_at DESC`)
+        .prepare(
+          `SELECT m.*,
+             (SELECT COUNT(*) FROM memo_attachments a WHERE a.memo_id = m.id) AS attachment_count,
+             (SELECT a.id FROM memo_attachments a WHERE a.memo_id = m.id AND a.mime_type LIKE 'image/%' ORDER BY a.created_at ASC LIMIT 1) AS first_image_id
+           FROM memos m WHERE ${clauses.join(' AND ')} ORDER BY is_pinned DESC, updated_at DESC`
+        )
         .all(...params);
     },
 
@@ -46,6 +53,10 @@ module.exports = function createMemosRepository(db) {
 
     setPinned(id, isPinned) {
       db.prepare('UPDATE memos SET is_pinned = ? WHERE id = ?').run(isPinned ? 1 : 0, id);
+    },
+
+    setLocked(id, isLocked) {
+      db.prepare('UPDATE memos SET is_locked = ? WHERE id = ?').run(isLocked ? 1 : 0, id);
     },
 
     softDelete(id) {
