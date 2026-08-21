@@ -24,7 +24,10 @@ body {
   display: flex;
   flex-direction: column;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-  -webkit-app-region: drag; /* 카드 배경을 드래그하면 창이 이동한다 */
+  /* 카드 전체를 드래그 영역으로 두면(예전 방식) 프레임 없는 창에서 가장자리를 잡고 늘리려는
+     동작까지 "창 이동"으로 먹혀버려서 위/아래/좌/우 리사이즈가 안 먹는 느낌이 났다.
+     board-widget처럼 titlebar만 드래그 영역으로 두고 나머지는 OS가 가장자리 리사이즈를
+     정상적으로 잡을 수 있게 비워둔다. */
 }
 
 .widget-titlebar {
@@ -282,9 +285,13 @@ body {
 .bw-mini-cal .month-event-pill,
 .bw-mini-cal .month-more { display: none; } /* 공간이 좁아 숫자/오늘 표시만, 개별 일정 pill은 생략 */
 
-/* ================= 메모 낱개 위젯 — 포스트잇처럼 배경색을 고를 수 있는 팔레트 =================
-   widget-card 전체가 기본 -webkit-app-region:drag라서, 클릭이 실제로 먹혀야 하는 이 안의
-   조작 요소들(색상 스와치 등)엔 widget-btn/widget-textarea처럼 no-drag를 따로 걸어줘야 한다. */
+/* ================= 메모 낱개 위젯 — 상단 라벨 + 포스트잇처럼 배경색을 고를 수 있는 팔레트 =================
+   postit-widget과 달리 위쪽에 "메모"라는 라벨을 항상 보이게 두고, 서식/잠금 버튼 묶음만
+   호버로 나타나게 분리한다(widget-titlebar는 postit 전용이라 그대로 두고 별도 클래스로 둠). */
+.mi-titlebar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; -webkit-app-region: drag; }
+.mi-titlebar-label { font-size: 11px; font-weight: 700; color: rgba(0, 0, 0, .45); -webkit-app-region: drag; }
+.mi-titlebar-buttons { display: flex; gap: 4px; -webkit-app-region: no-drag; }
+
 .mi-color-row { display: flex; gap: 5px; margin-bottom: 8px; -webkit-app-region: no-drag; }
 .mi-color-swatch { width: 14px; height: 14px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; }
 .mi-color-swatch.selected { border-color: rgba(0, 0, 0, .5); }

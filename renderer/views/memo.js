@@ -130,7 +130,8 @@ export async function mount(root) {
   let folders = [];
   let selectedId = null;
   let keyword = '';
-  let selected = new Set(); // 선택삭제용 — 메모 id 집합
+  let selected = new Set(); // 선택삭제용 — 메모 id 집합 (체크박스 또는 Cmd/Ctrl·Shift+클릭으로 채워짐)
+  let lastClickedId = null; // Shift+클릭 범위선택의 기준점
   // undefined="전체 메모"(폴더 무관), null="미분류"(folder_id 없음), 숫자="그 폴더만"
   let currentFolderId;
   let lockListMode = 'hidden'; // 설정 > 보안의 "잠긴 메모 표시 방식" — 'hidden'(잠긴 메모로만 표시) | 'title'(제목만 표시)
@@ -255,7 +256,7 @@ export async function mount(root) {
     const title = locked && lockListMode === 'hidden' ? '🔒 잠긴 메모' : escapeHtml(deriveTitle(m));
     const snippet = locked ? '' : escapeHtml(deriveSnippet(m));
     return `
-      <div class="notes-list-item ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
+      <div class="notes-list-item ${m.id === selectedId ? 'active' : ''} ${selected.has(m.id) ? 'multi-selected' : ''}" data-id="${m.id}">
         ${showThumb ? `<div class="notes-list-item-thumb" id="thumb-${m.id}" data-image-id="${m.first_image_id}"></div>` : ''}
         <div class="notes-list-item-body">
           <div class="notes-list-item-title-row">
@@ -326,7 +327,43 @@ export async function mount(root) {
     listEl.querySelectorAll('.notes-list-item').forEach((row) => {
       row.addEventListener('click', (e) => {
         if (e.target.closest('[data-action="select"]') || e.target.closest('.drag-handle')) return;
-        openMemoMaybeLocked(Number(row.dataset.id), row);
+        const id = Number(row.dataset.id);
+
+        // 파인더/애플 메모장처럼 Cmd·Ctrl+클릭(하나씩 토글) / Shift+클릭(범위선택)으로
+        // 다중 선택 — 열지는 않고 배경색만 다르게 표시한다(체크박스와 같은 selected Set을 공유).
+        if (e.metaKey || e.ctrlKey) {
+          if (selected.has(id)) selected.delete(id);
+          else selected.add(id);
+          lastClickedId = id;
+          renderList();
+          return;
+        }
+        if (e.shiftKey && lastClickedId != null) {
+          const ids = items.map((m) => m.id);
+          const a = ids.indexOf(lastClickedId);
+          const b = ids.indexOf(id);
+          if (a !== -1 && b !== -1) {
+            const [start, end] = a < b ? [a, b] : [b, a];
+            for (let i = start; i <= end; i++) selected.add(ids[i]);
+            renderList();
+            return;
+          }
+        }
+
+        // 일반 클릭 — 다중 선택 중이었으면 비우고(파인더와 동일한 관례) 평소처럼 상세를 연다.
+        if (selected.size > 0) selected.clear();
+        lastClickedId = id;
+        openMemoMaybeLocked(id, row);
+      });
+      row.addEventListener('contextmenu', (e) => {
+        // 여러 개를 선택해둔 상태에서 그중 하나를 우클릭하면, 그 하나만을 위한 메뉴 대신
+        // "선택한 N개 삭제"만 있는 축소 메뉴를 띄운다. attachContextMenu의 리스너보다 먼저
+        // 등록돼 있어야 하므로(같은 엘리먼트에서는 등록 순서대로 실행됨) 반드시 그 위에 온다.
+        const id = Number(row.dataset.id);
+        if (selected.size <= 1 || !selected.has(id)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        showBulkDeleteMenu(e.clientX, e.clientY, [...selected]);
       });
       attachContextMenu(
         row,
@@ -799,6 +836,51 @@ export async function mount(root) {
     selectMemo(id);
   }
 
+  async function bulkDeleteSelected() {
+    if (selected.size === 0) return;
+    const targets = [...selected];
+    try {
+      await Promise.all(targets.map((id) => window.itda.memos.delete(id)));
+      toast(`${targets.length}개 휴지통으로 이동했어요`);
+      selected.clear();
+      if (selectedId && targets.includes(selectedId)) selectedId = null;
+      await load();
+    } catch (e) {
+      errorToast(e, '일부 메모를 삭제하지 못했어요');
+      await load();
+    }
+  }
+
+  // 다중 선택된 상태에서 그중 하나를 우클릭하면 뜨는 축소 메뉴 — "선택한 N개 삭제" 하나뿐.
+  // context-menu.js(공용 컴포넌트, todo/event/postit과도 공유)를 건드리지 않고 이 화면에서만
+  // 쓰는 가벼운 메뉴라 여기서 직접 만든다.
+  function showBulkDeleteMenu(x, y, ids) {
+    document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = `<button class="ctx-menu-item ctx-menu-danger" data-action="bulk-delete">${TRASH_ICON} 선택한 ${ids.length}개 삭제</button>`;
+    document.body.appendChild(menu);
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const rect = menu.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(x, vw - rect.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, vh - rect.height - 8))}px`;
+
+    function close() {
+      menu.remove();
+      document.removeEventListener('mousedown', onOutside);
+    }
+    function onOutside(e) {
+      if (!menu.contains(e.target)) close();
+    }
+    menu.querySelector('[data-action="bulk-delete"]').addEventListener('click', async () => {
+      close();
+      if (!confirm(`선택한 메모 ${ids.length}개를 삭제하시겠습니까?`)) return;
+      await bulkDeleteSelected();
+    });
+    setTimeout(() => document.addEventListener('mousedown', onOutside), 0);
+  }
+
   async function load() {
     try {
       memos = await window.itda.memos.list({});
@@ -832,6 +914,18 @@ export async function mount(root) {
   };
   document.addEventListener('keydown', handleNewMemoShortcut);
 
+  // 목록에서 Cmd/Ctrl·Shift+클릭으로 여러 개 선택해뒀을 때 Delete/Backspace로 한 번에 지우기
+  // (제목/본문 입력 중 글자를 지우는 backspace와 겹치지 않도록 isUserTyping()으로 가드).
+  const handleDeleteKey = (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (isUserTyping()) return;
+    if (selected.size === 0) return;
+    e.preventDefault();
+    if (!confirm(`선택한 메모 ${selected.size}개를 삭제하시겠습니까?`)) return;
+    bulkDeleteSelected();
+  };
+  document.addEventListener('keydown', handleDeleteKey);
+
   $('m-selectAll').addEventListener('change', (e) => {
     const ids = [...filteredMemos()].map((m) => m.id);
     if (e.target.checked) ids.forEach((id) => selected.add(id));
@@ -844,18 +938,8 @@ export async function mount(root) {
 
   $('m-bulkDelete').addEventListener('click', async () => {
     if (selected.size === 0) return;
-    const targets = [...selected];
     $('m-bulkDelete').disabled = true;
-    try {
-      await Promise.all(targets.map((id) => window.itda.memos.delete(id)));
-      toast(`${targets.length}개 휴지통으로 이동했어요`);
-      selected.clear();
-      if (selectedId && targets.includes(selectedId)) selectedId = null;
-      await load();
-    } catch (e) {
-      errorToast(e, '일부 메모를 삭제하지 못했어요');
-      await load();
-    }
+    await bulkDeleteSelected();
   });
 
   let searchTimer = null;
@@ -902,6 +986,7 @@ export async function mount(root) {
   return () => {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
+    document.removeEventListener('keydown', handleDeleteKey);
     offDataChanged?.();
     setScreenShortcuts(null, []); // 다른 화면으로 이동하면 이 화면 전용 단축키는 오버레이에서 빠져야 함
   };

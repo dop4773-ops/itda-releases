@@ -95,9 +95,12 @@ async function mount() {
   if (memo.is_locked) {
     root.innerHTML = `
       <div class="widget-card" style="background:#E8E8EC;">
-        <div class="widget-titlebar widget-controls-hover">
-          <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
-          <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+        <div class="mi-titlebar">
+          <span class="mi-titlebar-label">메모</span>
+          <div class="mi-titlebar-buttons widget-controls-hover">
+            <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+            <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+          </div>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-size:12px;color:rgba(0,0,0,.6);">
           <div>🔒 잠긴 메모예요</div>
@@ -120,13 +123,16 @@ async function mount() {
 
   root.innerHTML = `
     <div class="widget-card" style="background:${memo.color_hex || DEFAULT_WIDGET_COLOR}">
-      <div class="widget-titlebar widget-controls-hover">
-        <button class="widget-btn" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
-        <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
-        <button class="widget-btn" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
-        <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
-        <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
-        <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+      <div class="mi-titlebar">
+        <span class="mi-titlebar-label">메모</span>
+        <div class="mi-titlebar-buttons widget-controls-hover">
+          <button class="widget-btn" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
+          <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
+          <button class="widget-btn" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
+          <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
+          <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+          <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+        </div>
       </div>
       <div class="mi-color-row">
         ${WIDGET_COLORS.map(

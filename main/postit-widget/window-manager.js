@@ -45,6 +45,10 @@ function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
 
   win.setOpacity(opacity);
   win.setMenu(null);
+  // BrowserWindow 생성자의 alwaysOnTop:true만으로는(특히 macOS) 창 레벨이 애매해서 다른 앱
+  // 창 뒤로 밀리는 것처럼 보일 수 있었다 — 생성 직후 setAlwaysOnTop으로 'floating' 레벨을
+  // 명시해서 다시 한 번 확실히 건다(아래 setAlwaysOnTop() 토글 함수와 동일한 처리).
+  if (postit.is_always_on_top) win.setAlwaysOnTop(true, 'floating');
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type: 'postit', id: String(postit.id) } });
   windows.set(postit.id, win);
@@ -77,7 +81,12 @@ function isOpen(postitId) {
 
 function setAlwaysOnTop(postitId, value) {
   const win = windows.get(postitId);
-  if (win && !win.isDestroyed()) win.setAlwaysOnTop(value);
+  if (!win || win.isDestroyed()) return;
+  // 'floating' 레벨을 명시해야 다른 앱 창 뒤로 밀리지 않고 확실히 위에 뜬다(레벨 없이 그냥
+  // true만 넘기면 창 종류에 따라 애매하게 동작하는 경우가 있었다). 켤 때는 moveTop()으로
+  // 지금 당장 맨 위로도 올려서 "켰는데 그대로 뒤에 있는" 것처럼 보이지 않게 한다.
+  win.setAlwaysOnTop(value, 'floating');
+  if (value) win.moveTop();
 }
 
 // 포스트잇이 완전삭제(휴지통 비우기)될 때 열려있는 위젯 창도 같이 정리하기 위함
