@@ -720,9 +720,8 @@ export async function mount(root) {
 
   $('c-openAdd').addEventListener('click', () => openModal());
   $('c-cancelAdd').addEventListener('click', closeModal);
-  $('c-modalOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'c-modalOverlay') closeModal();
-  });
+  // 일정 등록 폼은 입력 중간에 배경을 실수로 클릭해서 내용이 날아가는 일이 없도록,
+  // 바깥 클릭으로는 안 닫히고 Esc(registerEscClose)나 취소 버튼으로만 닫히게 한다.
 
   $('c-submitAdd').addEventListener('click', async () => {
     if (busy) return;

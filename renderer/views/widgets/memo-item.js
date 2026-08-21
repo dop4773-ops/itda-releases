@@ -3,7 +3,7 @@
  * renderer/views/postit-widget.js(포스트잇 낱개 위젯)와 동일한 패턴: 프레임 없는 투명 창에
  * widget-card를 그리고, contenteditable 본문을 직접 편집 + 자동저장한다.
  */
-import { toast, errorToast } from '../../shared/ui-utils.js';
+import { toast, errorToast, escapeHtml } from '../../shared/ui-utils.js';
 import {
   sanitizeRichHtml,
   toggleBold,
@@ -24,6 +24,12 @@ const LOCK_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" s
 const LOCK_OPEN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 017.8-1.3"/></svg>`;
 const MINIMIZE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg>`;
 const CLOSE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+const FILE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`;
+
+// 포스트잇과 같은 개인화 팔레트(STICKY_COLORS) 앞에 "기본 디자인"(색을 안 입힌 원래 느낌의
+// 중립 배경) 옵션을 하나 더 둔다 — 색을 꼭 골라야 하는 게 아니라 안 고르는 것도 선택지가 되도록.
+const DEFAULT_WIDGET_COLOR = '#F5F6F8';
+const WIDGET_COLORS = [DEFAULT_WIDGET_COLOR, ...STICKY_COLORS];
 
 const isMac = navigator.platform?.toUpperCase().includes('MAC');
 const MOD_LABEL = isMac ? '⌘' : 'Ctrl+';
@@ -36,6 +42,31 @@ function getIdFromQuery() {
 function bindWindowControls() {
   document.getElementById('w-minimize')?.addEventListener('click', () => window.itda.widgetControls.minimize());
   document.getElementById('w-close')?.addEventListener('click', () => window.close()); // 창만 닫힘 — 데이터는 그대로
+}
+
+// 내용 길이에 맞춰 창을 자동으로 맞춘다(열었을 때/동기화로 다시 그려졌을 때). 사용자가 그
+// 뒤에 직접 창 가장자리를 끌어서 수동으로 키우고 줄이는 건 window-manager.js의
+// resizable:true가 그대로 살아있어서 항상 가능하다 — 여기서 setBounds를 한 번 호출한다고
+// 그 기능이 꺼지는 게 아니다.
+function fitToContent(root) {
+  requestAnimationFrame(() => {
+    const card = root.querySelector('.widget-card');
+    const contentEl = root.querySelector('#w-content');
+    if (!card || !contentEl) return;
+    const cardStyle = getComputedStyle(card);
+    const paddingV = parseFloat(cardStyle.paddingTop) + parseFloat(cardStyle.paddingBottom);
+    const sumOffsetHeight = (el) => {
+      if (!el) return 0;
+      const s = getComputedStyle(el);
+      return el.offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+    };
+    const titlebarH = sumOffsetHeight(card.querySelector('.widget-titlebar'));
+    const colorRowH = sumOffsetHeight(card.querySelector('.mi-color-row'));
+    const attachH = sumOffsetHeight(card.querySelector('.mi-attach-strip'));
+    const textH = contentEl.scrollHeight; // overflow-y:auto라도 scrollHeight는 잘린 부분까지 포함한 전체 높이
+    const total = Math.round(paddingV + titlebarH + colorRowH + attachH + textH + 6);
+    window.itda.widgetWindow?.fitToContent?.({ height: total }).catch(() => {});
+  });
 }
 
 async function mount() {
@@ -78,17 +109,17 @@ async function mount() {
     return;
   }
 
-  // 첨부된 첫 번째 사진 — 위젯에서 사진을 새로 추가/삭제하는 기능은 없다(메인 메모 화면에서만).
+  // 첨부파일 — 사진은 썸네일로, 그 외 파일은 아이콘+파일명 칩으로. 위젯에서 새로 추가/삭제하는
+  // 기능은 없다(메인 메모 화면 전용) — 여기는 "보이게"만.
   let attachments = [];
   try {
     attachments = await window.itda.memoAttachments.list(id);
   } catch (e) {
     attachments = [];
   }
-  const firstImage = attachments.find((a) => a.mime_type?.startsWith('image/'));
 
   root.innerHTML = `
-    <div class="widget-card" style="background:${memo.color_hex || '#FBE28A'}">
+    <div class="widget-card" style="background:${memo.color_hex || DEFAULT_WIDGET_COLOR}">
       <div class="widget-titlebar widget-controls-hover">
         <button class="widget-btn" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
         <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
@@ -98,11 +129,24 @@ async function mount() {
         <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
       </div>
       <div class="mi-color-row">
-        ${STICKY_COLORS.map(
-          (c) => `<span class="mi-color-swatch ${c === memo.color_hex ? 'selected' : ''}" data-color="${c}" style="background:${c};"></span>`
+        ${WIDGET_COLORS.map(
+          (c, i) =>
+            `<span class="mi-color-swatch ${i === 0 ? 'mi-color-default' : ''} ${(memo.color_hex || DEFAULT_WIDGET_COLOR) === c ? 'selected' : ''}" data-color="${c}" style="background:${c};" title="${i === 0 ? '기본 디자인' : ''}"></span>`
         ).join('')}
       </div>
-      ${firstImage ? `<div class="mi-photo" id="mi-photo"></div>` : ''}
+      ${
+        attachments.length
+          ? `<div class="mi-attach-strip" id="mi-attachStrip">
+              ${attachments
+                .map((a) =>
+                  a.mime_type?.startsWith('image/')
+                    ? `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb" id="mi-thumb-${a.id}"></div></div>`
+                    : `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb mi-attach-file">${FILE_ICON}</div></div>`
+                )
+                .join('')}
+            </div>`
+          : ''
+      }
       <div id="w-content" class="widget-textarea" contenteditable="true" data-placeholder="메모를 입력하세요…">${sanitizeRichHtml(memo.content || '')}</div>
     </div>
     <div class="toast" id="toast"></div>
@@ -111,16 +155,30 @@ async function mount() {
   const shell = root.querySelector('.widget-card');
   const contentEl = document.getElementById('w-content');
   linkifyUrls(contentEl); // 불러올 때 한 번만 — 입력 중엔 호출 금지(커서 깨짐)
+  fitToContent(root); // 일단 지금 있는 내용 기준으로 한 번 맞추고, 사진 로드되면 아래서 다시 한 번 더
 
-  if (firstImage) {
-    try {
-      const dataUrl = await window.itda.memoAttachments.getImageData(firstImage.id);
-      const photoEl = root.querySelector('#mi-photo');
-      if (dataUrl && photoEl) photoEl.innerHTML = `<img src="${dataUrl}" alt="" />`;
-    } catch (e) {
-      /* 사진 하나 실패해도 나머지 위젯 표시에는 영향 없게 조용히 무시 */
-    }
-  }
+  attachments
+    .filter((a) => a.mime_type?.startsWith('image/'))
+    .forEach(async (a) => {
+      try {
+        const dataUrl = await window.itda.memoAttachments.getImageData(a.id);
+        const thumbEl = document.getElementById(`mi-thumb-${a.id}`);
+        if (dataUrl && thumbEl) thumbEl.innerHTML = `<img src="${dataUrl}" alt="" />`;
+        fitToContent(root);
+      } catch (e) {
+        /* 썸네일 하나 실패해도 나머지 위젯 표시에는 영향 없게 조용히 무시 */
+      }
+    });
+
+  root.querySelectorAll('.mi-attach-chip').forEach((chip) => {
+    chip.addEventListener('click', async () => {
+      try {
+        await window.itda.memoAttachments.open(Number(chip.dataset.id));
+      } catch (err) {
+        errorToast(err, '파일을 열지 못했어요');
+      }
+    });
+  });
 
   let saveTimer = null;
   const scheduleSave = () => {

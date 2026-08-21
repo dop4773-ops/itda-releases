@@ -288,8 +288,12 @@ body {
 .mi-color-row { display: flex; gap: 5px; margin-bottom: 8px; -webkit-app-region: no-drag; }
 .mi-color-swatch { width: 14px; height: 14px; border-radius: 5px; cursor: pointer; border: 2px solid transparent; flex-shrink: 0; }
 .mi-color-swatch.selected { border-color: rgba(0, 0, 0, .5); }
-/* object-fit:contain(자르지 않고 비율 유지) + width:100%로 위젯 너비에 맞춰 사진 자체가
-   줄어들고, height:auto라 세로 크기는 사진 비율을 따라간다(가로 사진은 낮게, 세로 사진은
-   높게) — 다만 세로로 너무 길어지지 않게 max-height로만 상한을 둔다. */
-.mi-photo { width: 100%; max-height: 160px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: rgba(0, 0, 0, .04); display: flex; align-items: center; justify-content: center; -webkit-app-region: no-drag; }
-.mi-photo img { width: 100%; height: auto; max-height: 160px; object-fit: contain; display: block; }
+.mi-color-default { border-color: rgba(0, 0, 0, .18); } /* 아주 옅은 회색이라 테두리 없인 안 보여서 */
+.mi-color-default.selected { border-color: rgba(0, 0, 0, .5); }
+
+/* 첨부파일 칩 줄 — 사진은 썸네일, 그 외 파일은 아이콘. 여러 개면 가로로 스크롤. */
+.mi-attach-strip { display: flex; gap: 6px; margin-bottom: 8px; overflow-x: auto; -webkit-app-region: no-drag; }
+.mi-attach-chip { flex-shrink: 0; width: 34px; height: 34px; border-radius: 7px; overflow: hidden; cursor: pointer; background: rgba(0, 0, 0, .06); }
+.mi-attach-chip:hover { background: rgba(0, 0, 0, .12); }
+.mi-attach-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0, 0, 0, .5); }
+.mi-attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
