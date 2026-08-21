@@ -1,5 +1,6 @@
 import { errorToast } from '../shared/ui-utils.js';
 import { sanitizeRichHtml, toggleBold, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
+import { wrapAutosave } from '../shared/pending-saves.js';
 
 const PIN_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
 const PIN_OUTLINE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
@@ -47,21 +48,18 @@ async function mount() {
     <div class="toast" id="toast"></div>
   `;
 
-  let saveTimer = null;
   const contentEl = document.getElementById('w-content');
   linkifyUrls(contentEl); // 불러올 때 한 번만 — 입력 중엔 호출 금지(커서 깨짐)
-  contentEl.addEventListener('input', () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-      try {
-        const cleanContent = sanitizeRichHtml(contentEl.innerHTML);
-        await window.itda.postits.update({ id, content: cleanContent });
-      } catch (err) {
-        errorToast(err, '저장하지 못했어요');
-      }
-    }, 500);
+  const scheduleSave = wrapAutosave(async () => {
+    try {
+      const cleanContent = sanitizeRichHtml(contentEl.innerHTML);
+      await window.itda.postits.update({ id, content: cleanContent });
+    } catch (err) {
+      errorToast(err, '저장하지 못했어요');
+    }
   });
-  bindChecklistToggle(contentEl, () => contentEl.dispatchEvent(new Event('input')));
+  contentEl.addEventListener('input', scheduleSave);
+  bindChecklistToggle(contentEl, scheduleSave);
   bindChecklistEnterKey(contentEl);
 
   document.getElementById('w-bold').addEventListener('click', () => {

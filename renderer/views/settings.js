@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { registerEscClose } from '../shared/esc-close.js';
+import { wrapAutosave } from '../shared/pending-saves.js';
 import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
@@ -433,18 +434,17 @@ export async function mount(root) {
   async function initUserPanel() {
     const input = $('user-nameInput');
     input.value = await getUserName();
-    let saveTimer = null;
-    input.addEventListener('input', () => {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(async () => {
+    input.addEventListener(
+      'input',
+      wrapAutosave(async () => {
         try {
           await window.itda.settings.set({ key: 'user_name', value: input.value.trim() });
           await applySidebarUserName(); // 사이드바에도 즉시 반영
         } catch (e) {
           errorToast(e, '이름을 저장하지 못했어요');
         }
-      }, 500);
-    });
+      })
+    );
   }
 
   // ================= 화면 (다크모드 + 배율) =================
@@ -945,18 +945,17 @@ export async function mount(root) {
     range.value = percent;
     valueLabel.textContent = `${percent}%`;
 
-    let saveTimer = null;
+    const scheduleOpacitySave = wrapAutosave(async () => {
+      try {
+        await window.itda.settings.set({ key: 'widget_opacity', value: String(Number(range.value) / 100) });
+        await window.itda.widgets.applyAppearance();
+      } catch (e) {
+        errorToast(e, '투명도를 저장하지 못했어요');
+      }
+    }, 200);
     range.addEventListener('input', () => {
       valueLabel.textContent = `${range.value}%`;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(async () => {
-        try {
-          await window.itda.settings.set({ key: 'widget_opacity', value: String(Number(range.value) / 100) });
-          await window.itda.widgets.applyAppearance();
-        } catch (e) {
-          errorToast(e, '투명도를 저장하지 못했어요');
-        }
-      }, 200);
+      scheduleOpacitySave();
     });
 
     const alwaysOnTopToggle = $('widget-alwaysOnTopToggle');

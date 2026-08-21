@@ -1,6 +1,7 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
 import { registerEscClose } from '../shared/esc-close.js';
+import { wrapAutosave } from '../shared/pending-saves.js';
 
 export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -146,23 +147,19 @@ export async function mountTagsPanel(root) {
       const textColorToggle = row.querySelector('[data-action="textColorToggle"]');
       let currentTextColor = textColorToggle.querySelector('.is-active')?.dataset.value || '#000000';
 
-      let saveTimer = null;
-      const scheduleSave = () => {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(async () => {
-          try {
-            await window.itda.categories.update({
-              id,
-              name: nameInput.value.trim(),
-              colorHex: colorInput.value,
-              textColor: currentTextColor,
-            });
-            toast('카테고리를 저장했어요');
-          } catch (e) {
-            errorToast(e, '저장하지 못했어요');
-          }
-        }, 500);
-      };
+      const scheduleSave = wrapAutosave(async () => {
+        try {
+          await window.itda.categories.update({
+            id,
+            name: nameInput.value.trim(),
+            colorHex: colorInput.value,
+            textColor: currentTextColor,
+          });
+          toast('카테고리를 저장했어요');
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+        }
+      });
       nameInput.addEventListener('input', scheduleSave);
       colorInput.addEventListener('input', scheduleSave);
 

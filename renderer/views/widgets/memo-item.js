@@ -16,6 +16,7 @@ import {
   linkifyUrls,
 } from '../../shared/rich-text.js';
 import { STICKY_COLORS } from '../../shared/theme.js';
+import { wrapAutosave } from '../../shared/pending-saves.js';
 
 const BOLD_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
 const UNDERLINE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 4v7a6 6 0 0012 0V4"/><path d="M4 20h16"/></svg>`;
@@ -188,18 +189,14 @@ async function mount() {
     });
   });
 
-  let saveTimer = null;
-  const scheduleSave = () => {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(async () => {
-      try {
-        const cleanContent = sanitizeRichHtml(contentEl.innerHTML);
-        await window.itda.memos.update({ id, content: cleanContent });
-      } catch (err) {
-        errorToast(err, '저장하지 못했어요');
-      }
-    }, 500);
-  };
+  const scheduleSave = wrapAutosave(async () => {
+    try {
+      const cleanContent = sanitizeRichHtml(contentEl.innerHTML);
+      await window.itda.memos.update({ id, content: cleanContent });
+    } catch (err) {
+      errorToast(err, '저장하지 못했어요');
+    }
+  });
   contentEl.addEventListener('input', scheduleSave);
   bindChecklistToggle(contentEl, scheduleSave);
   bindChecklistEnterKey(contentEl);

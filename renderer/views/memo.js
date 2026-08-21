@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { mountLinksWidget } from '../shared/links-ui.js';
+import { wrapAutosave } from '../shared/pending-saves.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { bindHashtagAutoTag } from '../shared/hashtag.js';
 import {
@@ -486,22 +487,18 @@ export async function mount(root) {
 
     const bodyEl = $('m-bodyInput');
     linkifyUrls(bodyEl); // 불러올 때 한 번만 URL을 링크로 표시(입력 중엔 절대 호출하지 않음 — 커서 깨짐 방지)
-    let saveTimer = null;
-    const scheduleSave = () => {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(async () => {
-        try {
-          const cleanContent = sanitizeRichHtml(bodyEl.innerHTML); // 저장 직전에도 한 번 더 정화(붙여넣기 등 대비, a 태그는 여기서 자동으로 벗겨짐)
-          await window.itda.memos.update({ id: memo.id, content: cleanContent });
-          // 목록의 제목/미리보기/정렬도 즉시 반영되도록 로컬 상태 갱신 후 리스트만 다시 그림(상세는 그대로 유지)
-          memo.content = cleanContent;
-          memo.updated_at = new Date().toISOString();
-          renderList();
-        } catch (e) {
-          errorToast(e, '저장하지 못했어요');
-        }
-      }, 500);
-    };
+    const scheduleSave = wrapAutosave(async () => {
+      try {
+        const cleanContent = sanitizeRichHtml(bodyEl.innerHTML); // 저장 직전에도 한 번 더 정화(붙여넣기 등 대비, a 태그는 여기서 자동으로 벗겨짐)
+        await window.itda.memos.update({ id: memo.id, content: cleanContent });
+        // 목록의 제목/미리보기/정렬도 즉시 반영되도록 로컬 상태 갱신 후 리스트만 다시 그림(상세는 그대로 유지)
+        memo.content = cleanContent;
+        memo.updated_at = new Date().toISOString();
+        renderList();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    });
     bodyEl.addEventListener('input', scheduleSave);
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);

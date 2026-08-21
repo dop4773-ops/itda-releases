@@ -32,6 +32,28 @@
  */
 
 const https = require('https');
+const { BrowserWindow } = require('electron');
+
+// 창(BrowserWindow)마다 자동저장 디바운스 타이머가 독립적으로 돌고 있어서(renderer/shared/
+// pending-saves.js), quitAndInstall 직전엔 열려있는 모든 창(메인 창 + 포스트잇/메모 등
+// 낱개 위젯 창)에 "지금 당장 저장해" 신호를 보내고 잠깐 기다린 뒤에 설치를 진행한다.
+// executeJavaScript가 그 창의 페이지 스크립트 전역(window.__itdaFlushPendingSaves)을 그대로
+// 호출하는 방식이라 별도 IPC 채널이 필요 없다 — 함수가 없거나(아직 로딩 전 등) 실행 중
+// 오류가 나도 그 창 하나만 못 미루고 넘어가게 각각 캐치한다.
+const FLUSH_TIMEOUT_MS = 1500; // 창 하나가 응답이 없어도 설치가 무한정 안 늦춰지게 상한
+async function flushAllWindowsThenInstall() {
+  const windows = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed());
+  await Promise.all(
+    windows.map((win) =>
+      Promise.race([
+        win.webContents
+          .executeJavaScript('window.__itdaFlushPendingSaves ? window.__itdaFlushPendingSaves() : null')
+          .catch(() => {}),
+        new Promise((resolve) => setTimeout(resolve, FLUSH_TIMEOUT_MS)),
+      ])
+    )
+  );
+}
 
 // package.json의 build.publish(owner/repo)와 동일한 저장소 — GitHub Releases 공개 API는
 // 인증 없이 조회 가능하고, User-Agent 헤더가 없으면 GitHub가 403으로 거부하므로 꼭 넣는다.
@@ -134,14 +156,16 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     sendStatus('downloading', { percent: Math.round(progress.percent) });
   });
   let updateReadyToInstall = false;
-  autoUpdater.on('update-downloaded', (info) => {
+  autoUpdater.on('update-downloaded', async (info) => {
     updateReadyToInstall = true;
     sendStatus('downloaded', { version: info.version });
     // 자동 모드면 창을 닫거나 사용자가 뭘 누르길 기다리지 않고 다운로드가 끝나는 즉시
     // 조용히 재시작+설치한다 — "자동"을 켰는데 결국 업데이트 화면에 들어가거나 창을 닫아야만
     // 설치되던 게 실제로는 자동이 아니라는 피드백을 반영. isForceRunAfter=true라 설치 후
-    // 자동으로 다시 켜진다.
+    // 자동으로 다시 켜진다. 재시작으로 타이핑 중이던 내용이 사라지지 않게, 설치 직전에
+    // 열려있는 모든 창의 대기 중인 자동저장을 먼저 강제로 끝낸다.
     if (getMode() === 'auto') {
+      await flushAllWindowsThenInstall();
       app.isQuittingItda = true;
       autoUpdater.quitAndInstall(true, true);
     }
@@ -151,9 +175,10 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   // 등) 나중에 자동 모드로 바뀐" 것처럼 그 즉시 설치가 못 걸린 경우를 위한 보조 장치 — 창을
   // 닫는 시점에도 한 번 더 확인해서, 그때까지 안 깔린 업데이트가 있으면 마저 설치한다.
   if (mainWindow) {
-    mainWindow.on('close', () => {
+    mainWindow.on('close', async () => {
       if (!updateReadyToInstall) return;
       if (getMode() !== 'auto') return;
+      await flushAllWindowsThenInstall();
       app.isQuittingItda = true;
       autoUpdater.quitAndInstall(true, true);
     });
@@ -168,7 +193,10 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     }
   });
 
-  ipcMain.handle('updater:quitAndInstall', () => {
+  ipcMain.handle('updater:quitAndInstall', async () => {
+    // 수동 모드에서 사용자가 재시작 버튼을 직접 눌러도, 다른 창(위젯 등)에 아직 안 끝난
+    // 자동저장이 있을 수 있으니 마찬가지로 먼저 플러시한다.
+    await flushAllWindowsThenInstall();
     autoUpdater.quitAndInstall();
     return { status: 'ok' };
   });
