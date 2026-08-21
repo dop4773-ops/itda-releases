@@ -18,6 +18,9 @@
  *   - 로컬 우선: 개발 모드(패키징 안 된 상태로 소스에서 직접 실행)에서는
  *     electron-updater 자체가 정상 동작하지 않으므로(배포 메타파일이 없음),
  *     아예 아무 것도 하지 않고 "개발 모드" 상태만 응답한다.
+ *   - quitAndInstall 직전엔 항상 두 가지를 먼저 한다: (1) 열려있는 모든 창의 대기 중인
+ *     자동저장을 강제로 끝내고(타이핑 중이던 내용 유실 방지), (2) 지금 열려있는 위젯들을
+ *     스냅샷 떠서 재시작 후 main.js가 그대로 다시 열게 한다 — main/widget-restore 참고.
  *
  * 렌더러 쪽 사용법 (settings.js, update-overlay.js 참고):
  *   window.itda.updater.getVersion()      → 현재 앱 버전 문자열
@@ -33,6 +36,7 @@
 
 const https = require('https');
 const { BrowserWindow } = require('electron');
+const { snapshotOpenWidgets } = require('../widget-restore');
 
 // 창(BrowserWindow)마다 자동저장 디바운스 타이머가 독립적으로 돌고 있어서(renderer/shared/
 // pending-saves.js), quitAndInstall 직전엔 열려있는 모든 창(메인 창 + 포스트잇/메모 등
@@ -163,8 +167,10 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     // 조용히 재시작+설치한다 — "자동"을 켰는데 결국 업데이트 화면에 들어가거나 창을 닫아야만
     // 설치되던 게 실제로는 자동이 아니라는 피드백을 반영. isForceRunAfter=true라 설치 후
     // 자동으로 다시 켜진다. 재시작으로 타이핑 중이던 내용이 사라지지 않게, 설치 직전에
-    // 열려있는 모든 창의 대기 중인 자동저장을 먼저 강제로 끝낸다.
+    // 열려있는 모든 창의 대기 중인 자동저장을 먼저 강제로 끝내고, 지금 열려있는 위젯들도
+    // 스냅샷 떠서 재시작 후 main.js가 그대로 다시 열게 한다(main/widget-restore 참고).
     if (getMode() === 'auto') {
+      snapshotOpenWidgets(settings);
       await flushAllWindowsThenInstall();
       app.isQuittingItda = true;
       autoUpdater.quitAndInstall(true, true);
@@ -178,6 +184,7 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     mainWindow.on('close', async () => {
       if (!updateReadyToInstall) return;
       if (getMode() !== 'auto') return;
+      snapshotOpenWidgets(settings);
       await flushAllWindowsThenInstall();
       app.isQuittingItda = true;
       autoUpdater.quitAndInstall(true, true);
@@ -195,7 +202,8 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
 
   ipcMain.handle('updater:quitAndInstall', async () => {
     // 수동 모드에서 사용자가 재시작 버튼을 직접 눌러도, 다른 창(위젯 등)에 아직 안 끝난
-    // 자동저장이 있을 수 있으니 마찬가지로 먼저 플러시한다.
+    // 자동저장이 있을 수 있으니 마찬가지로 먼저 플러시하고, 열려있던 위젯도 스냅샷 떠둔다.
+    snapshotOpenWidgets(settings);
     await flushAllWindowsThenInstall();
     autoUpdater.quitAndInstall();
     return { status: 'ok' };

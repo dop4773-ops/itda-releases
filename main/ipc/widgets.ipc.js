@@ -33,12 +33,20 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
     if (!WIDGET_TYPES.includes(type)) throw new Error('알 수 없는 위젯입니다: ' + type);
   }
 
+  // 실제로 여는 로직 — 사용자가 직접 누르는 "widgets:open"과, 자동 업데이트 재시작 직후
+  // 원래 열려있던 위젯을 되살리는 main/widget-restore가 둘 다 이걸 쓴다(중복 구현 방지).
+  function openWidgetByType(type) {
+    assertValidType(type);
+    windowManager.openWidget(type, loadBounds(type), { onBoundsChange: saveBounds, opacity: currentOpacity(), alwaysOnTop: currentAlwaysOnTop() });
+  }
+
   // 위젯은 사용자가 이 핸들러를 직접 호출했을 때만 열린다 — 앱 시작 시 자동으로
   // 다시 켜지는 동작은 의도적으로 없다(전에 있었다가 "예상 못하게 다 켜진다"는
   // 피드백을 받고 제거함). 위치/크기(bounds)만 기억해서, 나중에 다시 켤 때 그 자리에 뜬다.
+  // (자동 업데이트로 재시작될 때 재시작 직전 상태를 되살리는 건 예외 — main/widget-restore 참고,
+  // "일반적인 앱 시작"이 아니라 "끊긴 세션 이어붙이기"라 이 규칙과 상충하지 않는다.)
   ipcMain.handle('widgets:open', (event, type) => {
-    assertValidType(type);
-    windowManager.openWidget(type, loadBounds(type), { onBoundsChange: saveBounds, opacity: currentOpacity(), alwaysOnTop: currentAlwaysOnTop() });
+    openWidgetByType(type);
     return { opened: true };
   });
 
@@ -73,5 +81,5 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
     return { ok: true };
   });
 
-  return { WIDGET_TYPES };
+  return { WIDGET_TYPES, openWidgetByType };
 };

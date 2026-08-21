@@ -102,4 +102,9 @@ function setOpacityAll(opacity) {
   });
 }
 
-module.exports = { openWidget, isOpen, setAlwaysOnTop, closeIfOpen, setOpacityAll };
+// 자동 업데이트 재시작 직전에 "지금 뭐가 열려있었는지" 스냅샷 뜨기 위함(main/widget-restore 참고)
+function getOpenIds() {
+  return [...windows.keys()].filter((id) => isOpen(id));
+}
+
+module.exports = { openWidget, isOpen, setAlwaysOnTop, closeIfOpen, setOpacityAll, getOpenIds };

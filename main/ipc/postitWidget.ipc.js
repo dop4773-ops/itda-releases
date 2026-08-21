@@ -1,10 +1,9 @@
 const windowManager = require('../postit-widget/window-manager');
 
 module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
-  ipcMain.handle('postitWidget:open', (event, arg) => {
-    // 기존 호출부(숫자 id만 넘김)와 드래그앤드롭 신규 호출부({id,x,y}) 둘 다 지원
-    const id = typeof arg === 'object' && arg !== null ? arg.id : arg;
-    const dropPos = typeof arg === 'object' && arg !== null && arg.x != null ? { x: arg.x, y: arg.y } : null;
+  // 포스트잇 낱개 위젯을 여는 실제 로직 — 정상적인 "열기" IPC와, 자동 업데이트 재시작 후
+  // 위젯을 다시 켜는 main/widget-restore가 둘 다 이걸 쓴다(중복 구현 방지).
+  function openPostitById(id, { dropPos } = {}) {
     const postit = repos.postits.getById(id);
     if (!postit) throw new Error('포스트잇을 찾을 수 없습니다.');
     const rawOpacity = repos.settings.get('widget_opacity');
@@ -31,6 +30,13 @@ module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
       dropPos,
       opacity,
     });
+  }
+
+  ipcMain.handle('postitWidget:open', (event, arg) => {
+    // 기존 호출부(숫자 id만 넘김)와 드래그앤드롭 신규 호출부({id,x,y}) 둘 다 지원
+    const id = typeof arg === 'object' && arg !== null ? arg.id : arg;
+    const dropPos = typeof arg === 'object' && arg !== null && arg.x != null ? { x: arg.x, y: arg.y } : null;
+    openPostitById(id, { dropPos });
     return { opened: true };
   });
 
@@ -45,5 +51,5 @@ module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
     return { id, is_always_on_top: next };
   });
 
-  return { closeWidgetIfOpen: windowManager.closeIfOpen };
+  return { closeWidgetIfOpen: windowManager.closeIfOpen, openPostitById };
 };

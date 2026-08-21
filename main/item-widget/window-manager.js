@@ -78,4 +78,17 @@ function closeIfOpen(type, id) {
   if (win && !win.isDestroyed()) win.close();
 }
 
-module.exports = { openWidget, isOpen, closeIfOpen };
+// 자동 업데이트 재시작 직전에 "지금 뭐가 열려있었는지" 스냅샷 뜨기 위함(main/widget-restore 참고)
+function getOpenItems() {
+  return [...windows.keys()]
+    .filter((key) => {
+      const win = windows.get(key);
+      return win && !win.isDestroyed();
+    })
+    .map((key) => {
+      const [type, idStr] = key.split(':');
+      return { type, id: Number(idStr) };
+    });
+}
+
+module.exports = { openWidget, isOpen, closeIfOpen, getOpenItems };

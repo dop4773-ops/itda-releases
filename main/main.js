@@ -8,6 +8,7 @@ const { initTray } = require('./tray');
 const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
 const createSettingsRepository = require('./repositories/settings.repository');
+const { restoreOpenWidgets } = require('./widget-restore');
 
 let mainWindow;
 let db;
@@ -98,7 +99,7 @@ if (!gotLock) {
       return;
     }
 
-    registerIpcHandlers(ipcMain, db, () => mainWindow);
+    const { openWidgetByType, openPostitById } = registerIpcHandlers(ipcMain, db, () => mainWindow);
     createWindow();
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
     initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
@@ -106,6 +107,10 @@ if (!gotLock) {
     initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).
     // 위치/크기는 여전히 기억되지만(widget_bounds:*), "다시 켜기"는 사용자가 직접 해야 함.
+    // 단, 자동 업데이트로 재시작된 직후만 예외 — 재시작 직전에 열려있던 위젯을 그대로
+    // 되살린다(main/widget-restore 참고). 스냅샷이 없으면(=업데이트 재시작이 아니면)
+    // 아무 일도 안 일어나 위 원칙 그대로 유지된다.
+    restoreOpenWidgets({ settings: createSettingsRepository(db), openBoardWidgetByType: openWidgetByType, openPostitById });
 
     app.on('activate', () => {
       showMainWindow();
