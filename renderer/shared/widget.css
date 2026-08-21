@@ -226,14 +226,6 @@ body {
 .bw-postit-tile { border-radius: 8px; padding: 8px; min-height: 56px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .bw-postit-tile-content { font-size: 10.5px; line-height: 1.4; color: rgba(0,0,0,.75); word-break: break-word; }
 
-/* 빠른 메모 */
-.bw-memo-row { padding: 7px 0; border-bottom: 1px solid var(--bw-border); }
-.bw-memo-row:last-child { border-bottom: none; }
-.bw-memo-row-head { display: flex; justify-content: space-between; gap: 6px; }
-.bw-memo-row-head b { font-size: 12px; color: var(--bw-text); font-weight: 600; }
-.bw-memo-row-head span { font-size: 9.5px; color: var(--bw-faint); flex-shrink: 0; }
-.bw-memo-row-snippet { font-size: 10.5px; color: var(--bw-soft); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 /* 받은 업무 (Inbox) */
 .bw-inbox-row { display: flex; align-items: center; gap: 7px; padding: 6px 0; border-bottom: 1px solid var(--bw-border); }
 .bw-inbox-row:last-child { border-bottom: none; }

@@ -25,6 +25,7 @@ const LOCK_OPEN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="no
 const MINIMIZE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg>`;
 const CLOSE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const FILE_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>`;
+const PLUS_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M12 5v14M5 12h14"/></svg>`;
 
 // 포스트잇과 같은 개인화 팔레트(STICKY_COLORS) 앞에 "기본 디자인"(색을 안 입힌 원래 느낌의
 // 중립 배경) 옵션을 하나 더 둔다 — 색을 꼭 골라야 하는 게 아니라 안 고르는 것도 선택지가 되도록.
@@ -130,6 +131,7 @@ async function mount() {
           <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
           <button class="widget-btn" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
           <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
+          <button class="widget-btn" id="w-newMemo" title="새 메모">${PLUS_ICON}</button>
           <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
           <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
         </div>
@@ -254,6 +256,18 @@ async function mount() {
       mount(); // 잠금 화면으로 다시 그림 — 위젯에는 잠금 해제용 비밀번호 입력 UI가 없음(메인 화면 전용)
     } catch (err) {
       errorToast(err, '잠금 상태를 변경하지 못했어요');
+    }
+  });
+
+  // 포스트잇의 "+"(새 포스트잇 만들고 바로 낱개 위젯으로 열기)와 동일한 패턴 — 빠른 메모
+  // 위젯(목록 미리보기 + 메인 화면으로 점프하던 방식)을 없앤 대신, 메모 위젯 자체에서
+  // 바로 새 메모를 만들어 또 다른 편집 가능한 위젯으로 열 수 있게 한다.
+  document.getElementById('w-newMemo').addEventListener('click', async () => {
+    try {
+      const { id: newId } = await window.itda.memos.add({ content: '' });
+      await window.itda.itemWidget.open({ type: 'memo', id: newId });
+    } catch (err) {
+      errorToast(err, '새 메모를 만들지 못했어요');
     }
   });
 

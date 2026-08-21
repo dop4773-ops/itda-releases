@@ -932,7 +932,6 @@ export async function mount(root) {
     'today-schedule': { label: '오늘 일정', desc: '오늘 하루 일정을 시간순으로' },
     'today-todo': { label: '오늘 할 일', desc: '오늘 마감인 할 일 체크리스트' },
     'postit-board': { label: '포스트잇', desc: '최근 포스트잇 미니 보드' },
-    'quick-memo': { label: '빠른 메모', desc: '최근 메모 목록' },
     'google-calendar-mini': { label: '구글 캘린더', desc: '이번 달 미니 달력 (읽기 전용)' },
     inbox: { label: '받은 업무 (Inbox)', desc: '아직 처리 안 한 Inbox 항목' },
     dday: { label: 'D-DAY', desc: '가까운 마감일 순으로' },

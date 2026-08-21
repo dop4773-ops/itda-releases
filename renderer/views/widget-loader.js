@@ -5,7 +5,6 @@ const REGISTRY = {
   'today-schedule': () => import('./widgets/today-schedule.js'),
   'today-todo': () => import('./widgets/today-todo.js'),
   'postit-board': () => import('./widgets/postit-board.js'),
-  'quick-memo': () => import('./widgets/quick-memo.js'),
   'google-calendar-mini': () => import('./widgets/google-calendar-mini.js'),
   inbox: () => import('./widgets/inbox-widget.js'),
   dday: () => import('./widgets/dday.js'),

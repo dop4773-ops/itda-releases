@@ -2,7 +2,6 @@ import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserT
 import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { bindHashtagAutoTag } from '../shared/hashtag.js';
-import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import {
   sanitizeRichHtml,
   stripHtmlToPlainText,
@@ -106,7 +105,6 @@ export async function mount(root) {
             <input type="text" id="m-search" placeholder="검색" />
           </div>
           <button class="notes-new-btn" id="m-newBtn" title="새 메모 (${NEW_MEMO_SHORTCUT_LABEL})">${PLUS_ICON}</button>
-          ${widgetLaunchButtonHtml('m-widgetBtn', '빠른 메모 위젯 열기')}
         </div>
         <div class="notes-bulk-bar" id="m-bulkBar" style="display:none;">
           <label class="checkbox-row"><input type="checkbox" id="m-selectAll" /> 전체선택</label>
@@ -951,8 +949,6 @@ export async function mount(root) {
       renderList();
     }, 150);
   });
-
-  bindWidgetLaunchButton(root, 'm-widgetBtn', 'quick-memo');
 
   // 연결된 항목 팝오버 바깥 클릭 시 닫기 — renderDetail()이 여러 번 재실행돼도
   // 리스너가 쌓이지 않도록 mount() 스코프에서 딱 한 번만 등록하고, 화면을 벗어날 때 해제한다.
