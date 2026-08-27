@@ -858,6 +858,17 @@ export async function mount(root) {
               <option value="">불러오는 중…</option>
             </select>
           </label>
+          <label style="font-size:12px;color:var(--text-faint);display:flex;flex-direction:column;gap:4px;flex:1;">
+            자동 동기화 주기
+            <select id="gcal-intervalSelect" class="select">
+              <option value="15">15분마다</option>
+              <option value="30">30분마다 (기본)</option>
+              <option value="60">1시간마다</option>
+              <option value="180">3시간마다</option>
+              <option value="360">6시간마다</option>
+              <option value="0">끔 (수동으로만)</option>
+            </select>
+          </label>
         </div>`;
       $('gcal-syncBtn').addEventListener('click', async () => {
         $('gcal-syncBtn').disabled = true;
@@ -904,6 +915,17 @@ export async function mount(root) {
         } catch (e) {
           errorToast(e, '캘린더를 변경하지 못했어요');
           select.disabled = false;
+        }
+      });
+
+      const intervalSelect = $('gcal-intervalSelect');
+      intervalSelect.value = (await window.itda.settings.get('google_calendar_sync_interval_min')) ?? '30';
+      intervalSelect.addEventListener('change', async () => {
+        try {
+          await window.itda.settings.set({ key: 'google_calendar_sync_interval_min', value: intervalSelect.value });
+          toast(intervalSelect.value === '0' ? '자동 동기화를 껐어요' : `${intervalSelect.options[intervalSelect.selectedIndex].text}로 설정했어요`);
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
         }
       });
     } else {

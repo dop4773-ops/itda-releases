@@ -5,11 +5,13 @@
  *
  * 허용 태그: a(href가 http(s):로 시작할 때만, 링크 삽입 버튼으로 명시적으로 넣은 것만 — 아래 설명 참고),
  *           b, strong, i, em, u, span(font-size/color만 / item-mention 칩), div/p(text-align만), br,
- *           input(type=checkbox만, 체크리스트 전용 — contenteditable=false로 고정해서 텍스트 편집과 분리)
+ *           input(type=checkbox만, 체크리스트 전용 — contenteditable=false로 고정해서 텍스트 편집과 분리),
+ *           img(data-attachment-id가 유효한 숫자일 때만 — 첨부파일을 참조하는 인라인 사진, 아래 설명 참고)
  * 허용 속성: a의 href(http/https만) + target/rel/contenteditable은 항상 강제로 다시 부여,
  *           span의 style 중 font-size(10~28px 범위로 클램프)와 color(#RRGGBB 형식만) 둘만,
  *           div/p의 style 중 text-align(left/center/right/justify만),
  *           input의 type/checked만,
+ *           img의 data-attachment-id(숫자만)와 style 중 width(60~600px로 클램프)만 — src는 항상 제거,
  *           span.item-mention의 data-type/data-id(연결된 항목 칩 — @검색으로 삽입, contenteditable=false로 고정)
  * 그 외 모든 태그/속성/이벤트핸들러/src 등은 제거된다.
  * a(링크)는 두 가지 경로로만 생긴다: (1) 링크 삽입 버튼(insertLink)으로 직접 넣은 것 — href를
@@ -22,9 +24,11 @@
 const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'U', 'SPAN', 'DIV', 'P', 'BR']);
 // script/style/iframe 등은 "태그만 벗기기"가 아니라 내용까지 통째로 삭제한다
 // (벗기면 스크립트 원문이 그냥 텍스트로 노출되어 지저분해짐)
-const REMOVE_ENTIRELY_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'SVG', 'IMG']);
+const REMOVE_ENTIRELY_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'SVG']);
 const MIN_FONT_SIZE = 10;
 const MAX_FONT_SIZE = 28;
+const MIN_IMG_WIDTH = 60;
+const MAX_IMG_WIDTH = 600;
 const SAFE_HEX_COLOR = /^#[0-9a-f]{6}$/i; // style에 CSS 인젝션(expression/url 등) 못 들어오게 이 형식만 허용
 const SAFE_HREF = /^https?:\/\//i; // javascript:/data: 등 위험한 스킴 차단
 const SAFE_TEXT_ALIGN = new Set(['left', 'center', 'right', 'justify']);
@@ -68,6 +72,34 @@ function sanitizeElement(el) {
       child.setAttribute('contenteditable', 'false');
       if (checked) child.setAttribute('checked', '');
       continue; // input은 자식 노드가 없으므로 재귀 불필요
+    }
+
+    // 인라인 사진(img) — 첨부파일을 그대로 참조하는 "원자적" 요소. ALLOWED_TAGS 기반 일반 검사보다
+    // 먼저 처리해야 한다(IMG는 ALLOWED_TAGS에 없어서, 순서가 바뀌면 아래 "허용 안 된 태그" 분기에
+    // 걸려 태그만 벗겨지고 통째로 사라진다 — 처음 이 순서로 잘못 둬서 저장 후 사진이 사라지는
+    // 버그가 있었다). src는 절대 저장하지 않는다(붙여넣기/드래그로 들어온 원본 data: URL을 그대로
+    // 저장하면 DB가 급격히 불어나고, 파일이 이미 memo_attachments에 실물로 있으니 중복 저장일
+    // 뿐이다) — data-attachment-id로만 참조해두면 불러올 때 렌더러가 memoAttachments:getImageData로
+    // 다시 채워 넣는다(첨부 썸네일과 동일한 방식). style은 리사이즈 결과인 width(60~600px)만 허용.
+    if (child.tagName === 'IMG') {
+      const attachmentId = child.getAttribute('data-attachment-id');
+      if (!/^\d+$/.test(attachmentId || '')) {
+        el.removeChild(child); // 유효하지 않으면(오염된 데이터, 외부 img 붙여넣기 등) 통째로 버림 — 대체할 텍스트가 없음
+        continue;
+      }
+      const width = child.style.width;
+      Array.from(child.attributes).forEach((attr) => child.removeAttribute(attr.name));
+      child.className = 'memo-inline-img';
+      child.setAttribute('data-attachment-id', attachmentId);
+      child.setAttribute('contenteditable', 'false');
+      // img는 contenteditable 안에서 기본적으로 draggable="true"라, 리사이즈하려고 모서리를
+      // 누르는 손짓이 브라우저의 네이티브 "이미지 드래그"로 오인돼서 이미지가 원래 자리에서
+      // 붕 뜬 채 사라지는 문제가 있었다 — 꺼서 우리 커스텀 리사이즈 로직만 반응하게 한다.
+      child.setAttribute('draggable', 'false');
+      const pxMatch = width && width.match(/^(\d+(?:\.\d+)?)px$/);
+      const px = pxMatch ? Math.round(parseFloat(pxMatch[1])) : 260;
+      child.style.width = `${Math.min(MAX_IMG_WIDTH, Math.max(MIN_IMG_WIDTH, px))}px`;
+      continue; // img는 자식이 없는 원자적 요소라 재귀 불필요
     }
 
     if (!ALLOWED_TAGS.has(child.tagName)) {
@@ -167,6 +199,10 @@ export function stripHtmlToPlainText(html) {
   // ☑/☐ 표시를 텍스트로 먼저 심어준다.
   container.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     cb.insertAdjacentText('afterend', cb.hasAttribute('checked') ? '☑ ' : '☐ ');
+  });
+  // 인라인 사진도 체크박스와 같은 이유로 미리보기에 흔적을 남긴다(사진만 있는 메모가 빈 줄로 보이지 않게)
+  container.querySelectorAll('img').forEach((img) => {
+    img.insertAdjacentText('afterend', '📷 ');
   });
   container.querySelectorAll('div, p, br').forEach((el) => {
     el.insertAdjacentText('beforebegin', '\n');

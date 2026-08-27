@@ -19,6 +19,7 @@ import {
   linkifyUrls,
 } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
+import { registerEscClose } from '../shared/esc-close.js';
 import { setScreenShortcuts } from '../shared/shell.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
@@ -83,6 +84,59 @@ function dateGroupLabel(updatedAt) {
   if (diffDays <= 7) return '지난 7일';
   if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}월`;
   return `${d.getFullYear()}년`;
+}
+
+// 인라인 사진을 커서 위치(또는 없으면 끝)에 삽입한다. src는 여기서 바로 채워 넣지만(방금
+// 붙여넣거나 방금 읽어온 dataUrl이라 이미 손에 있음) 저장될 땐 sanitizeRichHtml이 src를
+// 걷어내고 data-attachment-id만 남긴다 — 다음에 불러올 때 다시 getImageData로 채워진다.
+function insertInlineImage(bodyEl, attachmentId, dataUrl) {
+  bodyEl.focus();
+  const img = document.createElement('img');
+  img.className = 'memo-inline-img';
+  img.dataset.attachmentId = String(attachmentId);
+  img.src = dataUrl;
+  img.style.width = '260px';
+  img.setAttribute('contenteditable', 'false');
+  img.setAttribute('draggable', 'false'); // 브라우저 기본 이미지 드래그와 충돌해서 리사이즈 도중 사라지는 문제 방지
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && bodyEl.contains(sel.anchorNode)) {
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(img);
+    range.setStartAfter(img);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    bodyEl.appendChild(img);
+  }
+}
+
+// 저장된 content 안의 img[data-attachment-id]는 src 없이 저장돼 있으므로(rich-text.js 참고),
+// 불러올 때마다 첨부 썸네일과 같은 방식으로 다시 채워 넣는다. 파일이 실제로 없으면(예: 다른
+// 기기에서 옮겨온 DB 등) 빈 자리로 남기지 않고 "사진을 불러올 수 없어요" 표시로 대체해서,
+// 사진이 그냥 조용히 사라진 것처럼 보이지 않게 한다.
+function loadInlineImages(bodyEl) {
+  bodyEl.querySelectorAll('img.memo-inline-img[data-attachment-id]').forEach(async (img) => {
+    const id = Number(img.dataset.attachmentId);
+    try {
+      const dataUrl = await window.itda.memoAttachments.getImageData(id);
+      if (dataUrl) {
+        img.src = dataUrl;
+      } else if (img.isConnected) {
+        img.replaceWith(brokenImagePlaceholder());
+      }
+    } catch (e) {
+      if (img.isConnected) img.replaceWith(brokenImagePlaceholder());
+    }
+  });
+}
+function brokenImagePlaceholder() {
+  const span = document.createElement('span');
+  span.className = 'memo-inline-img-broken';
+  span.setAttribute('contenteditable', 'false');
+  span.textContent = '🖼 사진을 불러올 수 없어요';
+  return span;
 }
 
 function deriveSnippet(memo) {
@@ -216,8 +270,7 @@ export async function mount(root) {
         try {
           await window.itda.memoFolders.delete(id);
           if (currentFolderId === id) currentFolderId = undefined;
-          await loadFolders();
-          await load();
+          await load(); // load()가 내부에서 loadFolders()도 같이 호출한다
         } catch (err) {
           errorToast(err, '폴더를 삭제하지 못했어요');
         }
@@ -376,12 +429,17 @@ export async function mount(root) {
             memos = memos.filter((m) => m.id !== item.id);
             selected.delete(item.id);
             if (selectedId === item.id) selectedId = null;
+            loadFolders(); // 지워진 메모가 폴더에 있었으면 그 폴더 개수도 갱신
             renderList();
             renderDetail();
           },
           onMoved: (item, folderId) => {
             const memo = memos.find((m) => m.id === item.id);
             if (memo) memo.folder_id = folderId;
+            // 폴더별 개수(f.memo_count)는 서버가 계산해서 loadFolders()로만 받아오는 값이라 —
+            // renderList()가 매번 부르는 renderFolderRail()은 전체/미분류 카운트(memos 배열에서
+            // 즉석 계산)만 맞고, 커스텀 폴더 칸은 다시 불러오기 전까진 그대로 낡아있었다(버그).
+            loadFolders();
             renderList();
             if (selectedId === item.id) renderDetail();
           },
@@ -487,6 +545,7 @@ export async function mount(root) {
 
     const bodyEl = $('m-bodyInput');
     linkifyUrls(bodyEl); // 불러올 때 한 번만 URL을 링크로 표시(입력 중엔 절대 호출하지 않음 — 커서 깨짐 방지)
+    loadInlineImages(bodyEl); // 저장된 인라인 사진들의 src를 첨부파일에서 다시 채워 넣음(마찬가지로 불러올 때 한 번만)
     const scheduleSave = wrapAutosave(async () => {
       try {
         const cleanContent = sanitizeRichHtml(bodyEl.innerHTML); // 저장 직전에도 한 번 더 정화(붙여넣기 등 대비, a 태그는 여기서 자동으로 벗겨짐)
@@ -503,6 +562,59 @@ export async function mount(root) {
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);
     bindChecklistBackspaceKey(bodyEl, scheduleSave);
+
+    // 클립보드에 이미지가 있으면(스크린샷 도구로 캡처 후 바로 붙여넣기 등) 브라우저 기본
+    // 붙여넣기(base64 <img>를 그대로 삽입 — sanitizeRichHtml이 나중에 지워버려서 저장 후
+    // 다시 열면 사진이 사라진 것처럼 보이는 원인이었다)를 막고, 첨부파일로 저장한 뒤
+    // data-attachment-id를 참조하는 인라인 사진으로 삽입한다.
+    bodyEl.addEventListener('paste', (e) => {
+      const items = [...(e.clipboardData?.items || [])];
+      const imageItem = items.find((it) => it.type.startsWith('image/'));
+      if (!imageItem) return; // 이미지가 아니면(텍스트 등) 기본 붙여넣기 그대로 둔다
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const record = await window.itda.memoAttachments.addFromDataUrl({
+            memoId: memo.id,
+            dataUrl: reader.result,
+            fileName: `pasted-${Date.now()}.png`,
+          });
+          insertInlineImage(bodyEl, record.id, reader.result);
+          scheduleSave();
+        } catch (err) {
+          errorToast(err, '사진을 붙여넣지 못했어요');
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // 인라인 사진 크기 조절 — 이미지 우측 하단 모서리 근처를 눌러서 끌면 폭이 바뀐다
+    // (높이는 auto라 비율 그대로 유지됨). 별도 리사이즈 손잡이 엘리먼트를 저장 데이터에
+    // 남기지 않으려고, 핸들을 따로 그리지 않고 이미지 자체의 코너 히트 영역으로만 판정한다.
+    bodyEl.addEventListener('mousedown', (e) => {
+      const img = e.target.closest('img.memo-inline-img');
+      if (!img) return;
+      const rect = img.getBoundingClientRect();
+      const nearCorner = e.clientX > rect.right - 16 && e.clientY > rect.bottom - 16;
+      if (!nearCorner) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = rect.width;
+      const onMove = (ev) => {
+        const nextW = Math.max(60, Math.min(bodyEl.clientWidth || 600, startW + (ev.clientX - startX)));
+        img.style.width = `${Math.round(nextW)}px`;
+      };
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        scheduleSave();
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
 
     // 엑셀/워드처럼 서식을 단축키로 — Cmd/Ctrl+B/U는 크로미움이 contenteditable에 기본으로도
     // 걸어주지만, 여기서 직접 가로채 처리해야 정렬(Cmd/Ctrl+Shift+L/E/R, 브라우저 기본 단축키가
@@ -581,7 +693,7 @@ export async function mount(root) {
       insertLink(bodyEl, /^https?:\/\//i.test(url) ? url : `https://${url}`);
       scheduleSave();
     });
-    $('m-photoBtn').addEventListener('click', () => addAttachments());
+    $('m-photoBtn').addEventListener('click', addInlinePhotos);
     root.querySelectorAll('.rich-size-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         applyFontSize(bodyEl, Number(btn.dataset.size));
@@ -613,6 +725,12 @@ export async function mount(root) {
       } catch (e) {
         errorToast(e, '첨부파일을 불러오지 못했어요');
       }
+      // 본문에 이미 인라인으로 삽입된 사진은 스트립에 또 보여주지 않는다(중복 표시 방지) —
+      // 문서 파일이나, 아직 인라인으로 옮겨지지 않은 예전 사진 첨부만 스트립에 남는다.
+      const inlineIds = new Set(
+        [...bodyEl.querySelectorAll('img.memo-inline-img[data-attachment-id]')].map((img) => Number(img.dataset.attachmentId))
+      );
+      attachments = attachments.filter((a) => !inlineIds.has(a.id));
 
       strip.innerHTML =
         attachments
@@ -681,43 +799,37 @@ export async function mount(root) {
     $('m-attachBtn').addEventListener('click', addAttachments);
     renderAttachments();
 
-    // ---------- 첨부파일 드래그앤드롭 ----------
-    // dataTransfer.files의 각 File은 Electron 렌더러에서 .path(실제 파일 시스템 경로)를
-    // 그대로 들고 있다 — 그 경로만 메인 프로세스로 넘기면(addFromPaths) 파일선택 다이얼로그와
-    // 똑같은 복사+기록 로직을 그대로 재사용할 수 있다.
-    let dragDepth = 0; // dragenter/dragleave가 자식 요소를 넘나들며 여러 번 오가므로 카운터로 안정적으로 판정
-    detailEl.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      dragDepth += 1;
-      detailEl.classList.add('drag-over');
-    });
-    detailEl.addEventListener('dragover', (e) => e.preventDefault()); // 기본 동작(파일을 새 탭으로 여는 등)을 막아야 drop이 발생함
-    detailEl.addEventListener('dragleave', () => {
-      dragDepth = Math.max(0, dragDepth - 1);
-      if (dragDepth === 0) detailEl.classList.remove('drag-over');
-    });
-    detailEl.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      dragDepth = 0;
-      detailEl.classList.remove('drag-over');
-      const filePaths = [...(e.dataTransfer?.files || [])].map((f) => f.path).filter(Boolean);
-      if (!filePaths.length) return;
+    // "사진 삽입" 버튼 — 파일 첨부와 같은 선택 다이얼로그를 재사용하되, 고른 게 사진이면
+    // 스트립이 아니라 본문에 바로 인라인으로 넣는다(애플 메모장처럼 크기 조절 가능).
+    async function addInlinePhotos() {
       try {
-        const result = await window.itda.memoAttachments.addFromPaths({ memoId: memo.id, filePaths });
+        const result = await window.itda.memoAttachments.add(memo.id);
+        if (result?.cancelled) return;
+        for (const record of result.added || []) {
+          if (!record.mime_type?.startsWith('image/')) continue; // 문서를 골랐으면 스트립에만 남기고 인라인 삽입은 생략
+          try {
+            const dataUrl = await window.itda.memoAttachments.getImageData(record.id);
+            if (dataUrl) insertInlineImage(bodyEl, record.id, dataUrl);
+          } catch (e) {
+            /* 하나 실패해도 나머지는 계속 */
+          }
+        }
         if (result?.skipped?.length) {
           toast(`${result.skipped.length}개 파일은 건너뛰었어요 (${result.skipped[0].reason})`);
         }
+        scheduleSave();
         await renderAttachments();
-      } catch (err) {
-        errorToast(err, '파일을 첨부하지 못했어요');
+      } catch (e) {
+        errorToast(e, '사진을 추가하지 못했어요');
       }
-    });
+    }
 
     $('m-folderSelect').addEventListener('change', async (e) => {
       const folderId = e.target.value ? Number(e.target.value) : null;
       try {
         await window.itda.memos.update({ id: memo.id, folderId });
         memo.folder_id = folderId;
+        await loadFolders(); // 커스텀 폴더의 개수(f.memo_count)는 서버 계산값이라 다시 불러와야 갱신됨
         renderList();
       } catch (err) {
         errorToast(err, '폴더를 변경하지 못했어요');
@@ -764,6 +876,7 @@ export async function mount(root) {
         toast('휴지통으로 이동했어요');
         memos = memos.filter((m) => m.id !== memo.id);
         selectedId = null;
+        await loadFolders(); // 지워진 메모가 폴더에 있었으면 그 폴더 개수도 갱신
         renderList();
         renderDetail();
       } catch (e) {
@@ -792,6 +905,15 @@ export async function mount(root) {
     if (window.matchMedia('(max-width: 900px)').matches) {
       root.querySelector('.notes-app')?.classList.add('detail-open');
     }
+  }
+
+  // "+"로 막 만든 메모나 지금 보고 있는 메모를 Esc로 닫고(선택 해제) 빈 상태로 돌아간다 —
+  // 제목/본문을 타이핑하는 중엔 반응하지 않는다(다른 팝오버 닫기 등과 겹치지 않게).
+  function closeMemoDetail() {
+    selectedId = null;
+    renderList();
+    renderDetail();
+    root.querySelector('.notes-app')?.classList.remove('detail-open');
   }
 
   // 잠긴 메모는 앱 비밀번호(설정 > 보안)로 확인한 뒤에만 상세를 연다 — 비밀번호가 아예
@@ -884,6 +1006,7 @@ export async function mount(root) {
       $('m-list').innerHTML = emptyStateBlock({ title: '메모를 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
       return;
     }
+    await loadFolders(); // 커스텀 폴더 개수(f.memo_count)는 서버 계산값이라 메모 목록과 같이 다시 불러온다
     renderList();
     renderDetail();
   }
@@ -920,6 +1043,71 @@ export async function mount(root) {
     bulkDeleteSelected();
   };
   document.addEventListener('keydown', handleDeleteKey);
+
+  const unsubscribeEsc = registerEscClose(() => selectedId !== null && !isUserTyping(), closeMemoDetail);
+
+  // ---------- 첨부파일 드래그앤드롭 ----------
+  // mount() 스코프에서 딱 한 번만 등록한다 — renderDetail() 안에 있으면 메모를 열 때마다(심지어
+  // 같은 메모를 다시 클릭할 때마다) 리스너가 새로 쌓여서, 파일 하나를 드롭해도 여러 개가
+  // 중복으로 첨부되는 버그가 있었다(detailEl은 재렌더링돼도 계속 같은 DOM 노드라 리스너가
+  // 안 사라짐). memo.id는 매번 selectedId로 다시 찾아서 최신 값을 쓴다.
+  // dataTransfer.files의 각 File은 Electron 렌더러에서 .path(실제 파일 시스템 경로)를 그대로
+  // 들고 있다 — 그 경로만 메인 프로세스로 넘기면(addFromPaths) 파일선택 다이얼로그와 똑같은
+  // 복사+기록 로직을 그대로 재사용할 수 있다.
+  let dragDepth = 0; // dragenter/dragleave가 자식 요소를 넘나들며 여러 번 오가므로 카운터로 안정적으로 판정
+  const detailEl = $('m-detail');
+  detailEl.addEventListener('dragenter', (e) => {
+    if (selectedId == null) return;
+    e.preventDefault();
+    dragDepth += 1;
+    detailEl.classList.add('drag-over');
+  });
+  detailEl.addEventListener('dragover', (e) => {
+    if (selectedId == null) return;
+    e.preventDefault(); // 기본 동작(파일을 새 탭으로 여는 등)을 막아야 drop이 발생함
+  });
+  detailEl.addEventListener('dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) detailEl.classList.remove('drag-over');
+  });
+  detailEl.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    detailEl.classList.remove('drag-over');
+    const memo = memos.find((m) => m.id === selectedId);
+    if (!memo) return;
+    const filePaths = [...(e.dataTransfer?.files || [])].map((f) => f.path).filter(Boolean);
+    if (!filePaths.length) return;
+    try {
+      const result = await window.itda.memoAttachments.addFromPaths({ memoId: memo.id, filePaths });
+      if (result?.skipped?.length) {
+        toast(`${result.skipped.length}개 파일은 건너뛰었어요 (${result.skipped[0].reason})`);
+      }
+      const imageRecords = (result.added || []).filter((r) => r.mime_type?.startsWith('image/'));
+      if (imageRecords.length) {
+        // 사진은 스트립이 아니라 본문에 바로 인라인으로 삽입 — renderDetail로 새 bodyEl을 얻는다.
+        renderDetail();
+        const bodyEl = $('m-bodyInput');
+        for (const record of imageRecords) {
+          try {
+            const dataUrl = await window.itda.memoAttachments.getImageData(record.id);
+            if (dataUrl) insertInlineImage(bodyEl, record.id, dataUrl);
+          } catch (err) {
+            /* 하나 실패해도 나머지는 계속 */
+          }
+        }
+        const cleanContent = sanitizeRichHtml(bodyEl.innerHTML);
+        await window.itda.memos.update({ id: memo.id, content: cleanContent });
+        memo.content = cleanContent;
+        memo.updated_at = new Date().toISOString();
+        renderList();
+      } else {
+        renderDetail(); // 문서 파일만 있었으면 스트립 갱신을 위해 다시 그리기만 하면 충분
+      }
+    } catch (err) {
+      errorToast(err, '파일을 첨부하지 못했어요');
+    }
+  });
 
   $('m-selectAll').addEventListener('change', (e) => {
     const ids = [...filteredMemos()].map((m) => m.id);
@@ -961,8 +1149,7 @@ export async function mount(root) {
   } catch (e) {
     lockListMode = 'hidden';
   }
-  await load();
-  await loadFolders();
+  await load(); // load()가 내부에서 loadFolders()도 같이 호출한다
   setScreenShortcuts('메모', MEMO_SCREEN_SHORTCUTS);
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
@@ -980,6 +1167,7 @@ export async function mount(root) {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
     document.removeEventListener('keydown', handleDeleteKey);
+    unsubscribeEsc();
     offDataChanged?.();
     setScreenShortcuts(null, []); // 다른 화면으로 이동하면 이 화면 전용 단축키는 오버레이에서 빠져야 함
   };

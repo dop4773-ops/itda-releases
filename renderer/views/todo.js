@@ -7,6 +7,7 @@ import { attachContextMenu } from '../shared/context-menu.js';
 import { attachDateQuickChips } from '../shared/date-quick-chips.js';
 import { confirmSeriesScope } from '../shared/series-scope.js';
 import { openCreateEventModal } from '../shared/create-event-modal.js';
+import { openCreateTodoModal } from '../shared/create-todo-modal.js';
 
 const TODO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`;
 const RECURRENCE_LABEL = { daily: '매일', weekly: '매주', monthly: '매월' };
@@ -18,6 +19,7 @@ const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 const CHEVRON_RIGHT = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>`;
 const CHEVRON_LEFT = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg>`;
 const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+const PLUS_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
 const SMALL_TRASH_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 
 const EMPTY_MESSAGES = {
@@ -41,6 +43,7 @@ export async function mount(root) {
         <button class="view-toggle-btn" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
         <button class="view-toggle-btn active" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
       </div>
+      <button class="notes-new-btn" id="t-newModalBtn" title="새 할 일 (팝업으로 작성)">${PLUS_ICON}</button>
       ${widgetLaunchButtonHtml('t-widgetBtn', '오늘 할 일 위젯 열기')}
     </div>
 
@@ -649,6 +652,14 @@ export async function mount(root) {
   $('t-addBtn').addEventListener('click', handleAdd);
   $('t-title').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleAdd();
+  });
+
+  // 상단 빠른 추가 행과 별개로, "+" 팝업으로도 새 할 일을 만들 수 있다 — 이미 있는
+  // Todo 전환 팝업(create-todo-modal.js)을 그대로 재사용(Esc/취소 버튼으로만 닫힘).
+  $('t-newModalBtn').addEventListener('click', async () => {
+    const newTodo = await openCreateTodoModal({});
+    if (!newTodo) return; // 취소
+    await refresh();
   });
 
   root.querySelectorAll('#t-tabs .tab').forEach((tab) => {

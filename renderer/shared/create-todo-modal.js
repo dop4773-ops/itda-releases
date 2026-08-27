@@ -39,9 +39,8 @@ function ensureModal() {
 
   const $ = (id) => modalEl.querySelector('#' + id);
   attachDateQuickChips($('ctm-due'));
-  modalEl.addEventListener('click', (e) => {
-    if (e.target === modalEl) activeCancel?.();
-  });
+  // 배경(오버레이) 클릭으로는 안 닫는다 — 입력하다가 실수로 바깥을 눌러서 날아가는 걸 막기 위해
+  // Esc 키와 "취소" 버튼으로만 닫히게 의도적으로 제한한다.
   registerEscClose(() => modalEl.classList.contains('open'), () => activeCancel?.());
 
   return modalEl;

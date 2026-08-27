@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld('itda', {
     list: (memoId) => ipcRenderer.invoke('memoAttachments:list', memoId),
     add: (memoId) => ipcRenderer.invoke('memoAttachments:add', memoId),
     addFromPaths: (payload) => ipcRenderer.invoke('memoAttachments:addFromPaths', payload),
+    addFromDataUrl: (payload) => ipcRenderer.invoke('memoAttachments:addFromDataUrl', payload),
     getImageData: (id) => ipcRenderer.invoke('memoAttachments:getImageData', id),
     open: (id) => ipcRenderer.invoke('memoAttachments:open', id),
     delete: (id) => ipcRenderer.invoke('memoAttachments:delete', id),

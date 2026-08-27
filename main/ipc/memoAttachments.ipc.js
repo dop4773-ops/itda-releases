@@ -1,7 +1,7 @@
 const { dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { copyIntoAttachments, fullPathFor, deleteStoredFile } = require('../memo-attachments/storage');
+const { copyIntoAttachments, copyBufferIntoAttachments, fullPathFor, deleteStoredFile } = require('../memo-attachments/storage');
 const { assertNonEmpty } = require('./_shared');
 
 // 확장자 기반 mime-type 약식 추정 — 새 의존성(mime-types 등) 추가 없이 흔한 형식만 커버.
@@ -102,6 +102,25 @@ module.exports = function registerMemoAttachmentsIpc(ipcMain, repos) {
     if (!memo) throw new Error('메모를 찾을 수 없습니다.');
     if (!Array.isArray(filePaths) || !filePaths.length) return { added: [], skipped: [] };
     return processFiles(memoId, filePaths);
+  });
+
+  // 클립보드에서 붙여넣은 이미지 — 파일 시스템 경로가 없는 메모리상의 데이터라 위 processFiles
+  // (경로 기반)와는 별도 경로로 다룬다. dataUrl은 "data:image/png;base64,...." 형식.
+  ipcMain.handle('memoAttachments:addFromDataUrl', (event, { memoId, dataUrl, fileName }) => {
+    assertNonEmpty(memoId, 'memoId가 필요합니다.');
+    assertNonEmpty(dataUrl, '이미지 데이터가 필요합니다.');
+    const memo = memos.getById(memoId);
+    if (!memo) throw new Error('메모를 찾을 수 없습니다.');
+
+    const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
+    if (!match) throw new Error('올바른 이미지 데이터가 아니에요.');
+    const [, mimeType, base64] = match;
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length > MAX_ATTACHMENT_BYTES) throw new Error('25MB를 초과해요.');
+
+    const name = fileName || 'pasted-image.png';
+    const { storedName, size } = copyBufferIntoAttachments(buffer, name);
+    return memoAttachments.insert({ memoId, fileName: name, storedName, mimeType, size });
   });
 
   // 이미지 파일을 렌더러에서 <img>로 보여주기 위해 base64로 인코딩해서 넘긴다.

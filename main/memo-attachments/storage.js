@@ -27,6 +27,16 @@ function copyIntoAttachments(sourcePath, originalName) {
   return { storedName, size };
 }
 
+// 클립보드 붙여넣기처럼 파일 경로가 없는 메모리상의 데이터를 저장할 때 쓴다(copyIntoAttachments와
+// 로직은 같되 원본이 디스크 경로가 아니라 버퍼라는 점만 다름).
+function copyBufferIntoAttachments(buffer, originalName) {
+  const storedName = generateStoredName(originalName);
+  const destPath = path.join(attachmentsDir(), storedName);
+  fs.writeFileSync(destPath, buffer);
+  const { size } = fs.statSync(destPath);
+  return { storedName, size };
+}
+
 function fullPathFor(storedName) {
   return path.join(attachmentsDir(), storedName);
 }
@@ -41,4 +51,4 @@ function deleteStoredFile(storedName) {
   }
 }
 
-module.exports = { attachmentsDir, copyIntoAttachments, fullPathFor, deleteStoredFile };
+module.exports = { attachmentsDir, copyIntoAttachments, copyBufferIntoAttachments, fullPathFor, deleteStoredFile };

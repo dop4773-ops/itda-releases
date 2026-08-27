@@ -78,4 +78,33 @@ module.exports = function registerGoogleCalendarIpc(ipcMain, repos) {
     repos.googleCalendar.clearAll();
     return syncNow(repos, () => getValidAccessToken(repos.settings), id);
   });
+
+  // ================= 주기적 자동 동기화 =================
+  // 예전엔 연결/수동 동기화/캘린더 변경 시에만 동기화해서, 앱을 오래 켜둔 채로 구글 쪽에서
+  // 일정이 바뀌면(예: 병원 어드민이 새 휴가를 올림) 재연결하거나 "지금 동기화"를 직접 누르기
+  // 전까진 반영이 안 됐다. 설정(google_calendar_sync_interval_min)으로 주기를 바꿀 수 있고,
+  // 값이 없으면 30분이 기본, 0이면 자동 동기화를 끄고 수동 버튼으로만 동기화한다.
+  // setInterval 자체를 설정이 바뀔 때마다 새로 만들지 않고, 짧은 틱(1분)마다 "마지막 동기화
+  // 이후 설정된 시간이 지났는지"를 확인하는 방식이라 사용자가 값을 바꿔도 앱 재시작 없이
+  // 다음 틱부터 바로 반영된다.
+  const AUTO_SYNC_TICK_MS = 60 * 1000;
+  let lastAutoSyncAt = 0;
+  function getSyncIntervalMinutes() {
+    const raw = repos.settings.get('google_calendar_sync_interval_min');
+    if (raw === undefined || raw === null || raw === '') return 30;
+    return Number(raw) || 0;
+  }
+  setInterval(async () => {
+    if (!tokenStore.isConnected(repos.settings)) return;
+    const intervalMin = getSyncIntervalMinutes();
+    if (intervalMin <= 0) return;
+    if (Date.now() - lastAutoSyncAt < intervalMin * 60 * 1000) return;
+    lastAutoSyncAt = Date.now();
+    try {
+      const { id: calendarId } = tokenStore.getSelectedCalendar(repos.settings);
+      await syncNow(repos, () => getValidAccessToken(repos.settings), calendarId);
+    } catch (err) {
+      console.error('[itda] 구글 캘린더 자동 동기화 실패:', err.message);
+    }
+  }, AUTO_SYNC_TICK_MS);
 };

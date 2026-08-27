@@ -91,6 +91,16 @@ html[data-theme="dark"]{
   --tone-blue-fg:#7EABFF;
 }
 
+/* ================= 스크롤바 =================
+   OS 기본 스크롤바는 테마와 무관하게 밝은 회색이라, 다크 모드에서 유독 튀어 보였다(특히
+   메모 화면처럼 스크롤 영역이 큰 곳). 테마 변수를 그대로 써서 라이트/다크 둘 다 배경과
+   자연스럽게 어울리게 앱 전체에 커스터마이즈한다. */
+*{scrollbar-width:thin;scrollbar-color:var(--border) transparent;} /* Firefox */
+*::-webkit-scrollbar{width:10px;height:10px;}
+*::-webkit-scrollbar-track{background:transparent;}
+*::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px;border:2px solid transparent;background-clip:padding-box;}
+*::-webkit-scrollbar-thumb:hover{background:var(--text-faint);background-clip:padding-box;}
+
 
 /* Pretendard Variable — 로컬 번들(CDN 의존 없음, 오프라인 병원 PC에서도 항상 로드됨).
    기본 시스템 폰트(윈도우는 맑은 고딕)가 "딱딱해 보인다"는 피드백에 대응 — 더 둥글고
@@ -790,6 +800,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .card-content .mc-item.mc-item-done{color:rgba(0,0,0,.4);text-decoration:line-through;}
 .notes-body-input a{color:var(--brand);text-decoration:underline;cursor:pointer;}
 .sticky-card .card-content a{color:#2255cc;text-decoration:underline;cursor:pointer;}
+
+/* 메모 본문 인라인 사진 — 우측 하단 모서리를 끌면 크기 조절(memo.js 참고). max-width:100%로
+   본문 폭을 절대 넘지 않게 막고, 실제 크기는 인라인 width 스타일(리사이즈 결과)이 정한다. */
+.memo-inline-img{display:block;max-width:100%;height:auto;border-radius:8px;margin:8px 0;cursor:nwse-resize;}
+.memo-inline-img-broken{display:block;padding:14px;text-align:center;color:var(--text-faint);background:var(--bg);border:1px dashed var(--border);border-radius:8px;margin:8px 0;font-size:12.5px;}
 
 /* 메모 상세 — "연결된 항목" 팝오버 (본문 작성을 방해하지 않도록 버튼 클릭 시에만 노출) */
 .links-popover-wrap{position:relative;}
