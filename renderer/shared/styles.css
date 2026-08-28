@@ -1196,15 +1196,19 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-block[data-cardtheme="dark"] .dash-block-body{color:#e8e8ee;}
 
 /* 카드 우클릭 메뉴 */
-.dash-card-menu{min-width:180px;}
+.dash-card-menu{min-width:190px;max-height:82vh;overflow-y:auto;}
 .dcm-label{font-size:11px;color:var(--text-faint);padding:4px 8px 2px;display:flex;justify-content:space-between;}
 .dcm-themes{display:flex;gap:5px;flex-wrap:wrap;padding:2px 8px 6px;}
 .dcm-swatch{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
 .dcm-swatch.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft);}
 .dcm-op{width:calc(100% - 16px);margin:2px 8px 6px;}
 .dcm-views{display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 6px;}
-.dcm-view{font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
-.dcm-view.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.dcm-view,.dcm-header{font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
+.dcm-view.active,.dcm-header.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.dcm-accent{display:flex;align-items:center;gap:6px;padding:2px 8px 6px;}
+.dcm-accent-reset{font-size:11px;padding:3px 9px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
+.dcm-accent-reset.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.dcm-accent-pick{width:30px;height:24px;padding:0;border:1px solid var(--border);border-radius:var(--radius-xs);cursor:pointer;background:none;}
 
 /* ---- Todo 위젯 표현 방식: 컴팩트 / 포커스 / 진행률 ---- */
 .todo-view-compact .todo-row{padding:4px 0;font-size:12.5px;gap:7px;}
@@ -1271,23 +1275,24 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-widget .panel-head{justify-content:flex-start;}
 .dash-widget .panel-head > a{margin-left:auto;}
 
-/* ---- 위젯 헤더 스타일 (설정 > 대시보드) — 업무 카드 제목 표시 방식. 그립은 편집 모드에서만
-   보이므로 어느 스타일이든 드래그는 그대로 된다. 꾸미기 블록은 .panel-head가 없어 영향 없음. ---- */
-.dash-widget-grid[data-headerstyle="minimal"] .dash-widget .panel-head{margin-bottom:6px;}
-.dash-widget-grid[data-headerstyle="minimal"] .dash-widget .panel-head h3{font-size:12px;font-weight:600;color:var(--text-soft);}
-.dash-widget-grid[data-headerstyle="minimal"] .dash-widget .panel-head > a{display:none;}
+/* ---- 위젯 헤더 스타일 — 각 .dash-widget[data-headerstyle]로만 적용한다(설정의 전체값이든
+   카드 우클릭의 카드별값이든 dashboard.js가 계산해서 이 속성 하나로 넣는다). 그립은 편집
+   모드에서만 보이므로 어느 스타일이든 드래그는 그대로. 꾸미기 블록은 .panel-head 없어 영향 없음. ---- */
+.dash-widget[data-headerstyle="minimal"] .panel-head{margin-bottom:6px;}
+.dash-widget[data-headerstyle="minimal"] .panel-head h3{font-size:12px;font-weight:600;color:var(--text-soft);}
+.dash-widget[data-headerstyle="minimal"] .panel-head > a{display:none;}
 
-.dash-widget-grid[data-headerstyle="accent"] .dash-widget .panel-head h3{border-left:3px solid var(--brand);padding-left:8px;line-height:1.1;}
+.dash-widget[data-headerstyle="accent"] .panel-head h3{border-left:3px solid var(--brand);padding-left:8px;line-height:1.1;}
 
-.dash-widget-grid[data-headerstyle="label"] .dash-widget .panel-head h3{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-faint);}
+.dash-widget[data-headerstyle="label"] .panel-head h3{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text-faint);}
 
-.dash-widget-grid[data-headerstyle="floating"] .dash-widget .panel-head{margin-bottom:14px;}
-.dash-widget-grid[data-headerstyle="floating"] .dash-widget .panel-head h3{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);padding:3px 11px;font-size:11px;font-weight:600;}
+.dash-widget[data-headerstyle="floating"] .panel-head{margin-bottom:14px;}
+.dash-widget[data-headerstyle="floating"] .panel-head h3{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);padding:3px 11px;font-size:11px;font-weight:600;}
 
-.dash-widget-grid[data-headerstyle="hidden"] .dash-widget .panel-head{margin-bottom:2px;}
-.dash-widget-grid[data-headerstyle="hidden"] .dash-widget .panel-head h3,
-.dash-widget-grid[data-headerstyle="hidden"] .dash-widget .panel-head > a{display:none;}
-.dash-widget-grid[data-headerstyle="hidden"].editing .dash-widget .panel-head h3{display:block;}
+.dash-widget[data-headerstyle="hidden"] .panel-head{margin-bottom:2px;}
+.dash-widget[data-headerstyle="hidden"] .panel-head h3,
+.dash-widget[data-headerstyle="hidden"] .panel-head > a{display:none;}
+.dash-widget-grid.editing .dash-widget[data-headerstyle="hidden"] .panel-head h3{display:block;}
 
 /* ================= 꾸미기 블록 ================= */
 /* 블록 래퍼는 카드 크롬(배경/테두리) 없이 투명 — 각 블록 콘텐츠가 자기 겉모습(우드 프레임,

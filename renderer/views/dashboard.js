@@ -1258,11 +1258,13 @@ export async function mount(root) {
     const applyGlobalOp = () => grid.style.setProperty('--dash-op', globalOp / 100);
     applyGlobalOp();
 
-    // 위젯 헤더 스타일(설정 > 대시보드) — 업무 카드 제목 표시 방식. CSS가 나머지를 처리.
+    // 위젯 헤더 스타일 — 설정 > 대시보드의 전체값. 카드 우클릭에서 카드별로 덮어쓸 수 있고,
+    // 최종 적용은 각 .dash-widget[data-headerstyle]로만 한다(카드별 > 전체).
+    const HEADER_STYLES = ['minimal', 'accent', 'label', 'floating', 'hidden'];
+    let globalHeaderStyle = '';
     try {
-      const hs = (await window.itda.settings.get('dashboard_header_style')) || 'standard';
-      if (['minimal', 'accent', 'label', 'floating', 'hidden'].includes(hs)) grid.dataset.headerstyle = hs;
-      else delete grid.dataset.headerstyle;
+      const hs = await window.itda.settings.get('dashboard_header_style');
+      if (HEADER_STYLES.includes(hs)) globalHeaderStyle = hs;
     } catch (e) {
       /* standard */
     }
@@ -1289,6 +1291,18 @@ export async function mount(root) {
       el.dataset.cardtheme = s.theme || '';
       if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
+      // 헤더 스타일: 카드별(s.header) > 전체(globalHeaderStyle). 'default'/'' = 기본형(속성 제거).
+      const effHeader = s.header && s.header !== 'default' ? s.header : s.header === 'default' ? '' : globalHeaderStyle;
+      if (HEADER_STYLES.includes(effHeader)) el.dataset.headerstyle = effHeader;
+      else el.removeAttribute('data-headerstyle');
+      // 강조색: 카드 하위 트리의 --brand만 바꾼다(표면색은 그대로). #rrggbb만 허용.
+      if (/^#[0-9a-f]{6}$/i.test(s.accent || '')) {
+        el.style.setProperty('--brand', s.accent);
+        el.style.setProperty('--brand-soft', s.accent + '22');
+      } else {
+        el.style.removeProperty('--brand');
+        el.style.removeProperty('--brand-soft');
+      }
     };
     DASHBOARD_CARDS.forEach((c) => applyCardStyle(c.id));
     grid.querySelectorAll('.dash-block').forEach((el) => applyCardStyle(el.dataset.card));
@@ -1302,11 +1316,20 @@ export async function mount(root) {
     function onCardMenuOutside(e) {
       if (cardMenu && !cardMenu.contains(e.target)) closeCardMenu();
     }
+    const HEADER_OPTS = [
+      ['default', '기본'],
+      ['minimal', '미니멀'],
+      ['accent', '악센트'],
+      ['label', '라벨'],
+      ['floating', '플로팅'],
+      ['hidden', '숨김'],
+    ];
     function openCardMenu(x, y, cardId, isBlock) {
       closeCardMenu();
       const s = cardStyles[cardId] || {};
       const views = !isBlock && CARD_VIEWS[cardId];
       const curView = views ? getWidgetView(cardId, views) : null;
+      const curHeader = s.header || 'default';
       const menu = document.createElement('div');
       menu.className = 'ctx-menu dash-card-menu';
       menu.innerHTML = `
@@ -1315,6 +1338,17 @@ export async function mount(root) {
             ? `<div class="dcm-label">표현 방식</div>
                <div class="dcm-views">${views.map(([v, l]) => `<button class="dcm-view ${v === curView ? 'active' : ''}" data-view="${v}">${escapeHtml(l)}</button>`).join('')}</div>`
             : ''
+        }
+        ${
+          isBlock
+            ? ''
+            : `<div class="dcm-label">헤더</div>
+               <div class="dcm-views">${HEADER_OPTS.map(([v, l]) => `<button class="dcm-header ${v === curHeader ? 'active' : ''}" data-header="${v}">${escapeHtml(l)}</button>`).join('')}</div>
+               <div class="dcm-label">강조색</div>
+               <div class="dcm-accent">
+                 <button class="dcm-accent-reset ${s.accent ? '' : 'active'}" data-accent="">기본</button>
+                 <input type="color" class="dcm-accent-pick" value="${/^#[0-9a-f]{6}$/i.test(s.accent || '') ? s.accent : '#6c8cf5'}" />
+               </div>`
         }
         <div class="dcm-label">테마</div>
         <div class="dcm-themes">
@@ -1330,6 +1364,10 @@ export async function mount(root) {
       setTimeout(() => document.addEventListener('mousedown', onCardMenuOutside, true), 0);
 
       const persist = () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
+      const patchStyle = (patch) => {
+        cardStyles[cardId] = { ...(cardStyles[cardId] || {}), ...patch };
+        applyCardStyle(cardId);
+      };
       menu.querySelectorAll('[data-view]').forEach((b) => {
         b.addEventListener('click', () => {
           menu.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('active', x === b));
@@ -1337,21 +1375,36 @@ export async function mount(root) {
           CARD_VIEW_RELOAD[cardId]?.();
         });
       });
+      menu.querySelectorAll('[data-header]').forEach((b) => {
+        b.addEventListener('click', () => {
+          menu.querySelectorAll('[data-header]').forEach((x) => x.classList.toggle('active', x === b));
+          patchStyle({ header: b.dataset.header === 'default' ? undefined : b.dataset.header });
+          persist();
+        });
+      });
+      const accentPick = menu.querySelector('.dcm-accent-pick');
+      const accentReset = menu.querySelector('.dcm-accent-reset');
+      accentPick?.addEventListener('input', () => {
+        accentReset.classList.remove('active');
+        patchStyle({ accent: accentPick.value });
+      });
+      accentPick?.addEventListener('change', persist);
+      accentReset?.addEventListener('click', () => {
+        accentReset.classList.add('active');
+        patchStyle({ accent: undefined });
+        persist();
+      });
       menu.querySelectorAll('[data-theme]').forEach((b) => {
         b.addEventListener('click', () => {
-          s.theme = b.dataset.theme;
-          cardStyles[cardId] = { ...(cardStyles[cardId] || {}), theme: s.theme || undefined, opacity: s.opacity };
           menu.querySelectorAll('[data-theme]').forEach((x) => x.classList.toggle('active', x === b));
-          applyCardStyle(cardId);
+          patchStyle({ theme: b.dataset.theme || undefined });
           persist();
         });
       });
       const opInput = menu.querySelector('.dcm-op');
       opInput.addEventListener('input', () => {
-        s.opacity = Number(opInput.value);
-        menu.querySelector('.dcm-opval').textContent = `${s.opacity}%`;
-        cardStyles[cardId] = { ...(cardStyles[cardId] || {}), opacity: s.opacity };
-        applyCardStyle(cardId);
+        menu.querySelector('.dcm-opval').textContent = `${opInput.value}%`;
+        patchStyle({ opacity: Number(opInput.value) });
       });
       opInput.addEventListener('change', persist);
       menu.querySelector('[data-act="hide"]')?.addEventListener('click', async () => {
