@@ -9,6 +9,7 @@ import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { promptText } from '../shared/text-prompt.js';
 import {
   BLOCK_TYPES,
   BLOCK_CATEGORIES,
@@ -157,6 +158,7 @@ export async function mount(root) {
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-arrangeBtn" title="위젯 자동 정렬">🧹 자동 정리 ▾</button>
+            <button class="btn-secondary" id="d-layoutBtn" title="배치 저장/불러오기">💾 레이아웃 ▾</button>
             <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
           <button class="btn" id="d-editDoneBtn">완료</button>
@@ -813,6 +815,16 @@ export async function mount(root) {
       setEditing,
       persist,
       arrangeLayout,
+      // 지금 화면의 위젯 위치/크기만 복사(레이아웃 저장용). 스타일/투명도와는 무관.
+      snapshotLayout: () => JSON.parse(JSON.stringify(positions)),
+      // 저장해둔 레이아웃을 지금 바로 반영. 없는 카드는 프리셋으로 채운다.
+      applyCustomLayout: (saved) => {
+        positions = JSON.parse(JSON.stringify(saved || {}));
+        fillMissing();
+        widgets.filter((w) => w.style.display !== 'none').forEach((w) => resolveCollisions(w.dataset.card));
+        applyAll();
+        persist();
+      },
       // 런타임에 추가된 블록 엘리먼트를 그리드에 편입: 위치 잡고 드래그/리사이즈 배선.
       attach: (el, size) => {
         widgets.push(el);
@@ -1194,6 +1206,86 @@ export async function mount(root) {
     openArrangeMenu(r.left, r.bottom + 4);
   });
 
+  // ---- 레이아웃(위젯 배치) 저장/불러오기 — 설정의 "배치 프리셋"과 같은 dashboard_custom_presets를 씀 ----
+  const loadLayoutPresets = async () => {
+    try {
+      const raw = await window.itda.settings.get('dashboard_custom_presets');
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  let layoutMenu = null;
+  const closeLayoutMenu = () => {
+    layoutMenu?.remove();
+    layoutMenu = null;
+    document.removeEventListener('mousedown', onLayoutMenuOutside, true);
+  };
+  function onLayoutMenuOutside(e) {
+    if (layoutMenu && !layoutMenu.contains(e.target)) closeLayoutMenu();
+  }
+  async function openLayoutMenu(x, y) {
+    closeLayoutMenu();
+    const presets = await loadLayoutPresets();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML =
+      (presets.length
+        ? presets
+            .map(
+              (p) =>
+                `<button class="ctx-menu-item" data-apply="${escapeHtml(p.id)}"><span>📐 ${escapeHtml(p.label)}</span><span class="ctx-menu-x" data-del="${escapeHtml(p.id)}" title="삭제">✕</span></button>`
+            )
+            .join('') + '<div class="ctx-menu-divider"></div>'
+        : '<div class="ctx-menu-empty">저장된 레이아웃이 없어요</div>') +
+      `<button class="ctx-menu-item" data-act="save">＋ 현재 배치 저장…</button>`;
+    document.body.appendChild(menu);
+    layoutMenu = menu;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+    setTimeout(() => document.addEventListener('mousedown', onLayoutMenuOutside, true), 0);
+
+    menu.querySelectorAll('[data-apply]').forEach((b) => {
+      b.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-del]')) return;
+        closeLayoutMenu();
+        const p = (await loadLayoutPresets()).find((x) => x.id === b.dataset.apply);
+        if (p) {
+          widgetGrid.applyCustomLayout(p.widgets);
+          toast(`"${p.label}" 배치를 적용했어요`);
+        }
+      });
+    });
+    menu.querySelectorAll('[data-del]').forEach((x) => {
+      x.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const remaining = (await loadLayoutPresets()).filter((p) => p.id !== x.dataset.del);
+        await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(remaining) }).catch(() => {});
+        const r = $('d-layoutBtn').getBoundingClientRect();
+        openLayoutMenu(r.left, r.bottom + 4);
+      });
+    });
+    menu.querySelector('[data-act="save"]').addEventListener('click', async () => {
+      closeLayoutMenu();
+      const name = await promptText($('d-layoutBtn'), { title: '레이아웃 이름', placeholder: '예: 회의 준비용' });
+      if (!name) return;
+      const widgets = widgetGrid.snapshotLayout();
+      if (!Object.keys(widgets).length) {
+        toast('저장할 배치가 없어요');
+        return;
+      }
+      const presetsNow = await loadLayoutPresets();
+      presetsNow.push({ id: `custom-${Date.now()}`, label: name, widgets });
+      await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(presetsNow) }).catch(() => {});
+      toast('레이아웃을 저장했어요');
+    });
+  }
+  $('d-layoutBtn').addEventListener('click', (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    openLayoutMenu(r.left, r.bottom + 4);
+  });
+
   let gridMenu = null;
   const closeGridMenu = () => {
     gridMenu?.remove();
@@ -1215,6 +1307,7 @@ export async function mount(root) {
       <button class="ctx-menu-item" data-g="bg">🎨 배경 바꾸기</button>
       <div class="ctx-menu-divider"></div>
       <button class="ctx-menu-item" data-g="arrange">🧹 레이아웃 자동 정리 ▸</button>
+      <button class="ctx-menu-item" data-g="layout">💾 레이아웃 저장/불러오기 ▸</button>
       <button class="ctx-menu-item" data-g="reset">↺ 기본 배치로 복원</button>
       <div class="ctx-menu-divider"></div>
       <button class="ctx-menu-item" data-g="done">✓ 편집 완료</button>`;
@@ -1226,10 +1319,11 @@ export async function mount(root) {
     menu.querySelectorAll('[data-g]').forEach((b) => {
       b.addEventListener('click', () => {
         const act = b.dataset.g;
-        if (act === 'arrange') {
+        if (act === 'arrange' || act === 'layout') {
           const r = b.getBoundingClientRect();
           closeGridMenu();
-          openArrangeMenu(r.right - 4, r.top);
+          if (act === 'arrange') openArrangeMenu(r.right - 4, r.top);
+          else openLayoutMenu(r.right - 4, r.top);
           return;
         }
         closeGridMenu();
@@ -2223,6 +2317,7 @@ export async function mount(root) {
     closeBgPop();
     closeArrangeMenu();
     closeGridMenu();
+    closeLayoutMenu();
     customization?.closeCardMenu();
     summaryRow?.closeSumMenu();
     document.removeEventListener('keydown', handleDashKeys);

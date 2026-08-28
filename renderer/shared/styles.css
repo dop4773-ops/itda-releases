@@ -963,6 +963,9 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .ctx-menu-item:hover{background:var(--brand-soft);color:var(--brand);}
 .ctx-menu-item.ctx-menu-danger:hover{background:var(--danger-soft);color:var(--danger);}
 .ctx-menu-divider{height:1px;background:var(--divider);margin:4px 2px;}
+.ctx-menu-item .ctx-menu-x{margin-left:auto;color:var(--text-faint);font-size:11px;padding:0 3px;border-radius:4px;}
+.ctx-menu-item .ctx-menu-x:hover{background:var(--danger-soft);color:var(--danger);}
+.ctx-menu-empty{padding:8px 10px;font-size:12px;color:var(--text-faint);}
 
 /* ================= 날짜 퀵칩 (오늘/내일/이번 주/다음 주/날짜 선택) ================= */
 /* width:100%로 강제 — .form-row(가로 flex) 안에서도 항상 새 줄로 내려가고,
