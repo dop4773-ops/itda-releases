@@ -852,6 +852,20 @@ export async function mount(root) {
     ['focus', '포커스'],
     ['progress', '진행률'],
   ];
+  const EVENT_VIEWS = [
+    ['list', '리스트'],
+    ['compact', '컴팩트'],
+    ['next', '다음 일정'],
+  ];
+  const MEMO_VIEWS = [
+    ['list', '리스트'],
+    ['snippet', '미리보기'],
+    ['compact', '컴팩트'],
+  ];
+  const POSTIT_VIEWS = [
+    ['list', '리스트'],
+    ['grid', '그리드'],
+  ];
   let widgetViews = {};
   try {
     widgetViews = JSON.parse((await window.itda.settings.get('dashboard_widget_views')) || '{}') || {};
@@ -864,8 +878,13 @@ export async function mount(root) {
     window.itda.settings.set({ key: 'dashboard_widget_views', value: JSON.stringify(widgetViews) }).catch(() => {});
   }
   // 카드별 지원하는 표현 방식 + 바꿨을 때 다시 그릴 함수(우클릭 메뉴에서 씀).
-  const CARD_VIEWS = { todo: TODO_VIEWS };
-  const CARD_VIEW_RELOAD = { todo: () => loadTodos() };
+  const CARD_VIEWS = { todo: TODO_VIEWS, event: EVENT_VIEWS, memo: MEMO_VIEWS, postit: POSTIT_VIEWS };
+  const CARD_VIEW_RELOAD = {
+    todo: () => loadTodos(),
+    event: () => loadEvents(),
+    memo: () => loadMemos(),
+    postit: () => loadPinnedPostits(),
+  };
 
   // ================= 꾸미기 블록 (시계/사진/텍스트/링크 …) =================
   // dashboard_blocks = [{id,type,config}]  — 위치/크기는 업무 카드와 똑같이 dashboard_layout에 저장.
@@ -1638,21 +1657,52 @@ export async function mount(root) {
       return;
     }
     emptyEl.style.display = 'none';
-    listEl.innerHTML = events
-      .map(
-        (e) => `
-        <div class="todo-row dash-row-link" data-id="${e.id}">
+    listEl.className = '';
+
+    const openEvt = (id) => {
+      const evt = events.find((e) => e.id === Number(id));
+      if (evt) eventDetailModal.openDetail({ ...evt, source: 'local' });
+    };
+    const view = getWidgetView('event', EVENT_VIEWS);
+
+    if (view === 'next') {
+      const now = new Date();
+      const next = events.find((e) => e.start_at && new Date(e.start_at) >= now) || events[0];
+      const end = next.end_at ? ' – ' + next.end_at.slice(11, 16) : '';
+      listEl.innerHTML = `
+        <div class="todo-focus-view" data-id="${next.id}">
+          <span class="tfv-eyebrow">다음 일정</span>
+          <b class="tfv-title">${escapeHtml(next.title)}</b>
+          <span class="tfv-due">${(next.start_at || '').slice(11, 16)}${end}</span>
+          ${events.length > 1 ? `<span class="tfv-more dash-row-link" data-nav="#/calendar">그 외 ${events.length - 1}개 →</span>` : ''}
+        </div>`;
+      bindDashRowNav(listEl);
+      listEl.querySelector('.todo-focus-view').addEventListener('click', (ev) => {
+        if (!ev.target.closest('.tfv-more')) openEvt(next.id);
+      });
+      return;
+    }
+
+    const LIMIT = view === 'compact' ? 4 : events.length;
+    if (view === 'compact') listEl.className = 'todo-view-compact';
+    listEl.innerHTML =
+      events
+        .slice(0, LIMIT)
+        .map(
+          (e) => `
+        <div class="todo-row event-row" data-id="${e.id}">
           <span class="cat" style="background:${e.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
           <span class="txt">${escapeHtml(e.title)}</span>
           <span class="due">${(e.start_at || '').slice(11, 16)}</span>
         </div>`
-      )
-      .join('');
-    listEl.querySelectorAll('.dash-row-link').forEach((row) => {
-      row.addEventListener('click', () => {
-        const evt = events.find((e) => e.id === Number(row.dataset.id));
-        if (evt) eventDetailModal.openDetail({ ...evt, source: 'local' });
-      });
+        )
+        .join('') +
+      (events.length > LIMIT ? `<a class="todo-more-link" id="d-eventMore">+ ${events.length - LIMIT}개 더보기</a>` : '');
+    listEl.querySelector('#d-eventMore')?.addEventListener('click', () => {
+      location.hash = '#/calendar';
+    });
+    listEl.querySelectorAll('.event-row').forEach((row) => {
+      row.addEventListener('click', () => openEvt(row.dataset.id));
       attachContextMenu(row, () => ({ type: 'event', id: Number(row.dataset.id) }), { onDeleted: () => loadEvents() });
     });
   }
@@ -1674,9 +1724,29 @@ export async function mount(root) {
       return;
     }
     emptyEl.style.display = 'none';
-    listEl.innerHTML = memos
-      .map((m) => `<div class="todo-row dash-row-link" data-nav="#/memo" data-id="${m.id}"><span class="txt">${escapeHtml(m.title || stripHtmlToPlainText(m.content))}</span></div>`)
-      .join('');
+    listEl.className = '';
+    const view = getWidgetView('memo', MEMO_VIEWS);
+
+    if (view === 'snippet') {
+      listEl.innerHTML = memos
+        .map((m) => {
+          const plain = stripHtmlToPlainText(m.content || '');
+          const title = m.title || plain.split('\n')[0] || '(제목 없음)';
+          const body = (m.title ? plain : plain.split('\n').slice(1).join(' ')).trim();
+          return `<div class="memo-snippet-row dash-row-link" data-nav="#/memo" data-id="${m.id}">
+            <b>${escapeHtml(title)}</b>${body ? `<p>${escapeHtml(body)}</p>` : ''}
+          </div>`;
+        })
+        .join('');
+    } else {
+      if (view === 'compact') listEl.className = 'todo-view-compact';
+      listEl.innerHTML = memos
+        .map(
+          (m) =>
+            `<div class="todo-row dash-row-link" data-nav="#/memo" data-id="${m.id}"><span class="txt">${escapeHtml(m.title || stripHtmlToPlainText(m.content))}</span></div>`
+        )
+        .join('');
+    }
     bindDashRowNav(listEl);
     listEl.querySelectorAll('.dash-row-link').forEach((row) => {
       attachContextMenu(row, () => ({ type: 'memo', id: Number(row.dataset.id) }), { onDeleted: () => loadMemos() });
@@ -1702,10 +1772,27 @@ export async function mount(root) {
       return;
     }
     emptyEl.style.display = 'none';
-    listEl.innerHTML = pinned
-      .slice(0, 5)
-      .map((p) => `<div class="todo-row dash-row-link" data-nav="#/postit" data-id="${p.id}"><span class="txt">${escapeHtml(p.title || stripHtmlToPlainText(p.content))}</span></div>`)
-      .join('');
+    listEl.className = '';
+    const view = getWidgetView('postit', POSTIT_VIEWS);
+    const shown = pinned.slice(0, view === 'grid' ? 6 : 5);
+
+    if (view === 'grid') {
+      listEl.className = 'postit-grid-view';
+      listEl.innerHTML = shown
+        .map(
+          (p) => `<div class="postit-mini dash-row-link" data-nav="#/postit" data-id="${p.id}" style="background:${p.color_hex || STICKY_COLORS[0]}">
+            <span>${escapeHtml(p.title || stripHtmlToPlainText(p.content || ''))}</span>
+          </div>`
+        )
+        .join('');
+    } else {
+      listEl.innerHTML = shown
+        .map(
+          (p) =>
+            `<div class="todo-row dash-row-link" data-nav="#/postit" data-id="${p.id}"><span class="txt">${escapeHtml(p.title || stripHtmlToPlainText(p.content))}</span></div>`
+        )
+        .join('');
+    }
     bindDashRowNav(listEl);
     listEl.querySelectorAll('.dash-row-link').forEach((row) => {
       attachContextMenu(row, () => ({ type: 'postit', id: Number(row.dataset.id) }), {
