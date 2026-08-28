@@ -145,6 +145,21 @@ export function blockCategory(type) {
   return BLOCK_CATEGORY[type] || 'tool';
 }
 
+// "위젯 추가" 상세 화면에서 종류별로 여러 스타일을 미리보기로 보여줄 때 쓴다.
+// { key: 바꿀 config 필드, options: [[값, 라벨], ...] }. 항목이 없는 타입은 미리보기 1개만.
+export const BLOCK_VARIANTS = {
+  clock: { key: 'style', options: [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털'], ['led', 'LED'], ['minimal', '미니멀'], ['word', '텍스트']] },
+  dateCard: { key: 'theme', options: [['soft', '소프트'], ['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']] },
+  flipCalendar: { key: 'theme', options: [['classic', '클래식'], ['ink', '잉크'], ['minimal', '미니멀']] },
+  quote: { key: 'theme', options: [['soft', '소프트'], ['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']] },
+  countdown: { key: 'theme', options: [['soft', '소프트'], ['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']] },
+  metric: { key: 'theme', options: [['soft', '소프트'], ['bold', '볼드'], ['minimal', '미니멀']] },
+  text: { key: 'variant', options: [['plain', '기본'], ['heading', '제목'], ['note', '메모지'], ['quote', '인용문']] },
+  image: { key: 'frame', options: [['polaroid', '폴라로이드'], ['tape', '테이프'], ['rounded', '둥근 모서리'], ['plain', '없음']] },
+  divider: { key: 'style', options: [['solid', '실선'], ['dashed', '점선'], ['dots', '점'], ['wave', '물결']] },
+  sticker: { key: 'color', options: [['#ffe08a', '노랑'], ['#a9d8f5', '파랑'], ['#f6b8ce', '분홍'], ['#aee6c4', '초록']] },
+};
+
 export function makeBlockId() {
   return 'blk-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }

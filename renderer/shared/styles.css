@@ -1202,6 +1202,27 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dcm-swatch{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
 .dcm-swatch.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft);}
 .dcm-op{width:calc(100% - 16px);margin:2px 8px 6px;}
+.dcm-views{display:flex;flex-wrap:wrap;gap:4px;padding:2px 8px 6px;}
+.dcm-view{font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
+.dcm-view.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+
+/* ---- Todo 위젯 표현 방식: 컴팩트 / 포커스 / 진행률 ---- */
+.todo-view-compact .todo-row{padding:4px 0;font-size:12.5px;gap:7px;}
+.todo-view-compact .todo-row .due{display:none;}
+.todo-more-link{display:block;font-size:11.5px;color:var(--brand);padding:6px 0 0;cursor:pointer;}
+.todo-progress-view{padding:10px 2px;}
+.tpv-bar{height:12px;border-radius:7px;background:var(--divider);overflow:hidden;}
+.tpv-fill{height:100%;border-radius:7px;background:var(--brand);transition:width .3s ease;}
+.tpv-nums{display:flex;align-items:baseline;gap:8px;margin-top:8px;}
+.tpv-nums b{font-size:20px;font-weight:800;color:var(--text);}
+.tpv-nums span{font-size:12px;color:var(--text-soft);}
+.todo-focus-view{display:flex;flex-direction:column;gap:5px;padding:6px 2px;}
+.tfv-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-faint);}
+.tfv-title{font-size:17px;font-weight:700;color:var(--text);line-height:1.3;}
+.tfv-title.done{color:var(--text-faint);text-decoration:line-through;}
+.tfv-due{font-size:12px;color:var(--text-soft);}
+.tfv-done{align-self:flex-start;margin-top:4px;}
+.tfv-more{font-size:11.5px;color:var(--brand);cursor:pointer;margin-top:2px;}
 
 /* 설정 > 화면 > 테마 색 스와치 */
 .app-theme-swatches{display:flex;gap:8px;flex-wrap:wrap;}
@@ -1500,6 +1521,15 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-add-preview-block{position:relative;width:100%;height:100%;pointer-events:none;outline:none;}
 .dash-add-preview-block .dash-widget-grip,.dash-add-preview-block .dash-block-tools,.dash-add-preview-block .dash-widget-resize{display:none !important;}
 .dash-add-detail-name{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--text);}
+/* 스타일별 미리보기 타일 */
+.dash-add-variants{display:grid;grid-template-columns:1fr 1fr;gap:8px;overflow-y:auto;}
+.dash-add-variant{display:flex;flex-direction:column;gap:5px;padding:7px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg);cursor:pointer;font-family:inherit;}
+.dash-add-variant:hover{border-color:var(--brand);}
+.dash-add-variant.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft);}
+.dash-add-variant-prev{height:76px;border-radius:var(--radius-sm);background:var(--surface);display:flex;align-items:center;justify-content:center;padding:6px;overflow:hidden;position:relative;}
+.dash-add-variant-prev .dash-add-preview-block{transform:scale(.92);}
+.dash-add-variant-label{font-size:11.5px;font-weight:600;color:var(--text-soft);text-align:center;}
+.dash-add-variant.active .dash-add-variant-label{color:var(--text);}
 
 /* ================= 꾸미기 블록: 카운트다운 / 진행 막대 / 배지 / 구분선 ================= */
 .countdown-block{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:12px;border-radius:var(--radius-lg);}

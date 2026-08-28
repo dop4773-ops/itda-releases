@@ -12,6 +12,7 @@ import { attachContextMenu } from '../shared/context-menu.js';
 import {
   BLOCK_TYPES,
   BLOCK_CATEGORIES,
+  BLOCK_VARIANTS,
   blockCategory,
   makeBlockId,
   renderBlockElement,
@@ -843,6 +844,29 @@ export async function mount(root) {
     };
   }
 
+  // ================= 위젯 표현 방식 (같은 데이터를 다른 형태로 보여주기) =================
+  // dashboard_widget_views = { todo: 'list'|'compact'|'focus'|'progress', ... }
+  const TODO_VIEWS = [
+    ['list', '리스트'],
+    ['compact', '컴팩트'],
+    ['focus', '포커스'],
+    ['progress', '진행률'],
+  ];
+  let widgetViews = {};
+  try {
+    widgetViews = JSON.parse((await window.itda.settings.get('dashboard_widget_views')) || '{}') || {};
+  } catch (e) {
+    widgetViews = {};
+  }
+  const getWidgetView = (cardId, allowed) => (allowed.some(([v]) => v === widgetViews[cardId]) ? widgetViews[cardId] : allowed[0][0]);
+  function setWidgetView(cardId, view) {
+    widgetViews[cardId] = view;
+    window.itda.settings.set({ key: 'dashboard_widget_views', value: JSON.stringify(widgetViews) }).catch(() => {});
+  }
+  // 카드별 지원하는 표현 방식 + 바꿨을 때 다시 그릴 함수(우클릭 메뉴에서 씀).
+  const CARD_VIEWS = { todo: TODO_VIEWS };
+  const CARD_VIEW_RELOAD = { todo: () => loadTodos() };
+
   // ================= 꾸미기 블록 (시계/사진/텍스트/링크 …) =================
   // dashboard_blocks = [{id,type,config}]  — 위치/크기는 업무 카드와 똑같이 dashboard_layout에 저장.
   let blocks = [];
@@ -897,10 +921,10 @@ export async function mount(root) {
   }
   blocks.forEach((b) => wireBlockTools(blockEls.get(b.id), b));
 
-  function addBlock(type) {
+  function addBlock(type, configOverride) {
     const def = BLOCK_TYPES[type];
     if (!def) return;
-    const block = { id: makeBlockId(), type, config: JSON.parse(JSON.stringify(def.defaultConfig || {})) };
+    const block = { id: makeBlockId(), type, config: configOverride || JSON.parse(JSON.stringify(def.defaultConfig || {})) };
     blocks.push(block);
     const el = renderBlockElement(block);
     $('d-widgetGrid').appendChild(el);
@@ -1025,24 +1049,52 @@ export async function mount(root) {
     function renderDecoDetail(type) {
       const def = BLOCK_TYPES[type];
       if (!def) return renderDecoList();
+      const variants = BLOCK_VARIANTS[type];
+      const baseCfg = () => JSON.parse(JSON.stringify(def.defaultConfig || {}));
+      let selected = variants ? variants.options[0][0] : null;
+
       decoBody.innerHTML = `
         <button class="dash-add-back" id="d-decoBack">‹ 목록으로</button>
-        <div class="dash-add-preview" id="d-decoPreview"></div>
-        <div class="dash-add-detail-name"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</div>
-        <p class="dash-add-foot" style="margin:0;">추가한 뒤 위젯의 ⚙ 아이콘에서 스타일·내용을 바꿀 수 있어요.</p>
+        <div class="dash-add-detail-name"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}${variants ? ' · 스타일 고르기' : ''}</div>
+        ${variants ? `<div class="dash-add-variants" id="d-decoVariants"></div>` : `<div class="dash-add-preview" id="d-decoPreview"></div>`}
+        <p class="dash-add-foot" style="margin:0;">추가한 뒤 위젯의 ⚙ 아이콘에서 더 바꿀 수 있어요.</p>
         <button class="btn" id="d-decoAdd" style="width:100%;">＋ 이 위젯 추가</button>`;
-      const previewBlock = { id: 'preview-' + type, type, config: JSON.parse(JSON.stringify(def.defaultConfig || {})) };
-      const el = renderBlockElement(previewBlock);
-      el.classList.add('dash-add-preview-block');
-      $('d-decoPreview').appendChild(el);
-      try {
-        tickBlock(el, previewBlock);
-      } catch (e) {
-        /* 미리보기 tick 실패는 무시 */
+
+      const mountPreview = (host, cfg) => {
+        const b = { id: 'preview-' + type, type, config: cfg };
+        const el = renderBlockElement(b);
+        el.classList.add('dash-add-preview-block');
+        host.appendChild(el);
+        try {
+          tickBlock(el, b);
+        } catch (e) {
+          /* 미리보기 tick 실패는 무시 */
+        }
+      };
+
+      if (variants) {
+        const wrap = $('d-decoVariants');
+        wrap.innerHTML = variants.options
+          .map(
+            ([v, label]) =>
+              `<button class="dash-add-variant" data-v="${escapeHtml(String(v))}"><span class="dash-add-variant-prev"></span><span class="dash-add-variant-label">${escapeHtml(label)}</span></button>`
+          )
+          .join('');
+        wrap.querySelectorAll('[data-v]').forEach((btn) => {
+          mountPreview(btn.querySelector('.dash-add-variant-prev'), { ...baseCfg(), [variants.key]: btn.dataset.v });
+          btn.classList.toggle('active', btn.dataset.v === selected);
+          btn.addEventListener('click', () => {
+            selected = btn.dataset.v;
+            wrap.querySelectorAll('[data-v]').forEach((x) => x.classList.toggle('active', x === btn));
+          });
+        });
+      } else {
+        mountPreview($('d-decoPreview'), baseCfg());
       }
+
       $('d-decoBack').addEventListener('click', renderDecoList);
       $('d-decoAdd').addEventListener('click', () => {
-        addBlock(type);
+        addBlock(type, variants ? { ...baseCfg(), [variants.key]: selected } : baseCfg());
         renderDecoList();
       });
     }
@@ -1234,9 +1286,17 @@ export async function mount(root) {
     function openCardMenu(x, y, cardId, isBlock) {
       closeCardMenu();
       const s = cardStyles[cardId] || {};
+      const views = !isBlock && CARD_VIEWS[cardId];
+      const curView = views ? getWidgetView(cardId, views) : null;
       const menu = document.createElement('div');
       menu.className = 'ctx-menu dash-card-menu';
       menu.innerHTML = `
+        ${
+          views
+            ? `<div class="dcm-label">표현 방식</div>
+               <div class="dcm-views">${views.map(([v, l]) => `<button class="dcm-view ${v === curView ? 'active' : ''}" data-view="${v}">${escapeHtml(l)}</button>`).join('')}</div>`
+            : ''
+        }
         <div class="dcm-label">테마</div>
         <div class="dcm-themes">
           ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
@@ -1251,6 +1311,13 @@ export async function mount(root) {
       setTimeout(() => document.addEventListener('mousedown', onCardMenuOutside, true), 0);
 
       const persist = () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
+      menu.querySelectorAll('[data-view]').forEach((b) => {
+        b.addEventListener('click', () => {
+          menu.querySelectorAll('[data-view]').forEach((x) => x.classList.toggle('active', x === b));
+          setWidgetView(cardId, b.dataset.view);
+          CARD_VIEW_RELOAD[cardId]?.();
+        });
+      });
       menu.querySelectorAll('[data-theme]').forEach((b) => {
         b.addEventListener('click', () => {
           s.theme = b.dataset.theme;
@@ -1463,8 +1530,9 @@ export async function mount(root) {
       return;
     }
     const doneCount = todos.filter((t) => t.is_done).length;
+    const openCount = todos.length - doneCount;
     $('d-todoCount').textContent = `${todos.length}건`;
-    $('d-todoSub').textContent = `진행 중 ${todos.length - doneCount} · 완료 ${doneCount}`;
+    $('d-todoSub').textContent = `진행 중 ${openCount} · 완료 ${doneCount}`;
 
     const listEl = $('d-todoList');
     const emptyEl = $('d-todoEmpty');
@@ -1474,29 +1542,70 @@ export async function mount(root) {
       return;
     }
     emptyEl.style.display = 'none';
-    listEl.innerHTML = todos
-      .map(
-        (t) => `
+    listEl.className = '';
+
+    const view = getWidgetView('todo', TODO_VIEWS);
+    const dueLabel = isSameDate(viewDate, new Date()) ? '오늘' : dateStr.slice(5);
+    const toggleTodo = async (id, checkboxEl) => {
+      try {
+        await window.itda.todos.toggle(id);
+        loadTodos();
+      } catch (err) {
+        if (checkboxEl) checkboxEl.checked = !checkboxEl.checked;
+        errorToast(err, '상태를 변경하지 못했어요');
+      }
+    };
+
+    if (view === 'progress') {
+      const pct = todos.length ? Math.round((doneCount / todos.length) * 100) : 0;
+      listEl.innerHTML = `
+        <div class="todo-progress-view">
+          <div class="tpv-bar"><div class="tpv-fill" style="width:${pct}%"></div></div>
+          <div class="tpv-nums"><b>${pct}%</b><span>${doneCount}개 완료 · ${openCount}개 남음</span></div>
+        </div>`;
+      return;
+    }
+
+    if (view === 'focus') {
+      const focus = todos.find((t) => !t.is_done) || todos[0];
+      listEl.innerHTML = `
+        <div class="todo-focus-view" data-id="${focus.id}">
+          <span class="tfv-eyebrow">지금 집중할 일</span>
+          <b class="tfv-title ${focus.is_done ? 'done' : ''}">${escapeHtml(focus.title)}</b>
+          <span class="tfv-due">${focus.due_date ? focus.due_date.slice(5) : dueLabel}</span>
+          <button class="btn-secondary tfv-done" data-id="${focus.id}">${focus.is_done ? '↩ 완료 취소' : '✓ 완료'}</button>
+          ${openCount > 1 ? `<span class="tfv-more dash-row-link" data-nav="#/todo">그 외 ${openCount - 1}개 →</span>` : ''}
+        </div>`;
+      bindDashRowNav(listEl);
+      listEl.querySelector('.tfv-done').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleTodo(Number(e.currentTarget.dataset.id));
+      });
+      return;
+    }
+
+    // list / compact — 같은 마크업, compact는 CSS로 촘촘하게 + N개만 노출
+    const LIMIT = view === 'compact' ? 4 : todos.length;
+    const shown = todos.slice(0, LIMIT);
+    if (view === 'compact') listEl.className = 'todo-view-compact';
+    listEl.innerHTML =
+      shown
+        .map(
+          (t) => `
         <div class="todo-row ${t.is_done ? 'done' : ''} dash-row-link" data-nav="#/todo" data-id="${t.id}">
           <input type="checkbox" data-id="${t.id}" ${t.is_done ? 'checked' : ''} />
           <span class="cat" style="background:${t.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
           <span class="txt">${escapeHtml(t.title)}</span>
-          <span class="due">${isSameDate(viewDate, new Date()) ? '오늘' : dateStr.slice(5)}</span>
+          <span class="due">${dueLabel}</span>
         </div>`
-      )
-      .join('');
+        )
+        .join('') +
+      (todos.length > LIMIT ? `<a class="todo-more-link dash-row-link" data-nav="#/todo">+ ${todos.length - LIMIT}개 더보기</a>` : '');
     bindDashRowNav(listEl);
     listEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-      cb.addEventListener('change', async (e) => {
+      cb.addEventListener('change', (e) => {
         e.stopPropagation();
-        const prevChecked = !e.target.checked;
-        try {
-          await window.itda.todos.toggle(Number(e.target.dataset.id));
-          loadTodos();
-        } catch (err) {
-          e.target.checked = prevChecked;
-          errorToast(err, '상태를 변경하지 못했어요');
-        }
+        toggleTodo(Number(e.target.dataset.id), e.target);
       });
     });
     listEl.querySelectorAll('.todo-row').forEach((row) => {
