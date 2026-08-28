@@ -37,6 +37,12 @@ function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTo
 
   win.setOpacity(opacity);
   win.setMenu(null);
+  if (alwaysOnTop) {
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.on('blur', () => {
+      if (!win.isDestroyed() && win.isAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
+    });
+  }
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type } });
   windows.set(type, win);
@@ -78,7 +84,7 @@ function setOpacityAll(opacity) {
 }
 function setAlwaysOnTopAll(value) {
   windows.forEach((win) => {
-    if (!win.isDestroyed()) win.setAlwaysOnTop(value);
+    if (!win.isDestroyed()) win.setAlwaysOnTop(value, value ? 'screen-saver' : 'normal');
   });
 }
 

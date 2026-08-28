@@ -45,10 +45,17 @@ function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
 
   win.setOpacity(opacity);
   win.setMenu(null);
-  // BrowserWindow 생성자의 alwaysOnTop:true만으로는(특히 macOS) 창 레벨이 애매해서 다른 앱
-  // 창 뒤로 밀리는 것처럼 보일 수 있었다 — 생성 직후 setAlwaysOnTop으로 'floating' 레벨을
-  // 명시해서 다시 한 번 확실히 건다(아래 setAlwaysOnTop() 토글 함수와 동일한 처리).
-  if (postit.is_always_on_top) win.setAlwaysOnTop(true, 'floating');
+  // 생성자 alwaysOnTop만으로는 창 종류(transparent+frameless)에 따라 다른 앱 뒤로 밀리는 일이
+  // 있어서, 가장 높은 레벨('screen-saver')로 다시 한 번 확실히 건다. 또 창이 포커스를 잃거나
+  // 보여질 때 일부 환경(특히 윈도우)에서 topmost가 슬며시 풀리는 경우가 있어 다시 걸어준다.
+  if (postit.is_always_on_top) {
+    win.setAlwaysOnTop(true, 'screen-saver');
+    const reassert = () => {
+      if (!win.isDestroyed() && win.isAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
+    };
+    win.on('blur', reassert);
+    win.on('show', reassert);
+  }
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type: 'postit', id: String(postit.id) } });
   windows.set(postit.id, win);
@@ -85,7 +92,7 @@ function setAlwaysOnTop(postitId, value) {
   // 'floating' 레벨을 명시해야 다른 앱 창 뒤로 밀리지 않고 확실히 위에 뜬다(레벨 없이 그냥
   // true만 넘기면 창 종류에 따라 애매하게 동작하는 경우가 있었다). 켤 때는 moveTop()으로
   // 지금 당장 맨 위로도 올려서 "켰는데 그대로 뒤에 있는" 것처럼 보이지 않게 한다.
-  win.setAlwaysOnTop(value, 'floating');
+  win.setAlwaysOnTop(value, 'screen-saver');
   if (value) win.moveTop();
 }
 

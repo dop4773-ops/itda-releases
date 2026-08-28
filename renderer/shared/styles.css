@@ -1023,8 +1023,36 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* 레이아웃 편집 바 */
 .dash-edit-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--brand-soft);border:1px solid var(--brand);border-radius:var(--radius-md);}
 .dash-edit-hint{font-size:12px;color:var(--text-soft);}
-.dash-edit-presets{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+.dash-edit-presets{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .dash-edit-bar .btn-secondary{font-size:11.5px;padding:5px 9px;}
+.dash-edit-bar > .btn{margin-left:auto;}
+.dash-edit-opacity{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-soft);}
+.dash-edit-opacity input[type="range"]{width:90px;}
+
+/* ---- 요약 카드: 접기 ---- */
+.summary-collapsed-bar{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:7px 12px;font-size:12px;color:var(--text-soft);cursor:pointer;margin-bottom:20px;}
+.summary-collapsed-bar:hover{border-color:var(--brand);color:var(--brand);}
+.summary-grid.summary-empty{display:none;}
+
+/* ---- 대시보드 카드 테마/투명도 ---- */
+.dash-widget.panel:not(.dash-block){--card-bg:var(--surface);background:color-mix(in srgb, var(--card-bg) calc(var(--dash-op, 1) * 100%), transparent);}
+.dash-widget[data-cardtheme="dark"]{--card-bg:#26262e;color:#e8e8ee;border-color:#3a3a44;}
+.dash-widget[data-cardtheme="dark"] h3,.dash-widget[data-cardtheme="dark"] .btn-icon{color:#e8e8ee;}
+.dash-widget[data-cardtheme="glass"]{--dash-op:.5;}
+.dash-widget[data-cardtheme="yellow"]{--card-bg:#fff6d9;border-color:#f0e2a8;}
+.dash-widget[data-cardtheme="blue"]{--card-bg:#e8f0ff;border-color:#c9dbf6;}
+.dash-widget[data-cardtheme="mint"]{--card-bg:#e4f6ee;border-color:#bfe6d3;}
+.dash-widget[data-cardtheme="pink"]{--card-bg:#fdeef2;border-color:#f3cdd9;}
+/* 블록은 배경이 없으니 내용에만 투명도 적용(그립/툴은 그대로 보이게) */
+.dash-block-body{opacity:var(--dash-op, 1);}
+
+/* 카드 우클릭 메뉴 */
+.dash-card-menu{min-width:180px;}
+.dcm-label{font-size:11px;color:var(--text-faint);padding:4px 8px 2px;display:flex;justify-content:space-between;}
+.dcm-themes{display:flex;gap:5px;flex-wrap:wrap;padding:2px 8px 6px;}
+.dcm-swatch{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
+.dcm-swatch.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft);}
+.dcm-op{width:calc(100% - 16px);margin:2px 8px 6px;}
 
 /* ---- 대시보드 헤더(인사말 + 날짜 네비게이터 + 시계 + 테마토글 + 새로만들기) ---- */
 .dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px;}

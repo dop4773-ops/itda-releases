@@ -405,6 +405,19 @@ const WMO = {
   85: ['🌨️', '눈 소나기'], 86: ['❄️', '눈 소나기'],
   95: ['⛈️', '뇌우'], 96: ['⛈️', '뇌우·우박'], 99: ['⛈️', '강한 뇌우'],
 };
+// open-meteo 지오코딩은 한글 도시명("서울")을 못 찾는다 — 주요 국내 도시는 좌표를 직접 들고 있고,
+// 그 외(영문 도시명 등)만 지오코딩 API로 넘긴다.
+const KR_CITIES = {
+  서울: [37.5665, 126.978, '서울'], 부산: [35.1796, 129.0756, '부산'], 대구: [35.8714, 128.6014, '대구'],
+  인천: [37.4563, 126.7052, '인천'], 광주: [35.1595, 126.8526, '광주'], 대전: [36.3504, 127.3845, '대전'],
+  울산: [35.5384, 129.3114, '울산'], 세종: [36.48, 127.289, '세종'], 수원: [37.2636, 127.0286, '수원'],
+  용인: [37.2411, 127.1776, '용인'], 성남: [37.42, 127.1265, '성남'], 고양: [37.6584, 126.832, '고양'],
+  제주: [33.4996, 126.5312, '제주'], 서귀포: [33.2542, 126.56, '서귀포'], 춘천: [37.8813, 127.73, '춘천'],
+  강릉: [37.7519, 128.8761, '강릉'], 원주: [37.3422, 127.9202, '원주'], 전주: [35.8242, 127.148, '전주'],
+  청주: [36.6424, 127.489, '청주'], 천안: [36.8151, 127.1139, '천안'], 창원: [35.228, 128.6811, '창원'],
+  포항: [36.019, 129.3435, '포항'], 김해: [35.2285, 128.8894, '김해'], 목포: [34.8118, 126.3922, '목포'],
+  여수: [34.7604, 127.6622, '여수'], 안동: [36.5684, 128.7294, '안동'], 평택: [36.9921, 127.1129, '평택'],
+};
 async function refreshWeather(el, block, force) {
   const now = Date.now();
   if (!force && now < (el._wxNext || 0)) return;
@@ -413,10 +426,16 @@ async function refreshWeather(el, block, force) {
   const loading = el.querySelector('.wx-loading');
   const main = el.querySelector('.wx-main');
   try {
-    const geo = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=ko&format=json`
-    ).then((r) => r.json());
-    const place = geo?.results?.[0];
+    let place;
+    const known = KR_CITIES[city.replace(/(특별시|광역시|시|도)$/, '')] || KR_CITIES[city];
+    if (known) {
+      place = { latitude: known[0], longitude: known[1], name: known[2] };
+    } else {
+      const geo = await fetch(
+        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&format=json`
+      ).then((r) => r.json());
+      place = geo?.results?.[0];
+    }
     if (!place) throw new Error('city not found');
     const wx = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code`
@@ -433,7 +452,7 @@ async function refreshWeather(el, block, force) {
   } catch (e) {
     if (loading) {
       loading.style.display = '';
-      loading.textContent = '날씨를 불러올 수 없어요';
+      loading.textContent = /[가-힣]/.test(city) ? `'${city}' 날씨를 못 찾았어요 (영어 도시명으로 시도)` : '날씨를 불러올 수 없어요';
     }
     if (main) main.style.display = 'none';
     el._wxNext = now + 5 * 60 * 1000; // 실패 시 5분 뒤 재시도
@@ -648,8 +667,8 @@ const FIELDS = {
     <label class="cfg-row">출처<input class="input" data-cfg="author" value="${escapeHtml(c.author || '')}" placeholder="예: 잇다 팀 (선택)" /></label>
     ${sel('테마', 'theme', [['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
   weather: (c) => `
-    <label class="cfg-row">도시<input class="input" data-cfg="city" value="${escapeHtml(c.city || '서울')}" placeholder="예: 서울, Busan, Tokyo" /></label>
-    <p class="cfg-note">open-meteo에서 30분마다 자동으로 갱신해요. 인터넷 연결이 필요합니다.</p>`,
+    <label class="cfg-row">도시<input class="input" data-cfg="city" value="${escapeHtml(c.city || '서울')}" placeholder="예: 서울, 부산, Tokyo" /></label>
+    <p class="cfg-note">국내 주요 도시는 한글로, 해외는 영어 도시명으로 입력하세요. open-meteo에서 30분마다 자동 갱신되며 인터넷 연결이 필요합니다.</p>`,
   miniTool: (c) => sel('도구', 'tool', [['calc', '계산기'], ['notepad', '메모지'], ['timer', '스톱워치']], c.tool || 'calc'),
 };
 

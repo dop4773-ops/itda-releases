@@ -107,41 +107,44 @@ export async function mount(root) {
             </div>
             <span class="dash-time" id="d-timeNow"></span>
             ${widgetLaunchButtonHtml('d-ddayWidgetBtn', 'D-DAY 위젯 열기')}
-            <button class="btn-icon" id="d-addWidgetBtn" title="위젯 추가 (W)">${PLUS_MINI_ICON}</button>
             <button class="btn-icon" id="d-layoutEditBtn" title="레이아웃 편집 (E)">${EDIT_ICON}</button>
             <button class="btn-icon" id="d-sideToggle" title="사이드 패널 열기 (S)">${CHEVRON_LEFT}</button>
             <button class="btn" id="d-newBtn">+ 새로 만들기</button>
           </div>
         </div>
 
-        <div class="summary-grid summary-grid-5">
-          <div class="summary-card tone-purple" data-nav="#/todo" title="더블클릭하면 Todo로 이동해요">
+        <button class="summary-collapsed-bar" id="d-summaryExpand" style="display:none;">▾ 요약 카드 펼치기</button>
+        <div class="summary-grid summary-grid-5" id="d-summaryGrid" title="우클릭: 카드 선택 · 접기">
+          <div class="summary-card tone-purple" data-sum="todo" data-nav="#/todo" title="더블클릭하면 Todo로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-purple-fg)"></span>오늘 할 일</div>
             <div class="num" id="d-todoCount">-</div>
             <div id="d-todoSub" style="font-size:11.5px;color:var(--text-faint);"></div>
           </div>
-          <div class="summary-card tone-green" data-nav="#/calendar" title="더블클릭하면 일정으로 이동해요">
+          <div class="summary-card tone-green" data-sum="event" data-nav="#/calendar" title="더블클릭하면 일정으로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-green-fg)"></span>오늘 일정</div>
             <div class="num" id="d-eventCount">-</div>
           </div>
-          <div class="summary-card tone-yellow" data-nav="#/memo" title="더블클릭하면 메모로 이동해요">
+          <div class="summary-card tone-yellow" data-sum="memo" data-nav="#/memo" title="더블클릭하면 메모로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-yellow-fg)"></span>메모</div>
             <div class="num" id="d-memoCount">-</div>
           </div>
-          <div class="summary-card tone-pink" data-nav="#/postit" title="더블클릭하면 포스트잇으로 이동해요">
+          <div class="summary-card tone-pink" data-sum="postit" data-nav="#/postit" title="더블클릭하면 포스트잇으로 이동해요">
             <div class="top"><span class="dot" style="background:var(--tone-pink-fg)"></span>포스트잇</div>
             <div class="num" id="d-postitCount">-</div>
           </div>
-          <div class="summary-card tone-blue" id="d-notifSummaryCard" title="더블클릭하면 알림 목록을 열어요">
+          <div class="summary-card tone-blue" data-sum="notif" id="d-notifSummaryCard" title="더블클릭하면 알림 목록을 열어요">
             <div class="top"><span class="dot" style="background:var(--tone-blue-fg)"></span>알림</div>
             <div class="num" id="d-notifCount">-</div>
           </div>
         </div>
 
         <div class="dash-edit-bar" id="d-editBar" style="display:none;">
-          <span class="dash-edit-hint">레이아웃 편집 중 — 드래그로 옮기고 모서리로 크기 조절 (겹치면 자동으로 밀려나요)</span>
           <span class="dash-edit-presets">
+            <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
             <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
+            <label class="dash-edit-opacity" title="모든 위젯 투명도">투명도
+              <input type="range" id="d-opacityRange" min="30" max="100" step="5" value="100" />
+            </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
@@ -922,6 +925,222 @@ export async function mount(root) {
   }
   initAddPanel();
 
+  // ================= 위젯 투명도 (편집 바 슬라이더) + 카드별 테마/투명도(우클릭) + 요약 카드 =================
+  const CARD_THEMES = [
+    { id: '', label: '기본', sw: 'var(--surface)' },
+    { id: 'dark', label: '다크', sw: '#26262e' },
+    { id: 'glass', label: '유리', sw: 'rgba(255,255,255,.5)' },
+    { id: 'yellow', label: '노랑', sw: '#fff6d9' },
+    { id: 'blue', label: '블루', sw: '#e8f0ff' },
+    { id: 'mint', label: '민트', sw: '#e4f6ee' },
+    { id: 'pink', label: '핑크', sw: '#fdeef2' },
+  ];
+
+  async function initCustomization() {
+    const grid = $('d-widgetGrid');
+
+    // --- 전체 위젯 투명도 ---
+    let globalOp = 100;
+    try {
+      globalOp = Number(await window.itda.settings.get('dashboard_widget_opacity')) || 100;
+    } catch (e) {
+      /* 100 */
+    }
+    const applyGlobalOp = () => grid.style.setProperty('--dash-op', globalOp / 100);
+    applyGlobalOp();
+    $('d-opacityRange').value = globalOp;
+    $('d-opacityRange').addEventListener('input', (e) => {
+      globalOp = Number(e.target.value);
+      applyGlobalOp();
+    });
+    $('d-opacityRange').addEventListener('change', () => {
+      window.itda.settings.set({ key: 'dashboard_widget_opacity', value: String(globalOp) }).catch(() => {});
+    });
+
+    // --- 카드별 테마/투명도 ---
+    let cardStyles = {};
+    try {
+      cardStyles = JSON.parse((await window.itda.settings.get('dashboard_card_styles')) || '{}') || {};
+    } catch (e) {
+      cardStyles = {};
+    }
+    const applyCardStyle = (cardId) => {
+      const el = $(`d-card-${cardId}`);
+      if (!el) return;
+      const s = cardStyles[cardId] || {};
+      el.dataset.cardtheme = s.theme || '';
+      if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
+      else el.style.removeProperty('--dash-op');
+    };
+    DASHBOARD_CARDS.forEach((c) => applyCardStyle(c.id));
+
+    let cardMenu = null;
+    const closeCardMenu = () => {
+      cardMenu?.remove();
+      cardMenu = null;
+      document.removeEventListener('mousedown', onCardMenuOutside, true);
+    };
+    function onCardMenuOutside(e) {
+      if (cardMenu && !cardMenu.contains(e.target)) closeCardMenu();
+    }
+    function openCardMenu(x, y, cardId) {
+      closeCardMenu();
+      const s = cardStyles[cardId] || {};
+      const menu = document.createElement('div');
+      menu.className = 'ctx-menu dash-card-menu';
+      menu.innerHTML = `
+        <div class="dcm-label">테마</div>
+        <div class="dcm-themes">
+          ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
+        </div>
+        <div class="dcm-label">투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
+        <input type="range" class="dcm-op" min="30" max="100" step="5" value="${s.opacity ?? 100}" />
+        <div class="ctx-menu-divider"></div>
+        <button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`;
+      document.body.appendChild(menu);
+      cardMenu = menu;
+      menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth - 8)}px`;
+      menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight - 8)}px`;
+      setTimeout(() => document.addEventListener('mousedown', onCardMenuOutside, true), 0);
+
+      const save = () => {
+        cardStyles[cardId] = { ...cardStyles[cardId], ...(s.theme ? { theme: s.theme } : {}), ...(s.opacity != null ? { opacity: s.opacity } : {}) };
+        if (!s.theme) delete cardStyles[cardId]?.theme;
+        window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
+      };
+      menu.querySelectorAll('[data-theme]').forEach((b) => {
+        b.addEventListener('click', () => {
+          s.theme = b.dataset.theme;
+          cardStyles[cardId] = { ...(cardStyles[cardId] || {}), theme: s.theme || undefined, opacity: s.opacity };
+          menu.querySelectorAll('[data-theme]').forEach((x) => x.classList.toggle('active', x === b));
+          applyCardStyle(cardId);
+          window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
+        });
+      });
+      const opInput = menu.querySelector('.dcm-op');
+      opInput.addEventListener('input', () => {
+        s.opacity = Number(opInput.value);
+        menu.querySelector('.dcm-opval').textContent = `${s.opacity}%`;
+        cardStyles[cardId] = { ...(cardStyles[cardId] || {}), opacity: s.opacity };
+        applyCardStyle(cardId);
+      });
+      opInput.addEventListener('change', () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {}));
+      menu.querySelector('[data-act="hide"]').addEventListener('click', async () => {
+        closeCardMenu();
+        await toggleSummaryOrCard(cardId, false);
+      });
+    }
+
+    grid.querySelectorAll('.dash-widget:not(.dash-block)').forEach((el) => {
+      const cardId = el.id?.replace('d-card-', '');
+      if (!cardId) return;
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openCardMenu(e.clientX, e.clientY, cardId);
+      });
+    });
+
+    // 업무 카드 숨기기(우클릭 메뉴) — dashboard_cards 설정과 같은 값 사용
+    async function toggleSummaryOrCard(cardId, visible) {
+      let cfg = {};
+      try {
+        cfg = JSON.parse((await window.itda.settings.get('dashboard_cards')) || '{}');
+      } catch (e) {
+        /* {} */
+      }
+      const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
+      cfg = { ...defaults, ...cfg, [cardId]: visible };
+      await window.itda.settings.set({ key: 'dashboard_cards', value: JSON.stringify(cfg) }).catch(() => {});
+      const el = $(`d-card-${cardId}`);
+      if (el) el.style.display = visible ? '' : 'none';
+    }
+
+    return { closeCardMenu };
+  }
+  const customization = await initCustomization();
+
+  // --- 상단 요약 카드: 접기/펼치기 + 카드 선택(우클릭) ---
+  async function initSummaryRow() {
+    const gridEl = $('d-summaryGrid');
+    const expandBtn = $('d-summaryExpand');
+
+    let collapsed = false;
+    let cards = { todo: true, event: true, memo: true, postit: true, notif: true };
+    try {
+      collapsed = (await window.itda.settings.get('dashboard_summary_collapsed')) === '1';
+      const raw = await window.itda.settings.get('dashboard_summary_cards');
+      if (raw) cards = { ...cards, ...JSON.parse(raw) };
+    } catch (e) {
+      /* 기본값 */
+    }
+    const applyCards = () => {
+      gridEl.querySelectorAll('[data-sum]').forEach((c) => {
+        c.style.display = cards[c.dataset.sum] ? '' : 'none';
+      });
+      const anyOn = Object.values(cards).some(Boolean);
+      gridEl.classList.toggle('summary-empty', !anyOn);
+    };
+    const applyCollapsed = () => {
+      gridEl.style.display = collapsed ? 'none' : '';
+      expandBtn.style.display = collapsed ? '' : 'none';
+    };
+    applyCards();
+    applyCollapsed();
+
+    expandBtn.addEventListener('click', () => {
+      collapsed = false;
+      applyCollapsed();
+      window.itda.settings.set({ key: 'dashboard_summary_collapsed', value: '0' }).catch(() => {});
+    });
+
+    let sumMenu = null;
+    const closeSumMenu = () => {
+      sumMenu?.remove();
+      sumMenu = null;
+      document.removeEventListener('mousedown', onSumOutside, true);
+    };
+    function onSumOutside(e) {
+      if (sumMenu && !sumMenu.contains(e.target)) closeSumMenu();
+    }
+    gridEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      closeSumMenu();
+      const LB = { todo: '오늘 할 일', event: '오늘 일정', memo: '메모', postit: '포스트잇', notif: '알림' };
+      const menu = document.createElement('div');
+      menu.className = 'ctx-menu';
+      menu.innerHTML =
+        Object.keys(LB)
+          .map(
+            (k) => `<button class="ctx-menu-item" data-sc="${k}"><span>${cards[k] ? '☑' : '☐'}</span> ${LB[k]}</button>`
+          )
+          .join('') +
+        `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-sc-act="collapse">▴ 요약 카드 접기</button>`;
+      document.body.appendChild(menu);
+      sumMenu = menu;
+      menu.style.left = `${Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8)}px`;
+      menu.style.top = `${Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8)}px`;
+      setTimeout(() => document.addEventListener('mousedown', onSumOutside, true), 0);
+      menu.querySelectorAll('[data-sc]').forEach((b) => {
+        b.addEventListener('click', () => {
+          const k = b.dataset.sc;
+          cards[k] = !cards[k];
+          b.querySelector('span').textContent = cards[k] ? '☑' : '☐';
+          applyCards();
+          window.itda.settings.set({ key: 'dashboard_summary_cards', value: JSON.stringify(cards) }).catch(() => {});
+        });
+      });
+      menu.querySelector('[data-sc-act="collapse"]').addEventListener('click', () => {
+        closeSumMenu();
+        collapsed = true;
+        applyCollapsed();
+        window.itda.settings.set({ key: 'dashboard_summary_collapsed', value: '1' }).catch(() => {});
+      });
+    });
+
+    return { closeSumMenu };
+  }
+  const summaryRow = await initSummaryRow();
+
 
   // 일정 상세/수정 팝업 — 캘린더 화면으로 이동하지 않고 대시보드 안에서 바로 뜨도록
   // calendar.js와 동일한 모달을 재사용(renderer/shared/event-detail-modal.js)한다.
@@ -1521,6 +1740,8 @@ export async function mount(root) {
     clearInterval(blockTickTimer);
     closeBlockConfig();
     closeBgPop();
+    customization?.closeCardMenu();
+    summaryRow?.closeSumMenu();
     document.removeEventListener('keydown', handleDashKeys);
     setScreenShortcuts(null, []);
     eventDetailModal.destroy();
