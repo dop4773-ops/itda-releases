@@ -5,6 +5,8 @@ import { registerEscClose } from '../shared/esc-close.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 import { attachDateQuickChips } from '../shared/date-quick-chips.js';
 import { confirmSeriesScope } from '../shared/series-scope.js';
+import { setScreenShortcuts } from '../shared/shell.js';
+import { promptText } from '../shared/text-prompt.js';
 import {
   WEEKDAY_LABELS,
   dateKey as toKey,
@@ -178,7 +180,14 @@ export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 
 // 피드백이 있었다 — 그래서 접기 기능을 추가했다(기본값은 여전히 전부 보이는 펼침 상태).
 const ALLDAY_COLLAPSE_LIMIT = 3;
 
-export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, alldayExpanded = true } = {}) {
+export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, alldayExpanded = true, alldayOrder = [] } = {}) {
+  // 종일 일정은 사용자가 드래그로 정한 순서(alldayOrder)를 우선하고, 순서가 없는 건 시작일시로.
+  const alldayIdx = (e) => {
+    const i = alldayOrder.indexOf(e.id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const sortAllDay = (list) =>
+    list.slice().sort((a, b) => alldayIdx(a) - alldayIdx(b) || (a.start_at || '').localeCompare(b.start_at || ''));
   const today = new Date();
   const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
   const hourCount = HOUR_END - HOUR_START;
@@ -196,14 +205,14 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   const alldayRowCells = days
     .map((d) => {
       const key = toKey(d);
-      const allDayEvents = (byDate.get(key) || []).filter((e) => e.all_day);
+      const allDayEvents = sortAllDay((byDate.get(key) || []).filter((e) => e.all_day));
       const visibleEvents = alldayExpanded ? allDayEvents : allDayEvents.slice(0, ALLDAY_COLLAPSE_LIMIT);
       const hiddenCount = allDayEvents.length - visibleEvents.length;
       const bars = visibleEvents
         .map((e) => {
           const isGoogle = e.source === 'google';
           return `
-          <div class="allday-bar ${isGoogle ? 'is-google' : ''}" style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
+          <div class="allday-bar ${isGoogle ? 'is-google' : ''} ${deletable && !isGoogle ? 'allday-bar-drag' : ''}" ${deletable && !isGoogle ? 'draggable="true"' : ''} style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
             ${deletable && !isGoogle ? `<button class="event-del" data-action="delete" data-id="${e.id}">${CLOSE_ICON}</button>` : ''}
             <span>${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}</span>
           </div>`;
@@ -343,6 +352,10 @@ export async function mount(root) {
         <button class="btn-icon" id="c-miniToggle" title="미니 캘린더 보기">${CAL_ICON}</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
+        <div class="cal-search" id="c-searchWrap">
+          <input type="text" id="c-search" class="input" placeholder="일정 검색 (F)" autocomplete="off" />
+          <div class="cal-search-results" id="c-searchResults" style="display:none;"></div>
+        </div>
         <button class="btn-secondary" id="c-toggleGoogle" title="구글 캘린더 일정 표시 켜기/끄기">${CAL_ICON} 구글 캘린더</button>
         <div class="tabs">
           <button class="tab active" data-view="month">월</button>
@@ -361,6 +374,10 @@ export async function mount(root) {
       <div class="modal-card">
         <h3 id="c-modalTitle">새 일정</h3>
         <input type="hidden" id="c-editId" />
+        <div class="form-row cal-template-row" id="c-templateRow">
+          <div class="cal-template-chips" id="c-templateChips"></div>
+          <button type="button" class="btn-secondary" id="c-saveTemplate" title="지금 입력한 제목·카테고리·장소·종일을 즐겨찾는 템플릿으로 저장">★ 템플릿 저장</button>
+        </div>
         <div class="form-row"><input type="text" id="c-title" class="input" style="flex:1;" placeholder="일정 제목" /></div>
         <div class="form-row">
           <select id="c-category" class="select" style="flex:1;"></select>
@@ -429,6 +446,8 @@ export async function mount(root) {
   let miniOpen = false;
   let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
   let alldayExpanded = true; // 종일 일정 접기/펼치기(주/일 뷰) — 기본은 펼침(전부 보임)
+  let alldayOrder = []; // 종일 일정 사용자 지정 순서(드래그) — app_settings: calendar_allday_order
+  let eventTemplates = []; // 즐겨찾는 일정 템플릿 — app_settings: calendar_event_templates
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
   async function loadCategories() {
@@ -492,8 +511,50 @@ export async function mount(root) {
     });
   }
 
+  function persistAlldayOrder() {
+    window.itda.settings.set({ key: 'calendar_allday_order', value: JSON.stringify(alldayOrder) }).catch(() => {});
+  }
+  function reorderAllday(draggedId, targetId, before) {
+    if (draggedId === targetId || !draggedId) return;
+    // 처음 드래그하는 종일 일정들은 지금 화면에 보이는 순서대로 배열에 먼저 시드한다.
+    const seen = new Set(alldayOrder);
+    currentEvents
+      .filter((e) => e.all_day)
+      .forEach((e) => {
+        if (!seen.has(e.id)) {
+          alldayOrder.push(e.id);
+          seen.add(e.id);
+        }
+      });
+    alldayOrder = alldayOrder.filter((id) => id !== draggedId);
+    let ti = alldayOrder.indexOf(targetId);
+    if (ti === -1) ti = alldayOrder.length - 1;
+    alldayOrder.splice(before ? ti : ti + 1, 0, draggedId);
+    persistAlldayOrder();
+    load();
+  }
+
   function renderTimeGrid(container, byDate, dayCount) {
-    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true, alldayExpanded });
+    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true, alldayExpanded, alldayOrder });
+
+    container.querySelectorAll('.allday-bar-drag').forEach((bar) => {
+      bar.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', bar.dataset.id);
+        e.dataTransfer.effectAllowed = 'move';
+        bar.classList.add('dragging');
+      });
+      bar.addEventListener('dragend', () => bar.classList.remove('dragging'));
+      bar.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      bar.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const rect = bar.getBoundingClientRect();
+        const before = e.clientY - rect.top < rect.height / 2;
+        reorderAllday(Number(e.dataTransfer.getData('text/plain')), Number(bar.dataset.id), before);
+      });
+    });
 
     container.querySelectorAll('[data-action="toggle-allday"]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
@@ -677,7 +738,8 @@ export async function mount(root) {
     $('c-location').value = isEdit ? evt.location || '' : '';
     $('c-memo').value = isEdit ? evt.memo || '' : '';
 
-    const isAllDay = isEdit ? !!evt.all_day : false;
+    // 새 일정은 "하루종일"이 기본값 — 대부분의 일정 등록이 종일이라는 피드백 반영.
+    const isAllDay = isEdit ? !!evt.all_day : true;
     $('c-allDay').checked = isAllDay;
     $('c-start').type = isAllDay ? 'date' : 'datetime-local';
     $('c-start').value = isEdit ? (isAllDay ? (evt.start_at || '').slice(0, 10) : (evt.start_at || '').slice(0, 16).replace(' ', 'T')) : '';
@@ -688,8 +750,45 @@ export async function mount(root) {
     $('c-recurrenceRow').style.display = isEdit ? 'none' : '';
     $('c-recurrence').value = '';
 
+    // 즐겨찾는 템플릿 칩은 "새로 만들 때"만
+    $('c-templateRow').style.display = isEdit ? 'none' : '';
+    if (!isEdit) renderTemplateChips();
+
     $('c-modalOverlay').classList.add('open');
     $('c-title').focus();
+  }
+
+  // ---------- 즐겨찾는 일정 템플릿 ----------
+  function applyTemplate(t) {
+    $('c-title').value = t.title || '';
+    $('c-category').value = t.categoryId ? String(t.categoryId) : '';
+    $('c-location').value = t.location || '';
+    const wasAllDay = $('c-allDay').checked;
+    $('c-allDay').checked = !!t.allDay;
+    if (wasAllDay !== !!t.allDay) $('c-allDay').dispatchEvent(new Event('change')); // 시작/종료 입력 형태 갱신
+    $('c-title').focus();
+  }
+  function renderTemplateChips() {
+    const wrap = $('c-templateChips');
+    if (!eventTemplates.length) {
+      wrap.innerHTML = `<span class="cal-template-empty">자주 쓰는 일정을 템플릿으로 저장해 두면 여기서 한 번에 채울 수 있어요</span>`;
+      return;
+    }
+    wrap.innerHTML = eventTemplates
+      .map(
+        (t, i) => `<span class="cal-template-chip"><button type="button" data-tpl="${i}">${escapeHtml(t.name)}</button><button type="button" class="cal-template-del" data-tpl-del="${i}" title="템플릿 삭제">${CLOSE_ICON}</button></span>`
+      )
+      .join('');
+    wrap.querySelectorAll('[data-tpl]').forEach((btn) => {
+      btn.addEventListener('click', () => applyTemplate(eventTemplates[Number(btn.dataset.tpl)]));
+    });
+    wrap.querySelectorAll('[data-tpl-del]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        eventTemplates.splice(Number(btn.dataset.tplDel), 1);
+        await window.itda.settings.set({ key: 'calendar_event_templates', value: JSON.stringify(eventTemplates) }).catch(() => {});
+        renderTemplateChips();
+      });
+    });
   }
   function closeModal() {
     $('c-modalOverlay').classList.remove('open');
@@ -720,6 +819,31 @@ export async function mount(root) {
 
   $('c-openAdd').addEventListener('click', () => openModal());
   $('c-cancelAdd').addEventListener('click', closeModal);
+
+  // "★ 템플릿 저장" — 지금 폼에 입력된 제목/카테고리/장소/종일 여부를 즐겨찾는 템플릿으로 저장
+  $('c-saveTemplate').addEventListener('click', async () => {
+    const title = $('c-title').value.trim();
+    if (!title) {
+      toast('먼저 일정 제목을 입력해주세요.');
+      return;
+    }
+    const name = await promptText($('c-saveTemplate'), { title: '템플릿 이름', placeholder: `예: ${title}` });
+    if (!name) return;
+    eventTemplates.push({
+      name: name.trim(),
+      title,
+      categoryId: $('c-category').value ? Number($('c-category').value) : null,
+      location: $('c-location').value.trim() || null,
+      allDay: $('c-allDay').checked,
+    });
+    try {
+      await window.itda.settings.set({ key: 'calendar_event_templates', value: JSON.stringify(eventTemplates) });
+      toast('템플릿으로 저장했어요');
+      renderTemplateChips();
+    } catch (e) {
+      errorToast(e, '템플릿을 저장하지 못했어요');
+    }
+  });
   // 일정 등록 폼은 입력 중간에 배경을 실수로 클릭해서 내용이 날아가는 일이 없도록,
   // 바깥 클릭으로는 안 닫히고 Esc(registerEscClose)나 취소 버튼으로만 닫히게 한다.
 
@@ -827,22 +951,118 @@ export async function mount(root) {
   }
   document.addEventListener('keydown', handleDeleteKey);
 
-  // + 로 새 일정 추가, Tab으로 월/주/일 순환 — 입력 중이거나 모달이 열려있으면 평소 동작
-  // (문자 입력/폼 안에서 다음 칸으로 이동)을 그대로 두고 가로채지 않는다.
+  // 일정 화면 단축키 — 입력 중이거나 모달이 열려있으면 가로채지 않는다.
+  // Alt를 누르고 있으면 뜨는 오버레이(shell.js)에 아래 목록이 그대로 보인다.
+  const CAL_SCREEN_SHORTCUTS = [
+    { label: '새 일정', keys: '+' },
+    { label: '월 / 주 / 일 뷰', keys: 'M / W / D' },
+    { label: '뷰 순환', keys: 'Tab' },
+    { label: '이전 / 다음 기간', keys: '← / →' },
+    { label: '오늘로', keys: 'T' },
+    { label: '일정 검색', keys: 'F' },
+    { label: '구글 캘린더 표시', keys: 'G' },
+  ];
   function handleQuickKeys(e) {
     if (isUserTyping()) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
     if ($('c-modalOverlay').classList.contains('open') || $('c-detailOverlay').classList.contains('open')) return;
-    if (e.key === '+') {
-      e.preventDefault();
-      openModal();
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      const order = ['month', 'week', 'day'];
-      const next = order[(order.indexOf(currentView) + 1) % order.length];
-      root.querySelector(`.tab[data-view="${next}"]`)?.click();
+    const goView = (v) => root.querySelector(`.tab[data-view="${v}"]`)?.click();
+    switch (e.key) {
+      case '+':
+        e.preventDefault();
+        openModal();
+        break;
+      case 'Tab': {
+        e.preventDefault();
+        const order = ['month', 'week', 'day'];
+        goView(order[(order.indexOf(currentView) + 1) % order.length]);
+        break;
+      }
+      case 'm': case 'M': e.preventDefault(); goView('month'); break;
+      case 'w': case 'W': e.preventDefault(); goView('week'); break;
+      case 'd': case 'D': e.preventDefault(); goView('day'); break;
+      case 't': case 'T': e.preventDefault(); $('c-today').click(); break;
+      case 'ArrowLeft': e.preventDefault(); step(-1); break;
+      case 'ArrowRight': e.preventDefault(); step(1); break;
+      case 'f': case 'F': e.preventDefault(); $('c-search').focus(); break;
+      case 'g': case 'G': e.preventDefault(); $('c-toggleGoogle').click(); break;
+      default:
+        break;
     }
   }
   document.addEventListener('keydown', handleQuickKeys);
+  setScreenShortcuts('일정', CAL_SCREEN_SHORTCUTS);
+
+  // ---------- 일정 검색 (제목/내용 FTS) ----------
+  const searchResults = $('c-searchResults');
+  function closeSearchResults() {
+    searchResults.style.display = 'none';
+    searchResults.innerHTML = '';
+  }
+  async function runEventSearch(term) {
+    const q = term.trim();
+    if (q.length < 1) return closeSearchResults();
+    let hits = [];
+    try {
+      const rows = await window.itda.search.query(q);
+      hits = rows.filter((r) => r.entity_type === 'event');
+    } catch (err) {
+      // FTS 문법에 안 맞는 입력이면 지금 불러온 목록에서 제목 부분일치로 대체
+      hits = currentEvents
+        .filter((e) => (e.title || '').toLowerCase().includes(q.toLowerCase()))
+        .map((e) => ({ entity_id: e.id, title: e.title }));
+    }
+    if (!hits.length) {
+      searchResults.innerHTML = `<div class="cal-search-empty">"${escapeHtml(q)}" 일정을 찾지 못했어요</div>`;
+      searchResults.style.display = 'block';
+      return;
+    }
+    searchResults.innerHTML = hits
+      .slice(0, 12)
+      .map((h) => `<button type="button" class="cal-search-item" data-id="${h.entity_id}">${escapeHtml(h.title || '(제목 없음)')}</button>`)
+      .join('');
+    searchResults.style.display = 'block';
+    searchResults.querySelectorAll('.cal-search-item').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const evt = await window.itda.events.get(Number(btn.dataset.id));
+          if (!evt) return;
+          anchor = parseKey((evt.start_at || '').slice(0, 10));
+          currentView = 'day';
+          root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
+          $('c-search').value = '';
+          closeSearchResults();
+          await load();
+          openDetail({ ...evt, source: 'local' });
+        } catch (err) {
+          errorToast(err, '일정을 열지 못했어요');
+        }
+      });
+    });
+  }
+  const debouncedSearch = debounce(runEventSearch, 200);
+  $('c-search').addEventListener('input', (e) => debouncedSearch(e.target.value));
+  $('c-search').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $('c-search').value = '';
+      closeSearchResults();
+      $('c-search').blur();
+    }
+  });
+  const handleDocClickForSearch = (e) => {
+    if (!$('c-searchWrap').contains(e.target)) closeSearchResults();
+  };
+  document.addEventListener('click', handleDocClickForSearch);
+
+  // 저장된 종일 순서 / 즐겨찾는 템플릿 불러오기
+  try {
+    const rawOrder = await window.itda.settings.get('calendar_allday_order');
+    if (rawOrder) alldayOrder = JSON.parse(rawOrder) || [];
+    const rawTpl = await window.itda.settings.get('calendar_event_templates');
+    if (rawTpl) eventTemplates = JSON.parse(rawTpl) || [];
+  } catch (e) {
+    // 깨졌으면 빈 값으로 시작
+  }
 
   await loadCategories();
   await load();
@@ -858,6 +1078,8 @@ export async function mount(root) {
     unsubscribeEsc();
     document.removeEventListener('keydown', handleDeleteKey);
     document.removeEventListener('keydown', handleQuickKeys);
+    document.removeEventListener('click', handleDocClickForSearch);
+    setScreenShortcuts(null, []);
     offDataChanged?.();
   };
 }

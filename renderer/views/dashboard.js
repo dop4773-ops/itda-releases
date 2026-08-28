@@ -7,7 +7,7 @@ import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget
 import { getUserName } from '../shared/shell.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
-import { getPreset } from '../shared/dashboard-layouts.js';
+import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
@@ -34,6 +34,8 @@ const PIN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentC
 const WIDGET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`;
 const LINK_ROW_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07l1.5-1.5"/></svg>`;
 const GRIP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>`;
+const EDIT_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>`;
+const RESET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.7 3L3 9"/><path d="M3 4v5h5"/></svg>`;
 
 const TYPE_META = {
   todo: { label: 'Todo', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`, route: '#/todo' },
@@ -85,7 +87,9 @@ export async function mount(root) {
             </div>
             <span class="dash-time" id="d-timeNow"></span>
             ${widgetLaunchButtonHtml('d-ddayWidgetBtn', 'D-DAY 위젯 열기')}
-            <button class="btn-icon" id="d-sideToggle" title="사이드 패널 접기/펼치기">${CHEVRON_RIGHT}</button>
+            <button class="btn-icon" id="d-layoutEditBtn" title="레이아웃 편집">${EDIT_ICON}</button>
+            <button class="btn-icon" id="d-layoutResetBtn" title="기본 배치로 복원">${RESET_ICON}</button>
+            <button class="btn-icon" id="d-sideToggle" title="사이드 패널 열기">${CHEVRON_LEFT}</button>
             <button class="btn" id="d-newBtn">+ 새로 만들기</button>
           </div>
         </div>
@@ -112,6 +116,14 @@ export async function mount(root) {
             <div class="top"><span class="dot" style="background:var(--tone-blue-fg)"></span>알림</div>
             <div class="num" id="d-notifCount">-</div>
           </div>
+        </div>
+
+        <div class="dash-edit-bar" id="d-editBar" style="display:none;">
+          <span class="dash-edit-hint">레이아웃 편집 중 — 카드를 드래그해 옮기거나 모서리를 끌어 크기를 바꾸세요</span>
+          <span class="dash-edit-presets">
+            ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
+          </span>
+          <button class="btn" id="d-editDoneBtn">완료</button>
         </div>
 
         <div class="dash-widget-grid" id="d-widgetGrid">
@@ -165,7 +177,7 @@ export async function mount(root) {
         </div>
       </div>
 
-      <div class="dash-resizer" id="d-resizer" title="드래그해서 사이드 패널 폭 조절"></div>
+      <div class="dash-side-backdrop" id="d-sideBackdrop"></div>
 
       <aside class="dash-side" id="d-side">
         <div class="panel side-cal-panel" id="d-card-sideCalendar">
@@ -203,19 +215,10 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
 
-  // 사이드 패널이 접혀야 하는 이유는 두 가지 — (a) 사용자가 설정에서 사이드 카드를 둘 다
-  // 꺼놨거나(자동), (b) 헤더의 접기 버튼으로 직접 접었을 때(수동). 어느 쪽이든 접힌 걸로
-  // 취급한다(OR) — 카드가 둘 다 꺼진 상태에서 수동으로 "펼쳐도" 보여줄 내용이 없으니
-  // 자연스럽게 계속 접힌 채로 남는다(별도 가드 불필요).
-  let cardsHideSide = false;
-  let manualSideCollapsed = false;
-  function updateSideCollapsedClass() {
-    $('d-layout').classList.toggle('side-collapsed', cardsHideSide || manualSideCollapsed);
-  }
-
-  // 카드 on/off (설정에서 저장한 JSON 하나로 관리) — 데이터를 안 불러오는 최적화는 하지 않고
-  // 단순히 숨긴다(로컬 SQLite라 비용이 작아서 그정도 절약은 안 해도 됨).
-  // 위젯 그리드(flex-wrap)라 일부만 숨겨도 나머지가 자연스럽게 채워져서 별도 열 계산이 필요 없다.
+  // 카드 on/off (설정에서 저장한 JSON 하나로 관리). 사이드 패널 카드가 둘 다 꺼져 있으면
+  // 우측 패널을 열 이유가 없으므로 헤더의 "사이드 패널 열기" 버튼을 숨긴다.
+  // 위젯 레이아웃 상태(dashboard_layout)와 사이드 패널 열림 상태(dashboard_side_open)는
+  // 서로 완전히 독립적이다 — 하나를 바꿔도 다른 하나엔 영향이 없다.
   async function applyDashboardCardConfig() {
     const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
     let config = defaults;
@@ -232,331 +235,223 @@ export async function mount(root) {
     };
     DASHBOARD_CARDS.forEach((c) => setVisible(`d-card-${c.id}`, config[c.id]));
 
-    cardsHideSide = !(config.sideCalendar || config.sidePostit);
-    updateSideCollapsedClass();
+    const anySideCard = !!(config.sideCalendar || config.sidePostit);
+    $('d-sideToggle').style.display = anySideCard ? '' : 'none';
+    return config;
   }
   await applyDashboardCardConfig();
 
-  // 사이드 패널 접기/펼치기 버튼 — 위젯 카드는 절대 좌표(x/y/w/h)로 고정돼 있어서 사이드바
-  // 폭 변화에 맞춰 자동으로 비율을 조정해봤지만(스케일링), 접었다 펼 때 위젯 크기가 조금씩
-  // 어긋난 채 누적돼 이상해지는 문제가 있어서 되돌렸다 — 사이드바를 접어도 위젯 배치는
-  // 그대로 고정. 필요하면 사용자가 직접 위젯 크기/위치를 다시 조절하면 된다.
-  async function initSideToggle() {
+  // ================= 우측 사이드 패널 — 화면을 밀지 않는 슬라이드 오버레이 =================
+  // 예전엔 flex 컬럼이라 열고 닫을 때마다 위젯 그리드 폭이 바뀌었다 — 이제 위에 겹쳐 떠서
+  // 위젯 레이아웃엔 전혀 영향을 주지 않는다(요청: "사이드바 상태와 위젯 레이아웃 상태를 분리").
+  function initSidePanel() {
+    const panel = $('d-side');
+    const backdrop = $('d-sideBackdrop');
     const btn = $('d-sideToggle');
-    try {
-      manualSideCollapsed = (await window.itda.settings.get('dashboard_side_collapsed')) === '1';
-    } catch (e) {
-      manualSideCollapsed = false;
-    }
-    const updateIcon = () => {
-      btn.innerHTML = manualSideCollapsed ? CHEVRON_LEFT : CHEVRON_RIGHT;
-      btn.title = manualSideCollapsed ? '사이드 패널 펼치기' : '사이드 패널 접기';
+    let open = false;
+    const apply = () => {
+      panel.classList.toggle('open', open);
+      backdrop.classList.toggle('open', open);
+      btn.classList.toggle('active', open);
+      btn.title = open ? '사이드 패널 닫기' : '사이드 패널 열기';
     };
-    updateIcon();
-    updateSideCollapsedClass();
-    btn.addEventListener('click', async () => {
-      manualSideCollapsed = !manualSideCollapsed;
-      updateIcon();
-      updateSideCollapsedClass();
-      try {
-        await window.itda.settings.set({ key: 'dashboard_side_collapsed', value: manualSideCollapsed ? '1' : '0' });
-      } catch (e) {
-        errorToast(e, '설정을 저장하지 못했어요');
-      }
-    });
+    const setOpen = (next) => {
+      open = next;
+      apply();
+      window.itda.settings.set({ key: 'dashboard_side_open', value: open ? '1' : '0' }).catch(() => {});
+    };
+    window.itda.settings
+      .get('dashboard_side_open')
+      .then((v) => {
+        open = v === '1';
+        apply();
+      })
+      .catch(() => {});
+    btn.addEventListener('click', () => setOpen(!open));
+    backdrop.addEventListener('click', () => setOpen(false));
+    return { close: () => setOpen(false) };
   }
-  await initSideToggle();
+  initSidePanel();
 
-  // ================= 위젯 그리드: 자유 위치 이동 + 크기 조절 + 정렬 가이드 =================
-  // 카드마다 {x,y,w,h}를 설정에 저장해서 다음에 열어도 유지한다. 처음 보거나(설치 직후) 새로
-  // 켠 카드처럼 저장된 위치가 없는 카드는 현재 프리셋(기본형/2열형)으로 계산해서 채워 넣는다.
+  // ================= 위젯 그리드: 12칸 그리드 스냅 + 편집 모드 =================
+  // 저장하는 좌표는 픽셀이 아니라 그리드 칸 단위 {x,y,w,h}(요청: "Grid 좌표만 저장").
+  // 편집 모드(헤더 연필 버튼)일 때만 드래그·리사이즈가 활성화되고, 그 외엔 읽기 전용.
   async function initWidgetGrid() {
     const grid = $('d-widgetGrid');
     const widgets = Array.from(grid.querySelectorAll('.dash-widget'));
     const widgetById = new Map(widgets.map((w) => [w.dataset.card, w]));
+    let editing = false;
+    const isVisible = (w) => w.style.display !== 'none';
+    const visibleIds = () => widgets.filter(isVisible).map((w) => w.dataset.card);
 
-    let presetId = 'flow';
+    let presetId = DEFAULT_PRESET_ID;
     let positions = {};
     try {
       const raw = await window.itda.settings.get('dashboard_layout');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed?.widgets) {
-          presetId = parsed.preset || 'flow';
+          presetId = parsed.preset || DEFAULT_PRESET_ID;
           positions = parsed.widgets;
         }
       }
     } catch (e) {
-      // 저장된 값이 없거나(신규 설치) 옛 버전 형식/깨진 값이면 프리셋으로 새로 계산
+      // 없거나(신규) 깨졌으면 프리셋으로 새로 계산
     }
+    // 예전 버전은 픽셀 좌표(x가 수백 px)로 저장했다 — 그리드 칸(0~11)을 벗어나는 값이 하나라도
+    // 있으면 옛 형식으로 보고 통째로 버리고 프리셋으로 다시 깐다.
+    const looksLegacy = Object.values(positions).some((p) => !p || p.w > GRID_COLS || p.x > GRID_COLS || p.h > 20);
+    if (looksLegacy) positions = {};
 
-    const visibleIds = widgets.filter((w) => w.style.display !== 'none').map((w) => w.dataset.card);
-    const missingIds = visibleIds.filter((id) => !positions[id]);
-    if (missingIds.length) {
-      const containerWidth = grid.clientWidth || 1000;
-      const computed = getPreset(presetId).compute(visibleIds, containerWidth);
-      missingIds.forEach((id) => {
-        positions[id] = computed[id];
+    function fillMissing() {
+      const missing = visibleIds().filter((id) => !positions[id]);
+      if (!missing.length) return;
+      const computed = getPreset(presetId).compute(visibleIds());
+      missing.forEach((id) => {
+        positions[id] = computed[id] || { x: 0, y: 0, w: 4, h: 2 };
       });
     }
+    fillMissing();
 
     function applyPosition(cardId) {
-      const w = widgetById.get(cardId);
+      const el = widgetById.get(cardId);
       const p = positions[cardId];
-      if (!w || !p) return;
-      w.style.left = `${p.x}px`;
-      w.style.top = `${p.y}px`;
-      w.style.width = `${p.w}px`;
-      w.style.height = `${p.h}px`;
+      if (!el || !p) return;
+      el.style.gridColumn = `${p.x + 1} / span ${p.w}`;
+      el.style.gridRow = `${p.y + 1} / span ${p.h}`;
     }
-    widgets.forEach((w) => applyPosition(w.dataset.card));
-
-    function recalcContainerHeight() {
-      let maxBottom = 0;
-      widgets.forEach((w) => {
-        if (w.style.display === 'none') return;
-        const p = positions[w.dataset.card];
-        if (p) maxBottom = Math.max(maxBottom, p.y + p.h);
-      });
-      grid.style.height = `${maxBottom}px`;
+    function applyAll() {
+      widgets.forEach((w) => applyPosition(w.dataset.card));
     }
-    recalcContainerHeight();
+    applyAll();
 
     function persist() {
-      window.itda.settings.set({ key: 'dashboard_layout', value: JSON.stringify({ preset: presetId, widgets: positions }) }).catch(() => {});
+      window.itda.settings
+        .set({ key: 'dashboard_layout', value: JSON.stringify({ preset: presetId, widgets: positions }) })
+        .catch(() => {});
     }
-    persist(); // 방금 새로 채운 기본 위치도 다음엔 그대로 이어서 보이도록 저장해둔다
+    persist();
 
-    // 이동/크기조절 둘 다 커서를 직접 따라가는 커스텀 드래그라(네이티브 CSS resize 아님),
-    // 다른 카드와 가장자리/중심이 맞으면(파워포인트 스마트 가이드처럼) 점선을 보여주고
-    // 그 위치에 딱 붙는(스냅) 걸 이동/크기조절 둘 다에 똑같이 적용할 수 있다.
-    const SNAP = 6;
-    let guideEls = [];
-    function clearGuides() {
-      guideEls.forEach((el) => el.remove());
-      guideEls = [];
+    // --- 그리드 기하 계산 (드래그 중 매번 새로 잰다 — 사이드바 열림 등으로 폭이 바뀔 수 있음) ---
+    function geom() {
+      const rect = grid.getBoundingClientRect();
+      const cs = getComputedStyle(grid);
+      const gap = parseFloat(cs.columnGap) || 14;
+      const rowH = parseFloat(cs.gridAutoRows) || 108;
+      const colW = (rect.width - gap * (GRID_COLS - 1)) / GRID_COLS;
+      return { rect, gap, rowH, colW };
     }
-    function showGuide(axis, pos) {
-      const el = document.createElement('div');
-      el.className = `dash-guide dash-guide-${axis}`;
-      el.style[axis === 'v' ? 'left' : 'top'] = `${pos}px`;
-      grid.appendChild(el);
-      guideEls.push(el);
-    }
-    // dragged 기준 후보 x좌표들(edges)이 다른 카드들의 가장자리/중심선 중 SNAP px 이내로 가장
-    // 가까운 것과 만나면 그 차이(delta)만큼 스냅한다 — 이동은 후보가 3개(좌/중앙/우), 크기조절은
-    // 움직이는 가장자리 1개만 후보로 넘겨서 같은 함수를 재사용한다.
-    function findSnap(dragged, candidates, otherEdges) {
-      let best = null;
-      widgets.forEach((o) => {
-        if (o === dragged || o.style.display === 'none') return;
-        const edges = otherEdges(o);
-        candidates.forEach((c) => edges.forEach((oe) => {
-          const diff = Math.abs(c - oe);
-          if (diff <= SNAP && (!best || diff < best.diff)) best = { diff, delta: oe - c, pos: oe };
-        }));
-      });
-      return best;
-    }
-    function otherXEdges(o) {
-      return [o.offsetLeft, o.offsetLeft + o.offsetWidth / 2, o.offsetLeft + o.offsetWidth];
-    }
-    function otherYEdges(o) {
-      return [o.offsetTop, o.offsetTop + o.offsetHeight / 2, o.offsetTop + o.offsetHeight];
-    }
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-    // 드래그 시작 시점에 한 번만 호출 — document에 mousemove/mouseup을 걸어주고,
-    // 언마운트 중 드래그가 끊겨도 정리할 수 있게 activeOnMove/activeOnUp에 기록해둔다.
-    let activeOnMove = null;
-    let activeOnUp = null;
+    let activeMove = null;
+    let activeUp = null;
     function startDrag(onMove, onUp) {
-      activeOnMove = onMove;
-      activeOnUp = (ev) => {
-        document.removeEventListener('mousemove', activeOnMove);
-        document.removeEventListener('mouseup', activeOnUp);
-        activeOnMove = null;
-        activeOnUp = null;
+      activeMove = onMove;
+      activeUp = (ev) => {
+        document.removeEventListener('mousemove', activeMove);
+        document.removeEventListener('mouseup', activeUp);
+        activeMove = null;
+        activeUp = null;
         onUp(ev);
       };
-      document.addEventListener('mousemove', activeOnMove);
-      document.addEventListener('mouseup', activeOnUp);
+      document.addEventListener('mousemove', activeMove);
+      document.addEventListener('mouseup', activeUp);
     }
 
-    // 이동: 그립을 눌러서 자유롭게 끈다 — 좌/중앙/우, 상/중앙/하 세 후보 다 스냅 대상.
+    // 이동 — 그립을 끌면 카드가 셀 단위로 스냅해서 따라온다.
     grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
       grip.addEventListener('mousedown', (e) => {
+        if (!editing) return;
         e.preventDefault();
         const widget = grip.closest('.dash-widget');
         const cardId = widget.dataset.card;
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startLeft = widget.offsetLeft;
-        const startTop = widget.offsetTop;
+        const p = positions[cardId];
+        const wRect = widget.getBoundingClientRect();
+        const grabX = e.clientX - wRect.left;
+        const grabY = e.clientY - wRect.top;
         widget.classList.add('dragging');
-
         startDrag(
           (ev) => {
-            const rawLeft = Math.max(0, startLeft + (ev.clientX - startX));
-            const rawTop = Math.max(0, startTop + (ev.clientY - startY));
-            const w = widget.offsetWidth;
-            const h = widget.offsetHeight;
-            const snapX = findSnap(widget, [rawLeft, rawLeft + w / 2, rawLeft + w], otherXEdges);
-            const snapY = findSnap(widget, [rawTop, rawTop + h / 2, rawTop + h], otherYEdges);
-            widget.style.left = `${snapX ? rawLeft + snapX.delta : rawLeft}px`;
-            widget.style.top = `${snapY ? rawTop + snapY.delta : rawTop}px`;
-            clearGuides();
-            if (snapX) showGuide('v', snapX.pos);
-            if (snapY) showGuide('h', snapY.pos);
+            const { rect, gap, rowH, colW } = geom();
+            const px = ev.clientX - rect.left - grabX;
+            const py = ev.clientY - rect.top - grabY;
+            p.x = clamp(Math.round(px / (colW + gap)), 0, GRID_COLS - p.w);
+            p.y = Math.max(0, Math.round(py / (rowH + gap)));
+            applyPosition(cardId);
           },
           () => {
             widget.classList.remove('dragging');
-            clearGuides();
-            positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, y: widget.offsetTop };
-            recalcContainerHeight();
             persist();
           }
         );
       });
     });
 
-    // 크기조절: 오른쪽 아래 모서리 핸들을 눌러서 끈다 — 움직이는 건 우측/하단 가장자리뿐이라
-    // 그 가장자리가 다른 카드의 가장자리/중심과 맞을 때만 스냅한다(= 폭/높이를 맞추는 효과도 됨).
+    // 크기조절 — 우하단 핸들을 끌면 열/행 span이 셀 단위로 바뀐다.
     widgets.forEach((widget) => {
       const handle = document.createElement('span');
       handle.className = 'dash-widget-resize';
       handle.title = '드래그해서 크기 조절';
       widget.appendChild(handle);
-
       handle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // 패널 클릭/그립 드래그로 안 새게
-        const cardId = widget.dataset.card;
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startW = widget.offsetWidth;
-        const startH = widget.offsetHeight;
-        const left = widget.offsetLeft;
-        const top = widget.offsetTop;
-        widget.classList.add('dragging');
-
-        startDrag(
-          (ev) => {
-            const rawW = Math.max(260, startW + (ev.clientX - startX));
-            const rawH = Math.max(140, startH + (ev.clientY - startY));
-            const snapX = findSnap(widget, [left + rawW], otherXEdges);
-            const snapY = findSnap(widget, [top + rawH], otherYEdges);
-            widget.style.width = `${snapX ? rawW + snapX.delta : rawW}px`;
-            widget.style.height = `${snapY ? rawH + snapY.delta : rawH}px`;
-            clearGuides();
-            if (snapX) showGuide('v', snapX.pos);
-            if (snapY) showGuide('h', snapY.pos);
-          },
-          () => {
-            widget.classList.remove('dragging');
-            clearGuides();
-            positions[cardId] = { ...positions[cardId], w: widget.offsetWidth, h: widget.offsetHeight };
-            recalcContainerHeight();
-            persist();
-          }
-        );
-      });
-    });
-
-    // 왼쪽 아래 모서리 핸들 — 오른쪽 핸들과 반대로, 오른쪽 가장자리는 고정한 채 왼쪽 가장자리(x)와
-    // 폭을 같이 움직인다. 좌측 카드도 오른쪽 카드처럼 자유롭게 크기 조절할 수 있게 해달라는 요청.
-    widgets.forEach((widget) => {
-      const handle = document.createElement('span');
-      handle.className = 'dash-widget-resize dash-widget-resize-left';
-      handle.title = '드래그해서 크기 조절';
-      widget.appendChild(handle);
-
-      handle.addEventListener('mousedown', (e) => {
+        if (!editing) return;
         e.preventDefault();
         e.stopPropagation();
         const cardId = widget.dataset.card;
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const startW = widget.offsetWidth;
-        const startH = widget.offsetHeight;
-        const right = widget.offsetLeft + startW; // 이 핸들을 끄는 동안 고정할 오른쪽 가장자리
-        const top = widget.offsetTop;
+        const p = positions[cardId];
         widget.classList.add('dragging');
-
         startDrag(
           (ev) => {
-            const desiredLeft = Math.max(0, Math.min(right - 260, right - startW + (ev.clientX - startX)));
-            const rawH = Math.max(140, startH + (ev.clientY - startY));
-            const snapX = findSnap(widget, [desiredLeft], otherXEdges);
-            const snapY = findSnap(widget, [top + rawH], otherYEdges);
-            const finalLeft = snapX ? desiredLeft + snapX.delta : desiredLeft;
-            widget.style.left = `${finalLeft}px`;
-            widget.style.width = `${right - finalLeft}px`;
-            widget.style.height = `${snapY ? rawH + snapY.delta : rawH}px`;
-            clearGuides();
-            if (snapX) showGuide('v', snapX.pos);
-            if (snapY) showGuide('h', snapY.pos);
+            const { rect, gap, rowH, colW } = geom();
+            const px = ev.clientX - rect.left;
+            const py = ev.clientY - rect.top;
+            p.w = clamp(Math.round((px - p.x * (colW + gap)) / (colW + gap)), 2, GRID_COLS - p.x);
+            p.h = clamp(Math.round((py - p.y * (rowH + gap)) / (rowH + gap)), 1, 20);
+            applyPosition(cardId);
           },
           () => {
             widget.classList.remove('dragging');
-            clearGuides();
-            positions[cardId] = { ...positions[cardId], x: widget.offsetLeft, w: widget.offsetWidth, h: widget.offsetHeight };
-            recalcContainerHeight();
             persist();
           }
         );
       });
     });
 
-    return () => {
-      if (activeOnMove) document.removeEventListener('mousemove', activeOnMove);
-      if (activeOnUp) document.removeEventListener('mouseup', activeOnUp);
-    };
-  }
-  const disconnectWidgetGrid = await initWidgetGrid();
-
-  // ================= 사이드 패널(우측 캘린더/포스트잇) 폭 드래그 조절 =================
-  const SIDE_WIDTH_MIN = 260;
-  const SIDE_WIDTH_MAX = 560;
-  const SIDE_WIDTH_DEFAULT = 336;
-  let onResizerMove = null;
-  let onResizerUp = null;
-
-  async function initSideResizer() {
-    const layout = $('d-layout');
-    const resizer = $('d-resizer');
-    let width = SIDE_WIDTH_DEFAULT;
-    try {
-      const raw = await window.itda.settings.get('dashboard_side_width');
-      if (raw) width = Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, Number(raw) || SIDE_WIDTH_DEFAULT));
-    } catch (e) {
-      // 저장된 값이 없거나 깨졌으면 기본값 사용
+    // --- 편집 모드 토글 + 프리셋 + 복원 ---
+    function setEditing(on) {
+      editing = on;
+      grid.classList.toggle('editing', on);
+      $('d-editBar').style.display = on ? '' : 'none';
+      $('d-layoutEditBtn').classList.toggle('active', on);
     }
-    layout.style.setProperty('--dash-side-w', `${width}px`);
-
-    let startX = 0;
-    let startWidth = width;
-    onResizerMove = (e) => {
-      const delta = startX - e.clientX; // 왼쪽으로 끌수록 사이드 패널이 넓어짐
-      const next = Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, startWidth + delta));
-      layout.style.setProperty('--dash-side-w', `${next}px`);
-    };
-    onResizerUp = () => {
-      document.removeEventListener('mousemove', onResizerMove);
-      document.removeEventListener('mouseup', onResizerUp);
-      resizer.classList.remove('dragging');
-      const finalWidth = parseInt(layout.style.getPropertyValue('--dash-side-w'), 10) || SIDE_WIDTH_DEFAULT;
-      window.itda.settings.set({ key: 'dashboard_side_width', value: String(finalWidth) }).catch(() => {});
-    };
-    resizer.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      startX = e.clientX;
-      startWidth = parseInt(layout.style.getPropertyValue('--dash-side-w'), 10) || SIDE_WIDTH_DEFAULT;
-      resizer.classList.add('dragging');
-      document.addEventListener('mousemove', onResizerMove);
-      document.addEventListener('mouseup', onResizerUp);
+    function applyPreset(id) {
+      presetId = id;
+      positions = getPreset(id).compute(visibleIds());
+      applyAll();
+      persist();
+    }
+    $('d-layoutEditBtn').addEventListener('click', () => setEditing(!editing));
+    $('d-editDoneBtn').addEventListener('click', () => setEditing(false));
+    $('d-editBar').querySelectorAll('[data-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        applyPreset(btn.dataset.preset);
+        toast('레이아웃을 바꿨어요');
+      });
     });
+    $('d-layoutResetBtn').addEventListener('click', () => {
+      applyPreset(DEFAULT_PRESET_ID);
+      toast('기본 배치로 되돌렸어요');
+    });
+
+    return {
+      destroy: () => {
+        if (activeMove) document.removeEventListener('mousemove', activeMove);
+        if (activeUp) document.removeEventListener('mouseup', activeUp);
+      },
+    };
   }
-  await initSideResizer();
+  const widgetGrid = await initWidgetGrid();
+
 
   // 일정 상세/수정 팝업 — 캘린더 화면으로 이동하지 않고 대시보드 안에서 바로 뜨도록
   // calendar.js와 동일한 모달을 재사용(renderer/shared/event-detail-modal.js)한다.
@@ -1121,8 +1016,6 @@ export async function mount(root) {
     eventDetailModal.destroy();
     clearTimeout(flushTimer);
     offDataChanged?.();
-    if (onResizerMove) document.removeEventListener('mousemove', onResizerMove);
-    if (onResizerUp) document.removeEventListener('mouseup', onResizerUp);
-    disconnectWidgetGrid?.();
+    widgetGrid?.destroy();
   };
 }

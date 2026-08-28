@@ -56,7 +56,7 @@ const MOD_LABEL = isMac ? '⌘' : 'Ctrl+';
 const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
 // Alt를 누르고 있으면 뜨는 전역 단축키 오버레이(shell.js)에 이 화면 전용 단축키를 얹어서 보여준다.
 const MEMO_SCREEN_SHORTCUTS = [
-  { label: '새 메모', keys: NEW_MEMO_SHORTCUT_LABEL },
+  { label: '새 메모', keys: `${NEW_MEMO_SHORTCUT_LABEL} / +` },
   { label: '굵게', keys: `${MOD_LABEL}B` },
   { label: '밑줄', keys: `${MOD_LABEL}U` },
   { label: '왼쪽 정렬', keys: `${MOD_SHIFT_LABEL}L` },
@@ -1026,6 +1026,12 @@ export async function mount(root) {
   // 화면 전용 고정 단축키(⌘/Ctrl+N) — 이 화면이 떠 있는 동안만 반응, 언마운트 시 해제.
   const handleNewMemoShortcut = (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      e.preventDefault();
+      createNewMemo();
+      return;
+    }
+    // 일정 화면과 동일하게, 입력 중이 아닐 때 '+' 로도 새 메모 추가
+    if (e.key === '+' && !e.metaKey && !e.ctrlKey && !e.altKey && !isUserTyping()) {
       e.preventDefault();
       createNewMemo();
     }

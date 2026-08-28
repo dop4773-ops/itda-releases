@@ -8,6 +8,7 @@ import { attachDateQuickChips } from '../shared/date-quick-chips.js';
 import { confirmSeriesScope } from '../shared/series-scope.js';
 import { openCreateEventModal } from '../shared/create-event-modal.js';
 import { openCreateTodoModal } from '../shared/create-todo-modal.js';
+import { setScreenShortcuts } from '../shared/shell.js';
 
 const TODO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`;
 const RECURRENCE_LABEL = { daily: '매일', weekly: '매주', monthly: '매월' };
@@ -656,11 +657,21 @@ export async function mount(root) {
 
   // 상단 빠른 추가 행과 별개로, "+" 팝업으로도 새 할 일을 만들 수 있다 — 이미 있는
   // Todo 전환 팝업(create-todo-modal.js)을 그대로 재사용(Esc/취소 버튼으로만 닫힘).
-  $('t-newModalBtn').addEventListener('click', async () => {
+  async function openNewTodoModal() {
     const newTodo = await openCreateTodoModal({});
     if (!newTodo) return; // 취소
     await refresh();
-  });
+  }
+  $('t-newModalBtn').addEventListener('click', openNewTodoModal);
+
+  // 일정/메모 화면과 동일하게, 입력 중이 아닐 때 '+' 로도 새 할 일 팝업 열기
+  const handleQuickAddKey = (e) => {
+    if (e.key !== '+' || e.metaKey || e.ctrlKey || e.altKey || isUserTyping()) return;
+    e.preventDefault();
+    openNewTodoModal();
+  };
+  document.addEventListener('keydown', handleQuickAddKey);
+  setScreenShortcuts('Todo', [{ label: '새 할 일', keys: '+' }]);
 
   root.querySelectorAll('#t-tabs .tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -711,5 +722,7 @@ export async function mount(root) {
   return () => {
     unsubscribeEsc();
     offDataChanged?.();
+    document.removeEventListener('keydown', handleQuickAddKey);
+    setScreenShortcuts(null, []);
   };
 }

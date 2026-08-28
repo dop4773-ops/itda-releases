@@ -503,6 +503,36 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .time-day-header.is-today{background:var(--brand-soft);}
 .time-day-container.is-today-col{background-color:rgba(108,140,245,.04);}
 
+/* ---- 일정 화면 비율 고정 ----
+   월간뷰 셀은 일정 개수와 무관하게 높이가 항상 같고(넘치면 "+N개 더보기"로 접힘),
+   주/일 뷰의 종일 행은 최대 높이를 제한해 그 아래 시간대 그리드가 항상 같은 자리에 온다. */
+#c-gridArea .month-cell{height:104px;min-height:0;overflow:hidden;}
+#c-gridArea .allday-row{max-height:33vh;overflow-y:auto;}
+
+/* ---- 종일 일정 드래그로 순서 바꾸기 ---- */
+.allday-bar-drag{cursor:grab;}
+.allday-bar-drag:active{cursor:grabbing;}
+.allday-bar-drag.dragging{opacity:.4;}
+
+/* ---- 일정 검색 ---- */
+.cal-search{position:relative;}
+.cal-search .input{height:32px;font-size:12px;padding:4px 10px;width:170px;}
+.cal-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:220px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:0 8px 24px rgba(16,24,40,.16);z-index:40;max-height:320px;overflow-y:auto;padding:4px;}
+.cal-search-item{display:block;width:100%;text-align:left;background:none;border:none;padding:7px 9px;font-size:12px;color:var(--text);border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-search-item:hover{background:var(--bg);}
+.cal-search-empty{padding:8px 9px;font-size:11.5px;color:var(--text-faint);}
+
+/* ---- 즐겨찾는 일정 템플릿 ---- */
+.cal-template-row{flex-wrap:wrap;align-items:center;gap:6px;}
+.cal-template-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0;}
+.cal-template-empty{font-size:11px;color:var(--text-faint);}
+.cal-template-chip{display:inline-flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);overflow:hidden;}
+.cal-template-chip > button[data-tpl]{background:none;border:none;padding:4px 10px;font-size:11.5px;color:var(--text);cursor:pointer;}
+.cal-template-chip > button[data-tpl]:hover{color:var(--brand);}
+.cal-template-del{background:none;border:none;padding:4px 6px;color:var(--text-faint);cursor:pointer;display:flex;align-items:center;}
+.cal-template-del:hover{color:var(--danger,#d9534f);}
+#c-saveTemplate{font-size:11px;padding:4px 9px;flex-shrink:0;}
+
 /* 일정 추가 모달 (전역 빠른입력 모달과 별개 — 폼 필드가 여러 개라 카드형으로) */
 .modal-card{
   width:480px;max-width:92vw;background:var(--surface);border-radius:var(--radius-lg);
@@ -965,20 +995,22 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
   .notes-app.detail-open .notes-sidebar{display:none;}
 }
 
-/* ================= 대시보드 레이아웃 (좌: 요약/할일/일정/메모, 우: 캘린더+포스트잇 패널) =================
-   우측 패널 폭은 --dash-side-w 변수로 제어하며, .dash-resizer를 드래그하면 dashboard.js가
-   이 값을 직접 바꾼다(그리드 대신 flex를 쓰는 이유는 두 컬럼 사이 16px gap 자리에 그대로
-   드래그 핸들을 끼워 넣기 위함 — 별도 열을 추가하면 gap이 이중으로 생김). */
-.dash-layout{display:flex;align-items:flex-start;}
-.dash-main{flex:1;min-width:0;}
-.dash-resizer{width:16px;flex:0 0 16px;align-self:stretch;cursor:col-resize;position:relative;}
-.dash-resizer::after{content:'';position:absolute;left:50%;top:0;bottom:0;width:2px;transform:translateX(-50%);background:var(--border);border-radius:1px;transition:background .12s ease;}
-.dash-resizer:hover::after,.dash-resizer.dragging::after{background:var(--brand);}
-.dash-side{flex:0 0 var(--dash-side-w, 336px);display:flex;flex-direction:column;gap:14px;min-width:0;overflow:hidden;transition:opacity .15s ease;}
-.dash-layout.side-collapsed .dash-side{opacity:0;pointer-events:none;flex-basis:0;}
-.dash-layout.side-collapsed .dash-resizer{opacity:0;pointer-events:none;width:0;flex-basis:0;}
-.side-toggle-btn svg{transition:transform .18s ease;}
-.side-toggle-btn.is-collapsed svg{transform:rotate(180deg);}
+/* ================= 대시보드 레이아웃 =================
+   위젯 그리드(.dash-main)는 항상 화면 전체 폭을 쓰고, 우측 사이드 패널(.dash-side)은
+   그 위에 겹쳐 뜨는 슬라이드 오버레이다 — 열고 닫아도 위젯 레이아웃 폭엔 영향이 없다. */
+.dash-layout{display:block;}
+.dash-main{min-width:0;}
+.dash-side-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.32);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:60;}
+.dash-side-backdrop.open{opacity:1;pointer-events:auto;}
+.dash-side{position:fixed;top:0;right:0;bottom:0;width:min(380px,92vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-12px 0 32px rgba(16,24,40,.16);
+  display:flex;flex-direction:column;gap:14px;padding:16px;overflow-y:auto;transform:translateX(100%);transition:transform .2s ease;z-index:61;}
+.dash-side.open{transform:translateX(0);}
+
+/* 레이아웃 편집 바 */
+.dash-edit-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;background:var(--brand-soft);border:1px solid var(--brand);border-radius:var(--radius-md);}
+.dash-edit-hint{font-size:12px;color:var(--text-soft);}
+.dash-edit-presets{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+.dash-edit-bar .btn-secondary{font-size:11.5px;padding:5px 9px;}
 
 /* ---- 대시보드 헤더(인사말 + 날짜 네비게이터 + 시계 + 테마토글 + 새로만들기) ---- */
 .dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px;}
@@ -994,32 +1026,21 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ---- 요약 카드 5개 ---- */
 .summary-grid-5{grid-template-columns:repeat(5,1fr);}
 
-/* ---- 위젯 그리드: 그립을 자유롭게 드래그해서 아무 데나 옮기고, 모서리 핸들을 드래그하면
-   크기 조절 — 둘 다 커스텀 마우스 드래그라서(네이티브 CSS resize 아님) 정렬 가이드 스냅이
-   이동/크기조절에 똑같이 적용된다(dashboard.js initWidgetGrid 참고). 카드가 자유 위치라
-   position:absolute를 쓰고, 컨테이너 높이는 JS가 내용에 맞춰 갱신한다. */
-.dash-widget-grid{position:relative;margin-bottom:16px;}
-/* overflow:auto가 아니라 hidden인 이유: 리사이즈 핸들이 카드 우하단에 고정으로 붙어있는데,
-   auto로 하면 내용이 넘칠 때 핸들도 스크롤을 따라 같이 밀려나서 손이 안 닿게 된다. 대신
-   내용이 넘치면 그냥 잘리고, 더 보고 싶으면 카드를 세로로 늘리면 된다(파워포인트 텍스트
-   상자처럼 — 이 기능 자체가 파워포인트 배치를 본떠 만든 거라 잘 맞는 절충이다). */
-.dash-widget{position:absolute;min-width:260px;min-height:140px;overflow:hidden;}
-.dash-widget.dragging{opacity:.6;z-index:20;box-shadow:0 10px 24px rgba(16,24,40,.22);}
-.dash-widget-grip{cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;display:inline-flex;}
+/* ---- 위젯 그리드: 12칸 CSS 그리드. 카드는 {gridColumn, gridRow}로 칸에 스냅되고,
+   편집 모드(.editing)일 때만 그립/리사이즈 핸들이 나타나 드래그·리사이즈가 된다. ---- */
+.dash-widget-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:108px;gap:14px;margin-bottom:16px;}
+.dash-widget{min-width:0;overflow:hidden;position:relative;}
+.dash-widget-grid.editing .dash-widget{outline:1px dashed var(--border);outline-offset:2px;}
+.dash-widget.dragging{opacity:.75;z-index:20;box-shadow:0 10px 24px rgba(16,24,40,.22);}
+/* 그립/핸들은 편집 모드에서만 보이고 반응한다 */
+.dash-widget-grip{display:none;cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;}
 .dash-widget-grip:active{cursor:grabbing;}
-.dash-widget-resize{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;}
-.dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-right:2px solid var(--text-faint);border-bottom:2px solid var(--text-faint);opacity:.45;}
-.dash-widget-resize:hover::after,.dash-widget.dragging .dash-widget-resize::after{opacity:.9;border-color:var(--brand);}
-.dash-widget-resize-left{left:1px;right:auto;cursor:nesw-resize;}
-.dash-widget-resize-left::after{left:3px;right:auto;border-right:none;border-left:2px solid var(--text-faint);}
-/* 기본 .panel-head는 space-between(제목 vs 더보기 버튼 2개 기준)인데, 위젯엔 그립까지 3번째
-   요소로 들어가서 그립+제목이 서로 멀어져버림 — 그립+제목을 붙이고 더보기만 오른쪽 끝으로 민다. */
+.dash-widget-grid.editing .dash-widget-grip{display:inline-flex;}
+.dash-widget-resize{display:none;position:absolute;right:1px;bottom:1px;width:16px;height:16px;cursor:nwse-resize;z-index:5;}
+.dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;border-right:2px solid var(--brand);border-bottom:2px solid var(--brand);opacity:.6;}
+.dash-widget-grid.editing .dash-widget-resize{display:block;}
 .dash-widget .panel-head{justify-content:flex-start;}
 .dash-widget .panel-head > a{margin-left:auto;}
-/* 파워포인트 스마트 가이드 느낌의 정렬 점선 — 드래그 중에만 잠깐 나타났다 사라진다. */
-.dash-guide{position:absolute;pointer-events:none;z-index:30;}
-.dash-guide-v{top:0;bottom:0;border-left:1px dashed var(--brand);}
-.dash-guide-h{left:0;right:0;border-top:1px dashed var(--brand);}
 
 /* ---- 연결된 업무 ---- */
 .linked-row-inner{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0;}
@@ -1051,6 +1072,12 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 
 @media (max-width: 1100px){
   .summary-grid-5{grid-template-columns:repeat(3,1fr);}
+}
+/* 창이 좁으면 12칸 그리드가 너무 잘게 쪼개지므로, 위젯을 세로로 한 줄씩 쌓는다
+   (편집 모드의 칸 스냅은 넓은 화면에서만 의미가 있다). */
+@media (max-width: 820px){
+  .dash-widget-grid{display:flex;flex-direction:column;grid-auto-rows:auto;}
+  .dash-widget{grid-column:auto !important;grid-row:auto !important;min-height:180px;}
 }
 
 /* 우측 캘린더 위젯 */
