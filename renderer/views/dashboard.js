@@ -391,11 +391,17 @@ export async function mount(root) {
     } catch (e) {
       /* none */
     }
+    const BG_PATTERNS = ['dot', 'grid', 'paper'];
     const applyBg = () => {
       bgEl.style.backgroundImage = '';
       bgEl.style.backgroundColor = '';
+      bgEl.classList.remove('pat-dot', 'pat-grid', 'pat-paper');
       if (bg.type === 'color' && bg.color) bgEl.style.backgroundColor = bg.color;
       else if (bg.type === 'image' && bg.dataUrl) bgEl.style.backgroundImage = `url("${bg.dataUrl}")`;
+      else if (BG_PATTERNS.includes(bg.type)) {
+        bgEl.classList.add('pat-' + bg.type);
+        if (bg.color) bgEl.style.backgroundColor = bg.color; // 패턴 아래 기본색(선택)
+      }
     };
     applyBg();
 
@@ -409,12 +415,15 @@ export async function mount(root) {
           <select class="select" id="bg-type">
             <option value="none">없음</option>
             <option value="color">단색</option>
+            <option value="dot">도트 패턴</option>
+            <option value="grid">격자 패턴</option>
+            <option value="paper">노트(가로줄)</option>
             <option value="image">이미지</option>
           </select>
         </label>
         <label class="cfg-row" id="bg-colorRow">색상<input type="color" id="bg-color" value="${bg.color || '#f0e6d6'}" /></label>
         <label class="cfg-row" id="bg-imageRow">이미지 파일<input type="file" accept="image/*" id="bg-file" /></label>
-        <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요.</p>`;
+        <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요. 패턴은 아주 옅게 들어가요.</p>`;
       document.body.appendChild(pop);
       bgPop = pop;
       const r = anchor.getBoundingClientRect();
@@ -425,8 +434,9 @@ export async function mount(root) {
       const typeSel = pop.querySelector('#bg-type');
       typeSel.value = bg.type || 'none';
       const sync = () => {
-        pop.querySelector('#bg-colorRow').style.display = typeSel.value === 'color' ? '' : 'none';
-        pop.querySelector('#bg-imageRow').style.display = typeSel.value === 'image' ? '' : 'none';
+        const v = typeSel.value;
+        pop.querySelector('#bg-colorRow').style.display = v === 'color' || BG_PATTERNS.includes(v) ? '' : 'none';
+        pop.querySelector('#bg-imageRow').style.display = v === 'image' ? '' : 'none';
       };
       sync();
       const commit = () => {
@@ -440,8 +450,11 @@ export async function mount(root) {
       });
       pop.querySelector('#bg-color').addEventListener('input', (e) => {
         bg.color = e.target.value;
-        bg.type = 'color';
-        typeSel.value = 'color';
+        // 패턴을 고른 상태면 그 아래 기본색으로 쓰고, 아니면 단색으로 전환
+        if (!BG_PATTERNS.includes(bg.type)) {
+          bg.type = 'color';
+          typeSel.value = 'color';
+        }
         sync();
         commit();
       });

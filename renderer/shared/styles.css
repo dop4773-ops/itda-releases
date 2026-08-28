@@ -1109,6 +1109,14 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음.
    .dash-layout이 min-height:100%라 위젯이 적어도 배경이 스크롤 영역 전체를 항상 채운다. */
 .dash-bg{position:absolute;top:-26px;left:-28px;right:-28px;bottom:-60px;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;}
+/* 캔버스 패턴 — 아주 옅게. 콘텐츠 가독성 우선이라 alpha를 낮게 유지한다. */
+.dash-bg.pat-dot,.dash-bg.pat-grid,.dash-bg.pat-paper{background-repeat:repeat;background-position:0 0;}
+.dash-bg.pat-dot{background-image:radial-gradient(rgba(110,110,135,.11) 1px, transparent 1.4px);background-size:22px 22px;}
+.dash-bg.pat-grid{background-image:linear-gradient(rgba(110,110,135,.08) 1px, transparent 1px),linear-gradient(90deg, rgba(110,110,135,.08) 1px, transparent 1px);background-size:28px 28px;}
+.dash-bg.pat-paper{background-image:repeating-linear-gradient(to bottom, transparent 0 29px, rgba(110,110,135,.08) 29px 30px);background-size:auto;}
+html[data-theme="dark"] .dash-bg.pat-dot{background-image:radial-gradient(rgba(200,205,230,.10) 1px, transparent 1.4px);}
+html[data-theme="dark"] .dash-bg.pat-grid{background-image:linear-gradient(rgba(200,205,230,.07) 1px, transparent 1px),linear-gradient(90deg, rgba(200,205,230,.07) 1px, transparent 1px);}
+html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gradient(to bottom, transparent 0 29px, rgba(200,205,230,.07) 29px 30px);}
 /* 대시보드 전체 테마 = .dash-bg 캔버스 색만 바꾼다(카드는 각자 테마로) */
 .dash-layout[data-dashtheme="warm"] .dash-bg{background-color:#f2e8d8;}
 .dash-layout[data-dashtheme="mono"] .dash-bg{background-color:#ededed;}
