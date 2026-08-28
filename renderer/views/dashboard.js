@@ -613,6 +613,8 @@ export async function mount(root) {
         showGhost(p.x, p.y, p.w, p.h);
         startDrag(
           (ev) => {
+            // 카드는 커서를 픽셀 단위로 따라가고(부드럽게), 고스트가 칸에 스냅된 착지 위치를 보여준다.
+            widget.style.transform = `translate(${ev.clientX - startX}px, ${ev.clientY - startY}px)`;
             const dCol = Math.round((ev.clientX - startX) / sx);
             const dRow = Math.round((ev.clientY - startY) / sy);
             target = { x: clamp(start.x + dCol, 0, GRID_COLS - p.w), y: Math.max(0, start.y + dRow) };
@@ -621,6 +623,7 @@ export async function mount(root) {
           },
           () => {
             widget.classList.remove('dragging');
+            widget.style.transform = '';
             p.x = target.x;
             p.y = target.y;
             resolveCollisions(cardId);
@@ -668,15 +671,23 @@ export async function mount(root) {
     }
     widgets.forEach(wireWidget);
 
-    // 새 블록을 놓을 빈 자리 — 맨 아래 줄 왼쪽.
-    function placeAtBottom(id, size) {
-      let maxY = 0;
-      widgets.forEach((w) => {
-        if (w.style.display === 'none') return;
-        const p = positions[w.dataset.card];
-        if (p) maxY = Math.max(maxY, p.y + p.h);
-      });
-      positions[id] = { x: 0, y: maxY, w: size?.w || 4, h: size?.h || 2 };
+    // 새 위젯을 놓을 자리 — 위에서부터 훑어서 안 겹치는 첫 칸에 넣는다(top-down first-fit).
+    function placeFirstFit(id, size) {
+      const w = Math.min(size?.w || 4, GRID_COLS);
+      const h = size?.h || 2;
+      const occ = widgets
+        .filter((el) => el.style.display !== 'none' && el.dataset.card !== id && positions[el.dataset.card])
+        .map((el) => positions[el.dataset.card]);
+      const fits = (x, y) => !occ.some((o) => x < o.x + o.w && x + w > o.x && y < o.y + o.h && y + h > o.y);
+      for (let y = 0; y < 200; y++) {
+        for (let x = 0; x <= GRID_COLS - w; x++) {
+          if (fits(x, y)) {
+            positions[id] = { x, y, w, h };
+            return;
+          }
+        }
+      }
+      positions[id] = { x: 0, y: 0, w, h };
     }
 
     // --- 편집 모드 토글 + 프리셋 + 복원 ---
@@ -720,7 +731,7 @@ export async function mount(root) {
       attach: (el, size) => {
         widgets.push(el);
         widgetById.set(el.dataset.card, el);
-        if (!positions[el.dataset.card]) placeAtBottom(el.dataset.card, size);
+        if (!positions[el.dataset.card]) placeFirstFit(el.dataset.card, size);
         wireWidget(el);
         resolveCollisions(el.dataset.card);
         applyAll();
@@ -739,7 +750,7 @@ export async function mount(root) {
       ensurePosition: (el, size) => {
         const id = el.dataset.card;
         if (positions[id]) return;
-        placeAtBottom(id, size);
+        placeFirstFit(id, size);
         resolveCollisions(id);
         applyAll();
         persist();
@@ -811,6 +822,7 @@ export async function mount(root) {
     blockEls.set(block.id, el);
     wireBlockTools(el, block);
     widgetGrid.attach(el, def.defaultSize);
+    customization?.attachBlockMenu(el);
     persistBlocks();
     if (!widgetGrid.isEditing()) widgetGrid.setEditing(true);
     restartBlockTick();
@@ -824,6 +836,7 @@ export async function mount(root) {
     blockEls.set(block.id, el);
     wireBlockTools(el, block);
     widgetGrid.attach(el, BLOCK_TYPES[src.type]?.defaultSize);
+    customization?.attachBlockMenu(el);
     persistBlocks();
     restartBlockTick();
   }
@@ -964,15 +977,16 @@ export async function mount(root) {
     } catch (e) {
       cardStyles = {};
     }
-    const applyCardStyle = (cardId) => {
-      const el = $(`d-card-${cardId}`);
+    const applyCardStyle = (id) => {
+      const el = grid.querySelector(`.dash-widget[data-card="${id}"]`);
       if (!el) return;
-      const s = cardStyles[cardId] || {};
-      el.dataset.cardtheme = s.theme || '';
+      const s = cardStyles[id] || {};
+      if (!el.classList.contains('dash-block')) el.dataset.cardtheme = s.theme || '';
       if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
     };
     DASHBOARD_CARDS.forEach((c) => applyCardStyle(c.id));
+    grid.querySelectorAll('.dash-block').forEach((el) => applyCardStyle(el.dataset.card));
 
     let cardMenu = null;
     const closeCardMenu = () => {
@@ -983,20 +997,23 @@ export async function mount(root) {
     function onCardMenuOutside(e) {
       if (cardMenu && !cardMenu.contains(e.target)) closeCardMenu();
     }
-    function openCardMenu(x, y, cardId) {
+    function openCardMenu(x, y, cardId, isBlock) {
       closeCardMenu();
       const s = cardStyles[cardId] || {};
       const menu = document.createElement('div');
       menu.className = 'ctx-menu dash-card-menu';
       menu.innerHTML = `
-        <div class="dcm-label">테마</div>
+        ${
+          isBlock
+            ? ''
+            : `<div class="dcm-label">테마</div>
         <div class="dcm-themes">
           ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
-        </div>
+        </div>`
+        }
         <div class="dcm-label">투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
         <input type="range" class="dcm-op" min="30" max="100" step="5" value="${s.opacity ?? 100}" />
-        <div class="ctx-menu-divider"></div>
-        <button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`;
+        ${isBlock ? '' : `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`}`;
       document.body.appendChild(menu);
       cardMenu = menu;
       menu.style.left = `${Math.min(x, window.innerWidth - menu.offsetWidth - 8)}px`;
@@ -1025,7 +1042,7 @@ export async function mount(root) {
         applyCardStyle(cardId);
       });
       opInput.addEventListener('change', () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {}));
-      menu.querySelector('[data-act="hide"]').addEventListener('click', async () => {
+      menu.querySelector('[data-act="hide"]')?.addEventListener('click', async () => {
         closeCardMenu();
         await toggleSummaryOrCard(cardId, false);
       });
@@ -1036,9 +1053,17 @@ export async function mount(root) {
       if (!cardId) return;
       el.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        openCardMenu(e.clientX, e.clientY, cardId);
+        openCardMenu(e.clientX, e.clientY, cardId, false);
       });
     });
+    // 꾸미기 블록 우클릭 → 투명도만 (테마는 블록마다 ⚙ 설정에 따로 있음)
+    const attachBlockMenu = (el) => {
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openCardMenu(e.clientX, e.clientY, el.dataset.card, true);
+      });
+    };
+    grid.querySelectorAll('.dash-block').forEach(attachBlockMenu);
 
     // 업무 카드 숨기기(우클릭 메뉴) — dashboard_cards 설정과 같은 값 사용
     async function toggleSummaryOrCard(cardId, visible) {
@@ -1055,7 +1080,7 @@ export async function mount(root) {
       if (el) el.style.display = visible ? '' : 'none';
     }
 
-    return { closeCardMenu };
+    return { closeCardMenu, attachBlockMenu, applyCardStyle };
   }
   const customization = await initCustomization();
 

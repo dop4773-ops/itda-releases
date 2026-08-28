@@ -114,6 +114,7 @@ export function paintBlock(el, block) {
   const painter = PAINTERS[block.type];
   body.innerHTML = painter ? painter(cfg) : `<div class="dash-block-empty">알 수 없는 블록</div>`;
   el.dataset.bare = BARE_TYPES.includes(block.type) ? '1' : '';
+  if (block.type === 'weather') el._wxNext = 0; // 도시가 바뀌었을 수 있으니 다시 렌더될 땐 무조건 재조회
   hydrateBlock(el, block);
   tickBlock(el, block);
 }
@@ -418,6 +419,14 @@ const KR_CITIES = {
   포항: [36.019, 129.3435, '포항'], 김해: [35.2285, 128.8894, '김해'], 목포: [34.8118, 126.3922, '목포'],
   여수: [34.7604, 127.6622, '여수'], 안동: [36.5684, 128.7294, '안동'], 평택: [36.9921, 127.1129, '평택'],
 };
+// 8초 안에 응답 없으면 끊고 에러 처리 — "불러오는 중"으로 무한정 안 걸리게.
+const fetchJson = (url) => {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 8000);
+  return fetch(url, { signal: ac.signal })
+    .then((r) => r.json())
+    .finally(() => clearTimeout(t));
+};
 async function refreshWeather(el, block, force) {
   const now = Date.now();
   if (!force && now < (el._wxNext || 0)) return;
@@ -431,15 +440,15 @@ async function refreshWeather(el, block, force) {
     if (known) {
       place = { latitude: known[0], longitude: known[1], name: known[2] };
     } else {
-      const geo = await fetch(
+      const geo = await fetchJson(
         `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&format=json`
-      ).then((r) => r.json());
+      );
       place = geo?.results?.[0];
     }
     if (!place) throw new Error('city not found');
-    const wx = await fetch(
+    const wx = await fetchJson(
       `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code`
-    ).then((r) => r.json());
+    );
     const cur = wx?.current;
     if (!cur) throw new Error('no data');
     const [icon, desc] = WMO[cur.weather_code] || ['🌡️', ''];
@@ -558,11 +567,16 @@ export function openBlockConfig(anchorEl, block, onChange) {
   const emit = () => onChange({ ...cfg });
   const readVal = (t) => (t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value);
   pop.querySelectorAll('[data-cfg]').forEach((n) => {
-    const ev = n.tagName === 'SELECT' || n.type === 'checkbox' || n.type === 'color' ? 'change' : 'input';
+    const ev = n.dataset.cfgEv || (n.tagName === 'SELECT' || n.type === 'checkbox' || n.type === 'color' ? 'change' : 'input');
     n.addEventListener(ev, (e) => {
       cfg[e.target.dataset.cfg] = readVal(e.target);
       emit();
     });
+    if (ev === 'change' && n.tagName === 'INPUT') {
+      n.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') n.blur();
+      }); // 엔터로 확정
+    }
   });
 
   const fileInput = pop.querySelector('input[type="file"]');
@@ -667,8 +681,11 @@ const FIELDS = {
     <label class="cfg-row">출처<input class="input" data-cfg="author" value="${escapeHtml(c.author || '')}" placeholder="예: 잇다 팀 (선택)" /></label>
     ${sel('테마', 'theme', [['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
   weather: (c) => `
-    <label class="cfg-row">도시<input class="input" data-cfg="city" value="${escapeHtml(c.city || '서울')}" placeholder="예: 서울, 부산, Tokyo" /></label>
-    <p class="cfg-note">국내 주요 도시는 한글로, 해외는 영어 도시명으로 입력하세요. open-meteo에서 30분마다 자동 갱신되며 인터넷 연결이 필요합니다.</p>`,
+    <label class="cfg-row">도시
+      <input class="input" data-cfg="city" data-cfg-ev="change" list="wx-city-list" value="${escapeHtml(c.city || '서울')}" placeholder="목록에서 고르거나 직접 입력" autocomplete="off" />
+      <datalist id="wx-city-list">${Object.keys(KR_CITIES).map((n) => `<option value="${n}">`).join('')}<option value="Tokyo"><option value="Osaka"><option value="New York"><option value="London"></datalist>
+    </label>
+    <p class="cfg-note">국내 도시는 목록에서 고르고, 해외는 영어 도시명을 직접 입력하세요. 30분마다 자동 갱신되며 인터넷이 필요합니다.</p>`,
   miniTool: (c) => sel('도구', 'tool', [['calc', '계산기'], ['notepad', '메모지'], ['timer', '스톱워치']], c.tool || 'calc'),
 };
 
