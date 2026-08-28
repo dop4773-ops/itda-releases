@@ -17,7 +17,15 @@ import {
   tickBlock,
   openBlockConfig,
   closeBlockConfig,
+  readImageDownscaled,
 } from '../shared/dashboard-blocks.js';
+
+const DASH_THEMES = [
+  { id: 'default', label: '기본', swatch: 'var(--bg)' },
+  { id: 'warm', label: '따뜻한', swatch: '#f0e6d6' },
+  { id: 'mono', label: '모노', swatch: '#e9e9e9' },
+  { id: 'dark', label: '다크', swatch: '#1c1c22' },
+];
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
@@ -81,6 +89,7 @@ export async function mount(root) {
 
   root.innerHTML = `
     <div class="dash-layout" id="d-layout">
+      <div class="dash-bg" id="d-bg"></div>
       <div class="dash-main">
         <div class="dash-header">
           <div class="dash-greeting">
@@ -130,8 +139,9 @@ export async function mount(root) {
         </div>
 
         <div class="dash-edit-bar" id="d-editBar" style="display:none;">
-          <span class="dash-edit-hint">레이아웃 편집 중 — 카드를 드래그해 옮기거나 모서리를 끌어 크기를 바꾸세요</span>
+          <span class="dash-edit-hint">레이아웃 편집 중 — 드래그로 옮기고 모서리로 크기 조절 (겹치면 자동으로 밀려나요)</span>
           <span class="dash-edit-presets">
+            <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
@@ -229,12 +239,16 @@ export async function mount(root) {
           <b>위젯 추가</b>
           <button class="btn-icon" id="d-addClose" title="닫기">✕</button>
         </div>
-        <div class="tabs dash-add-tabs">
-          <button class="tab active" data-addtab="work">업무</button>
-          <button class="tab" data-addtab="deco">꾸미기</button>
+        <div class="dash-theme-row" id="d-themeRow">
+          <span class="dash-theme-label">테마</span>
+          ${DASH_THEMES.map((t) => `<button class="dash-theme-swatch" data-theme-id="${t.id}" title="${escapeHtml(t.label)}" style="background:${t.swatch}"></button>`).join('')}
         </div>
-        <div class="dash-add-body" id="d-addBodyWork"></div>
-        <div class="dash-add-body" id="d-addBodyDeco" style="display:none;"></div>
+        <div class="tabs dash-add-tabs">
+          <button class="tab active" data-addtab="deco">꾸미기</button>
+          <button class="tab" data-addtab="work">업무</button>
+        </div>
+        <div class="dash-add-body" id="d-addBodyDeco"></div>
+        <div class="dash-add-body" id="d-addBodyWork" style="display:none;"></div>
         <p class="dash-add-foot">추가한 위젯은 편집 모드에서 드래그해 옮기고 크기를 바꿀 수 있어요.</p>
       </aside>
     </div>
@@ -300,6 +314,120 @@ export async function mount(root) {
   }
   initSidePanel();
 
+  // ================= 대시보드 배경 + 테마 =================
+  let bgPop = null;
+  const closeBgPop = () => {
+    bgPop?.remove();
+    bgPop = null;
+    document.removeEventListener('mousedown', onBgOutside, true);
+  };
+  function onBgOutside(e) {
+    if (bgPop && !bgPop.contains(e.target)) closeBgPop();
+  }
+  async function initBackgroundAndTheme() {
+    const layout = $('d-layout');
+    const bgEl = $('d-bg');
+
+    let theme = 'default';
+    try {
+      theme = (await window.itda.settings.get('dashboard_theme')) || 'default';
+    } catch (e) {
+      /* default */
+    }
+    const applyTheme = () => layout.setAttribute('data-dashtheme', theme);
+    applyTheme();
+    $('d-themeRow')
+      .querySelectorAll('[data-theme-id]')
+      .forEach((b) => {
+        b.classList.toggle('active', b.dataset.themeId === theme);
+        b.addEventListener('click', () => {
+          theme = b.dataset.themeId;
+          $('d-themeRow')
+            .querySelectorAll('[data-theme-id]')
+            .forEach((x) => x.classList.toggle('active', x === b));
+          applyTheme();
+          window.itda.settings.set({ key: 'dashboard_theme', value: theme }).catch(() => {});
+        });
+      });
+
+    let bg = { type: 'none' };
+    try {
+      const raw = await window.itda.settings.get('dashboard_bg');
+      if (raw) bg = JSON.parse(raw);
+    } catch (e) {
+      /* none */
+    }
+    const applyBg = () => {
+      bgEl.style.backgroundImage = '';
+      bgEl.style.backgroundColor = '';
+      if (bg.type === 'color' && bg.color) bgEl.style.backgroundColor = bg.color;
+      else if (bg.type === 'image' && bg.dataUrl) bgEl.style.backgroundImage = `url("${bg.dataUrl}")`;
+    };
+    applyBg();
+
+    $('d-bgBtn').addEventListener('click', () => {
+      closeBgPop();
+      const anchor = $('d-bgBtn');
+      const pop = document.createElement('div');
+      pop.className = 'dash-block-config';
+      pop.innerHTML = `
+        <label class="cfg-row">종류
+          <select class="select" id="bg-type">
+            <option value="none">없음</option>
+            <option value="color">단색</option>
+            <option value="image">이미지</option>
+          </select>
+        </label>
+        <label class="cfg-row" id="bg-colorRow">색상<input type="color" id="bg-color" value="${bg.color || '#f0e6d6'}" /></label>
+        <label class="cfg-row" id="bg-imageRow">이미지 파일<input type="file" accept="image/*" id="bg-file" /></label>
+        <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요.</p>`;
+      document.body.appendChild(pop);
+      bgPop = pop;
+      const r = anchor.getBoundingClientRect();
+      pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
+      pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
+      setTimeout(() => document.addEventListener('mousedown', onBgOutside, true), 0);
+
+      const typeSel = pop.querySelector('#bg-type');
+      typeSel.value = bg.type || 'none';
+      const sync = () => {
+        pop.querySelector('#bg-colorRow').style.display = typeSel.value === 'color' ? '' : 'none';
+        pop.querySelector('#bg-imageRow').style.display = typeSel.value === 'image' ? '' : 'none';
+      };
+      sync();
+      const commit = () => {
+        applyBg();
+        window.itda.settings.set({ key: 'dashboard_bg', value: JSON.stringify(bg) }).catch(() => {});
+      };
+      typeSel.addEventListener('change', () => {
+        bg.type = typeSel.value;
+        sync();
+        commit();
+      });
+      pop.querySelector('#bg-color').addEventListener('input', (e) => {
+        bg.color = e.target.value;
+        bg.type = 'color';
+        typeSel.value = 'color';
+        sync();
+        commit();
+      });
+      pop.querySelector('#bg-file').addEventListener('change', async (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        try {
+          bg.dataUrl = await readImageDownscaled(f, 1800);
+          bg.type = 'image';
+          typeSel.value = 'image';
+          sync();
+          commit();
+        } catch (err) {
+          errorToast(err, '이미지를 불러오지 못했어요');
+        }
+      });
+    });
+  }
+  await initBackgroundAndTheme();
+
   // ================= 위젯 그리드: 12칸 그리드 스냅 + 편집 모드 =================
   // 저장하는 좌표는 픽셀이 아니라 그리드 칸 단위 {x,y,w,h}(요청: "Grid 좌표만 저장").
   // 편집 모드(헤더 연필 버튼)일 때만 드래그·리사이즈가 활성화되고, 그 외엔 읽기 전용.
@@ -349,6 +477,38 @@ export async function mount(root) {
     }
     function applyAll() {
       widgets.forEach((w) => applyPosition(w.dataset.card));
+    }
+
+    // 겹침 방지 — movedId는 자리를 지키고, 겹치는 다른 위젯을 아래로 밀어낸다(연쇄).
+    // compact(위로 당기기)는 하지 않는다: 사용자가 놔둔 빈 공간을 존중.
+    const rectsOverlap = (a, b) =>
+      a && b && a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    function resolveCollisions(movedId) {
+      const ids = widgets
+        .filter((w) => w.style.display !== 'none')
+        .map((w) => w.dataset.card)
+        .filter((id) => positions[id]);
+      let guard = 0;
+      let moved = true;
+      while (moved && guard++ < 300) {
+        moved = false;
+        for (const a of ids) {
+          for (const b of ids) {
+            if (a === b || !rectsOverlap(positions[a], positions[b])) continue;
+            let victim;
+            if (a === movedId) victim = b;
+            else if (b === movedId) victim = a;
+            else {
+              const pa = positions[a];
+              const pb = positions[b];
+              victim = pa.y < pb.y || (pa.y === pb.y && pa.x <= pb.x) ? b : a;
+            }
+            const keeper = victim === a ? b : a;
+            positions[victim].y = positions[keeper].y + positions[keeper].h;
+            moved = true;
+          }
+        }
+      }
     }
     applyAll();
 
@@ -460,7 +620,8 @@ export async function mount(root) {
             widget.classList.remove('dragging');
             p.x = target.x;
             p.y = target.y;
-            applyPosition(cardId);
+            resolveCollisions(cardId);
+            applyAll();
             persist();
           }
         );
@@ -495,7 +656,8 @@ export async function mount(root) {
             widget.classList.remove('dragging');
             p.w = target.w;
             p.h = target.h;
-            applyPosition(cardId);
+            resolveCollisions(cardId);
+            applyAll();
             persist();
           }
         );
@@ -557,7 +719,8 @@ export async function mount(root) {
         widgetById.set(el.dataset.card, el);
         if (!positions[el.dataset.card]) placeAtBottom(el.dataset.card, size);
         wireWidget(el);
-        applyPosition(el.dataset.card);
+        resolveCollisions(el.dataset.card);
+        applyAll();
         persist();
       },
       detach: (el) => {
@@ -574,7 +737,8 @@ export async function mount(root) {
         const id = el.dataset.card;
         if (positions[id]) return;
         placeAtBottom(id, size);
-        applyPosition(id);
+        resolveCollisions(id);
+        applyAll();
         persist();
       },
     };
@@ -1343,6 +1507,7 @@ export async function mount(root) {
     clearInterval(clockTimer);
     clearInterval(blockTickTimer);
     closeBlockConfig();
+    closeBgPop();
     document.removeEventListener('keydown', handleDashKeys);
     setScreenShortcuts(null, []);
     eventDetailModal.destroy();

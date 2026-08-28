@@ -297,28 +297,37 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     return { status: 'ok' };
   });
 
-  // 앱 시작 몇 초 후 조용히 한 번 확인해둔다 — 자동 모드일 때만. 수동 모드는 백그라운드 확인을
-  // 아예 안 해서, 사용자가 설정 화면에서 "지금 확인"을 직접 눌러야만 확인/다운로드가 시작된다
-  // ("업데이트 확인" 버튼 자체는 모드와 무관하게 항상 동작 — 위 updater:checkNow 핸들러 참고).
-  if (getMode() === 'auto') {
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch((err) => {
-        console.error('[itda:updater] 시작 시 자동 확인 실패:', err);
-      });
-    }, 5000);
+  // ── 자동 모드 백그라운드 확인 ───────────────────────────────────────────────
+  // 트레이 상주형이라 재시작이 드물어서 "시작 시 1회"만으로는 며칠씩 새 버전을 모른다.
+  // (a) 시작 15초 후 1회, (b) 트레이에서 창을 열 때(자주 있는 행동), (c) 1시간마다,
+  // (d) 확인이 네트워크 오류로 실패하면 2분 뒤 한 번 더 — 이렇게 여러 겹으로 확인한다.
+  let lastCheckAt = 0;
+  let errorRetryScheduled = false;
+  function autoCheck(reason) {
+    if (getMode() !== 'auto') return;
+    const now = Date.now();
+    if (now - lastCheckAt < 60 * 1000) return; // 1분 내 중복 호출 방지
+    lastCheckAt = now;
+    console.log(`[itda:updater] 자동 확인 (${reason})`);
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error(`[itda:updater] 자동 확인 실패 (${reason}):`, err?.message || err);
+      if (!errorRetryScheduled) {
+        errorRetryScheduled = true;
+        setTimeout(() => {
+          errorRetryScheduled = false;
+          lastCheckAt = 0;
+          autoCheck('오류 후 재시도');
+        }, 120 * 1000);
+      }
+    });
   }
 
-  // 시작할 때 한 번만 확인하고 끝나면, 트레이에 상주한 채 며칠씩 안 꺼지는 이 앱 특성상
-  // 그 사이에 나온 새 릴리스는 앱을 재시작하기 전까진 영영 모르게 된다 — 실제로 이것 때문에
-  // "분명 배포했는데 업데이트가 안 되는 것 같다"는 문제가 있었다. 그래서 켜져 있는 동안
-  // 주기적으로도 다시 확인한다(자동 모드일 때만).
-  const CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000; // 3시간마다
-  setInterval(() => {
-    if (getMode() !== 'auto') return;
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.error('[itda:updater] 주기적 확인 실패:', err);
-    });
-  }, CHECK_INTERVAL_MS);
+  setTimeout(() => autoCheck('시작'), 15 * 1000);
+  setInterval(() => autoCheck('주기(1시간)'), 60 * 60 * 1000);
+  if (mainWindow) {
+    // 트레이 아이콘/second-instance로 메인 창을 다시 띄우는 순간도 좋은 확인 시점.
+    mainWindow.on('show', () => autoCheck('창 열림'));
+  }
 }
 
 module.exports = { initUpdater };

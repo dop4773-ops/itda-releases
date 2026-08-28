@@ -1,16 +1,13 @@
 /**
  * renderer/shared/dashboard-blocks.js
  *
- * 대시보드 "꾸미기 블록" — 기존 업무 카드(todo/event/memo…)와 똑같이 12칸 그리드에 놓이고
- * 편집 모드에서 드래그·리사이즈되는 새로운 위젯 타입들. 업무 카드와 다른 점은 딱 둘:
- *   1. 인스턴스를 여러 개 만들 수 있다(사진 3장, 텍스트 여러 개 …) — id로 구분.
- *   2. 타입별 설정(config)을 사용자가 편집한다(시계 스타일, 사진, 문구, 링크 목록 …).
+ * 대시보드 "꾸미기 블록" — 기존 업무 카드와 똑같이 12칸 그리드에 놓이고 편집 모드에서
+ * 드래그·리사이즈되는 위젯 타입. 인스턴스를 여러 개 만들 수 있고(id로 구분), 타입별
+ * 설정(config)을 사용자가 편집한다. 각 블록은 config.theme/variant/frame 등으로 겉모습을 바꾼다.
  *
- * 저장 구조:
- *   - app_settings.dashboard_blocks = [{ id, type, config }]           (블록 목록 + 설정)
- *   - app_settings.dashboard_layout.widgets[id] = { x, y, w, h }        (위치/크기 — 업무 카드와 공용)
- *
- * dashboard.js가 이 모듈의 BLOCK_TYPES/renderBlockElement/tickBlock/openBlockConfig를 쓴다.
+ * 저장:
+ *   - app_settings.dashboard_blocks = [{ id, type, config }]
+ *   - app_settings.dashboard_layout.widgets[id] = { x, y, w, h }   (업무 카드와 공용)
  */
 import { escapeHtml } from './ui-utils.js';
 
@@ -22,45 +19,39 @@ const pad = (n) => String(n).padStart(2, '0');
 export const BLOCK_TYPES = {
   clock: {
     label: '시계',
-    category: 'deco',
     icon: '🕰',
     defaultSize: { w: 3, h: 2 },
-    defaultConfig: { style: 'flip', showSeconds: false },
+    defaultConfig: { style: 'flip', showSeconds: false, theme: 'wood' },
   },
   dateCard: {
     label: '오늘 날짜 카드',
-    category: 'deco',
     icon: '📅',
     defaultSize: { w: 3, h: 2 },
-    defaultConfig: {},
+    defaultConfig: { theme: 'paper' },
   },
   flipCalendar: {
     label: '넘김 달력',
-    category: 'deco',
     icon: '📆',
-    defaultSize: { w: 2, h: 2 },
-    defaultConfig: {},
+    defaultSize: { w: 2, h: 3 },
+    defaultConfig: { theme: 'classic' },
   },
   text: {
     label: '텍스트',
-    category: 'deco',
     icon: 'T',
     defaultSize: { w: 4, h: 1 },
-    defaultConfig: { content: '오늘의 목표', fontSize: 'lg', align: 'left', color: '' },
+    defaultConfig: { content: '오늘의 목표', fontSize: 'lg', align: 'left', color: '', variant: 'plain' },
   },
   link: {
     label: '링크 / 바로가기',
-    category: 'deco',
     icon: '🔗',
-    defaultSize: { w: 3, h: 2 },
-    defaultConfig: { title: '바로가기', items: [{ label: '예시 링크', url: 'https://', icon: '🔗' }] },
+    defaultSize: { w: 3, h: 3 },
+    defaultConfig: { title: '바로가기', layout: 'list', items: [{ label: '예시 링크', url: 'https://', icon: '🔗' }] },
   },
   image: {
     label: '사진',
-    category: 'deco',
     icon: '🖼',
-    defaultSize: { w: 3, h: 2 },
-    defaultConfig: { dataUrl: '', fit: 'cover', radius: 12, shadow: true, caption: '' },
+    defaultSize: { w: 3, h: 3 },
+    defaultConfig: { dataUrl: '', fit: 'cover', frame: 'polaroid', caption: '' },
   },
 };
 
@@ -74,11 +65,10 @@ const GEAR = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke
 const DUP = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
 const DEL = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>`;
 
-/** 블록 하나의 DOM 엘리먼트를 만든다(그리드에 append하면 됨). 위치/크기는 dashboard.js가 grid-column/row로 건다. */
 export function renderBlockElement(block) {
   const el = document.createElement('div');
   el.className = 'panel dash-widget dash-block';
-  el.dataset.card = block.id; // initWidgetGrid가 위치를 이 키로 관리(업무 카드와 동일)
+  el.dataset.card = block.id;
   el.dataset.block = block.type;
   el.innerHTML = `
     <span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP}</span>
@@ -92,151 +82,183 @@ export function renderBlockElement(block) {
   return el;
 }
 
-/** config가 바뀌었을 때 body만 다시 그린다. */
 export function paintBlock(el, block) {
   const body = el.querySelector('.dash-block-body');
   const cfg = block.config || {};
-  el.dataset.blockStyle = cfg.style || '';
   const painter = PAINTERS[block.type];
   body.innerHTML = painter ? painter(cfg) : `<div class="dash-block-empty">알 수 없는 블록</div>`;
-  // 시계/날짜류는 만들자마자 현재 시각으로 한 번 채운다
+  el.dataset.bare = block.type === 'clock' || block.type === 'image' || block.type === 'text' ? '1' : '';
   tickBlock(el, block);
 }
 
+const digitCard = () => `<span class="flip-card"><span class="fc-top"><b>0</b></span><span class="fc-bot"><b>0</b></span></span>`;
+
 const PAINTERS = {
-  clock(cfg) {
-    if (cfg.style === 'analog') {
-      return `<div class="clk clk-analog"><svg viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="47" class="clk-face"/>
-        ${Array.from({ length: 12 }, (_, i) => {
-          const a = (i * 30 * Math.PI) / 180;
-          const x1 = 50 + Math.sin(a) * 41;
-          const y1 = 50 - Math.cos(a) * 41;
-          const x2 = 50 + Math.sin(a) * 46;
-          const y2 = 50 - Math.cos(a) * 46;
-          return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="clk-tick"/>`;
-        }).join('')}
-        <line class="clk-hand clk-hour" x1="50" y1="50" x2="50" y2="28"/>
-        <line class="clk-hand clk-min" x1="50" y1="50" x2="50" y2="18"/>
-        <line class="clk-hand clk-sec" x1="50" y1="55" x2="50" y2="14"/>
-        <circle cx="50" cy="50" r="2.5" class="clk-pin"/>
-      </svg></div>`;
+  clock(c) {
+    const theme = c.theme || 'wood';
+    if (c.style === 'analog') {
+      const minuteTicks = Array.from({ length: 60 }, (_, i) => {
+        const a = (i * 6 * Math.PI) / 180;
+        const r1 = i % 5 === 0 ? 38 : 41;
+        const x1 = 50 + Math.sin(a) * r1;
+        const y1 = 50 - Math.cos(a) * r1;
+        const x2 = 50 + Math.sin(a) * 44;
+        const y2 = 50 - Math.cos(a) * 44;
+        return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" class="an-tick ${i % 5 === 0 ? 'an-tick-h' : ''}"/>`;
+      }).join('');
+      return `<div class="clk clk-analog" data-theme="${theme}"><div class="analog-bezel"><svg viewBox="0 0 100 100" class="analog-svg">
+        <circle cx="50" cy="50" r="45" class="an-face"/>
+        ${minuteTicks}
+        <text x="50" y="20" class="an-num">12</text>
+        <text x="83" y="53.5" class="an-num">3</text>
+        <text x="50" y="86" class="an-num">6</text>
+        <text x="17" y="53.5" class="an-num">9</text>
+        <text x="50" y="64" class="an-brand">ITDA</text>
+        <line class="an-hand an-hour" x1="50" y1="50" x2="50" y2="32"/>
+        <line class="an-hand an-min" x1="50" y1="50" x2="50" y2="22"/>
+        <line class="an-hand an-sec" x1="50" y1="56" x2="50" y2="18"/>
+        <circle cx="50" cy="50" r="2.4" class="an-cap"/>
+      </svg></div></div>`;
     }
-    if (cfg.style === 'digital') {
-      return `<div class="clk clk-digital"><span class="clk-dig-time">00:00</span></div>`;
+    if (c.style === 'digital') {
+      return `<div class="clk clk-digital" data-theme="${theme}"><span class="clk-dig-time">00:00</span></div>`;
     }
-    // flip (기본) — 레트로 플립 시계
-    const digit = () => `<span class="fc-digit"><span class="fc-val">0</span></span>`;
-    return `<div class="clk clk-flip">
-      <span class="fc-group">${digit()}${digit()}</span><span class="fc-colon">:</span>
-      <span class="fc-group">${digit()}${digit()}</span>
-      ${cfg.showSeconds ? `<span class="fc-colon">:</span><span class="fc-group fc-sec">${digit()}${digit()}</span>` : ''}
+    // flip (split-flap)
+    return `<div class="clk clk-flip" data-theme="${theme}"><div class="flip-frame">
+      <span class="flip-ampm">AM</span>
+      <div class="flip-row">
+        ${digitCard()}${digitCard()}<span class="flip-sep">:</span>${digitCard()}${digitCard()}
+        ${c.showSeconds ? `<span class="flip-sep">:</span>${digitCard()}${digitCard()}` : ''}
+      </div>
+    </div></div>`;
+  },
+  dateCard(c) {
+    return `<div class="datecard" data-theme="${c.theme || 'paper'}">
+      <span class="dc-rings"><i></i><i></i></span>
+      <span class="dc-year"></span>
+      <span class="dc-day"></span>
+      <span class="dc-sub"></span>
     </div>`;
   },
-  dateCard() {
-    return `<div class="datecard">
-      <span class="datecard-year"></span>
-      <span class="datecard-day"></span>
-      <span class="datecard-wd"></span>
+  flipCalendar(c) {
+    return `<div class="flipcal" data-theme="${c.theme || 'classic'}">
+      <span class="fcal-rings"><i></i><i></i></span>
+      <span class="fcal-mon"></span>
+      <span class="fcal-day"></span>
+      <span class="fcal-wd"></span>
     </div>`;
   },
-  flipCalendar() {
-    return `<div class="flipcal">
-      <span class="flipcal-mon"></span>
-      <span class="flipcal-day"></span>
+  text(c) {
+    const sizeClass = { sm: 'ts-sm', md: 'ts-md', lg: 'ts-lg', xl: 'ts-xl' }[c.fontSize] || 'ts-lg';
+    const style = c.color ? ` style="--tb-color:${escapeHtml(c.color)}"` : '';
+    const html = escapeHtml(c.content || '').replace(/\n/g, '<br>') || '텍스트';
+    return `<div class="text-block tb-${escapeHtml(c.variant || 'plain')} ${sizeClass}" data-align="${escapeHtml(c.align || 'left')}"${style}>
+      <div class="tb-content">${html}</div>
     </div>`;
   },
-  text(cfg) {
-    const sizeClass = { sm: 'ts-sm', md: 'ts-md', lg: 'ts-lg', xl: 'ts-xl' }[cfg.fontSize] || 'ts-lg';
-    const style = cfg.color ? ` style="color:${escapeHtml(cfg.color)}"` : '';
-    return `<div class="text-block ${sizeClass}" data-align="${cfg.align || 'left'}"${style}>${escapeHtml(cfg.content || '').replace(/\n/g, '<br>') || '텍스트'}</div>`;
-  },
-  link(cfg) {
-    const items = Array.isArray(cfg.items) ? cfg.items : [];
+  link(c) {
+    const layout = c.layout === 'grid' ? 'grid' : 'list';
+    const items = Array.isArray(c.items) ? c.items : [];
     const rows = items
-      .map(
-        (it) => `<a class="link-block-row" href="${escapeHtml(it.url || '#')}" target="_blank" rel="noopener">
-          <span class="link-block-icon">${escapeHtml(it.icon || '🔗')}</span>
-          <span class="link-block-label">${escapeHtml(it.label || it.url || '링크')}</span>
-        </a>`
-      )
+      .map((it) => {
+        const href = escapeHtml(it.url || '#');
+        const icon = escapeHtml(it.icon || '🔗');
+        const label = escapeHtml(it.label || it.url || '링크');
+        return layout === 'grid'
+          ? `<a class="link-tile" href="${href}" target="_blank" rel="noopener"><span class="lt-icon">${icon}</span><span class="lt-label">${label}</span></a>`
+          : `<a class="link-block-row" href="${href}" target="_blank" rel="noopener"><span class="link-block-icon">${icon}</span><span class="link-block-label">${label}</span></a>`;
+      })
       .join('');
-    return `<div class="link-block">
-      ${cfg.title ? `<div class="link-block-title">${escapeHtml(cfg.title)}</div>` : ''}
-      <div class="link-block-list">${rows || '<div class="dash-block-empty">설정에서 링크를 추가하세요</div>'}</div>
+    return `<div class="link-block lb-${layout}">
+      ${c.title ? `<div class="link-block-title">${escapeHtml(c.title)}</div>` : ''}
+      <div class="link-block-${layout}">${rows || '<div class="dash-block-empty">설정(⚙)에서 링크를 추가하세요</div>'}</div>
     </div>`;
   },
-  image(cfg) {
-    if (!cfg.dataUrl) {
-      return `<div class="image-block image-block-empty">설정(⚙)에서 사진을 선택하세요</div>`;
+  image(c) {
+    const frame = escapeHtml(c.frame || 'polaroid');
+    if (!c.dataUrl) {
+      return `<figure class="image-block ib-${frame}"><div class="ib-photo image-block-empty">설정(⚙)에서 사진을 선택하세요</div></figure>`;
     }
-    const st = `object-fit:${cfg.fit === 'contain' ? 'contain' : 'cover'};border-radius:${Number(cfg.radius) || 0}px;${cfg.shadow ? 'box-shadow:0 6px 18px rgba(16,24,40,.22);' : ''}`;
-    return `<figure class="image-block">
-      <img src="${cfg.dataUrl}" alt="" style="${st}" />
-      ${cfg.caption ? `<figcaption>${escapeHtml(cfg.caption)}</figcaption>` : ''}
+    return `<figure class="image-block ib-${frame}">
+      <div class="ib-photo"><img src="${c.dataUrl}" alt="" style="object-fit:${c.fit === 'contain' ? 'contain' : 'cover'}" /></div>
+      ${c.caption ? `<figcaption>${escapeHtml(c.caption)}</figcaption>` : ''}
     </figure>`;
   },
 };
 
-// ────────────────────────────── tick (시계/날짜 갱신) ──────────────────────────────
+// ────────────────────────────── tick ──────────────────────────────
 export function tickBlock(el, block) {
   const cfg = block.config || {};
   const now = new Date();
+
   if (block.type === 'clock') {
     if (cfg.style === 'analog') {
       const s = now.getSeconds();
       const m = now.getMinutes() + s / 60;
       const h = (now.getHours() % 12) + m / 60;
-      const set = (sel, deg) => {
+      // 회전 대신 끝점 좌표를 직접 계산 — transform-origin 이슈로 침이 어긋나던 문제 방지.
+      const hand = (sel, len, deg, tail) => {
         const ln = el.querySelector(sel);
-        if (ln) ln.setAttribute('transform', `rotate(${deg} 50 50)`);
+        if (!ln) return;
+        const rad = ((deg - 90) * Math.PI) / 180;
+        ln.setAttribute('x1', (50 - Math.cos(rad) * (tail || 0)).toFixed(2));
+        ln.setAttribute('y1', (50 - Math.sin(rad) * (tail || 0)).toFixed(2));
+        ln.setAttribute('x2', (50 + Math.cos(rad) * len).toFixed(2));
+        ln.setAttribute('y2', (50 + Math.sin(rad) * len).toFixed(2));
       };
-      set('.clk-hour', h * 30);
-      set('.clk-min', m * 6);
-      set('.clk-sec', s * 6);
+      hand('.an-hour', 22, h * 30, 5);
+      hand('.an-min', 31, m * 6, 6);
+      hand('.an-sec', 33, s * 6, 8);
       return;
     }
     if (cfg.style === 'digital') {
       const t = el.querySelector('.clk-dig-time');
-      if (t) t.textContent = cfg.showSeconds ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}` : `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      if (t) {
+        t.textContent = cfg.showSeconds
+          ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+          : `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      }
       return;
     }
     // flip
+    const ampm = el.querySelector('.flip-ampm');
+    if (ampm) ampm.textContent = now.getHours() < 12 ? 'AM' : 'PM';
     const digits = cfg.showSeconds
       ? `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
       : `${pad(now.getHours())}${pad(now.getMinutes())}`;
-    el.querySelectorAll('.fc-digit').forEach((d, i) => {
+    el.querySelectorAll('.flip-card').forEach((card, i) => {
       const nv = digits[i];
-      const cur = d.querySelector('.fc-val');
-      if (cur && cur.textContent !== nv) {
-        cur.textContent = nv;
-        d.classList.remove('is-flipping');
-        void d.offsetWidth; // 리플로우 강제 → 애니메이션 재시작
-        d.classList.add('is-flipping');
+      const top = card.querySelector('.fc-top b');
+      if (top && top.textContent !== nv) {
+        card.querySelectorAll('b').forEach((b) => (b.textContent = nv));
+        card.classList.remove('is-flipping');
+        void card.offsetWidth;
+        card.classList.add('is-flipping');
       }
     });
     return;
   }
+
   if (block.type === 'dateCard') {
-    const y = el.querySelector('.datecard-year');
-    const dd = el.querySelector('.datecard-day');
-    const wd = el.querySelector('.datecard-wd');
-    if (y) y.textContent = now.getFullYear();
-    if (dd) dd.textContent = now.getDate();
-    if (wd) wd.textContent = `${now.getMonth() + 1}월 ${WD[now.getDay()]}요일`;
+    const set = (sel, v) => {
+      const n = el.querySelector(sel);
+      if (n) n.textContent = v;
+    };
+    set('.dc-year', now.getFullYear());
+    set('.dc-day', now.getDate());
+    set('.dc-sub', `${now.getMonth() + 1}월 · ${WD[now.getDay()]}요일`);
     return;
   }
-  if (block.type === 'flipCalendar') {
-    const mo = el.querySelector('.flipcal-mon');
-    const dy = el.querySelector('.flipcal-day');
-    if (mo) mo.textContent = MON_EN[now.getMonth()];
-    if (dy) dy.textContent = now.getDate();
-  }
-}
 
-/** 1초마다 호출되는 시계 블록만 실제 갱신이 필요한지 — dashboard.js가 interval 주기를 정할 때 참고 */
-export function needsTicking(blocks) {
-  return blocks.some((b) => b.type === 'clock' || b.type === 'dateCard' || b.type === 'flipCalendar');
+  if (block.type === 'flipCalendar') {
+    const set = (sel, v) => {
+      const n = el.querySelector(sel);
+      if (n) n.textContent = v;
+    };
+    set('.fcal-mon', MON_EN[now.getMonth()]);
+    set('.fcal-day', now.getDate());
+    set('.fcal-wd', `${WD[now.getDay()]}요일`);
+  }
 }
 
 // ────────────────────────────── 설정 팝오버 ──────────────────────────────
@@ -250,11 +272,6 @@ function onCfgOutside(e) {
   if (cfgPopEl && !cfgPopEl.contains(e.target)) closeBlockConfig();
 }
 
-/**
- * @param {HTMLElement} anchorEl 블록 엘리먼트
- * @param {{type,config}} block
- * @param {(config)=>void} onChange config가 바뀔 때마다 호출(즉시 저장·재렌더는 호출자 책임)
- */
 export function openBlockConfig(anchorEl, block, onChange) {
   closeBlockConfig();
   const cfg = { ...block.config };
@@ -270,27 +287,22 @@ export function openBlockConfig(anchorEl, block, onChange) {
   setTimeout(() => document.addEventListener('mousedown', onCfgOutside, true), 0);
 
   const emit = () => onChange({ ...cfg });
-  const bind = (sel, ev, fn) => pop.querySelectorAll(sel).forEach((n) => n.addEventListener(ev, fn));
-
-  bind('[data-cfg]', 'input', (e) => {
-    const k = e.target.dataset.cfg;
-    cfg[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.type === 'number' ? Number(e.target.value) : e.target.value;
-    emit();
-  });
-  bind('[data-cfg]', 'change', (e) => {
-    const k = e.target.dataset.cfg;
-    cfg[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    emit();
+  const readVal = (t) => (t.type === 'checkbox' ? t.checked : t.type === 'number' ? Number(t.value) : t.value);
+  pop.querySelectorAll('[data-cfg]').forEach((n) => {
+    const ev = n.tagName === 'SELECT' || n.type === 'checkbox' || n.type === 'color' ? 'change' : 'input';
+    n.addEventListener(ev, (e) => {
+      cfg[e.target.dataset.cfg] = readVal(e.target);
+      emit();
+    });
   });
 
-  // 사진 블록: 파일 선택 → 캔버스로 축소 → JPEG dataURL
   const fileInput = pop.querySelector('input[type="file"]');
   if (fileInput) {
     fileInput.addEventListener('change', async () => {
       const f = fileInput.files?.[0];
       if (!f) return;
       try {
-        cfg.dataUrl = await readImageDownscaled(f, 1280);
+        cfg.dataUrl = await readImageDownscaled(f, 1400);
         emit();
       } catch (err) {
         console.error('[itda] 이미지 로드 실패:', err);
@@ -298,7 +310,6 @@ export function openBlockConfig(anchorEl, block, onChange) {
     });
   }
 
-  // 링크 블록: 항목 추가/삭제
   if (block.type === 'link') {
     const renderItems = () => {
       const list = pop.querySelector('.cfg-link-items');
@@ -314,8 +325,7 @@ export function openBlockConfig(anchorEl, block, onChange) {
         .join('');
       list.querySelectorAll('input[data-li]').forEach((n) =>
         n.addEventListener('input', (e) => {
-          const i = Number(e.target.dataset.li);
-          cfg.items[i][e.target.dataset.f] = e.target.value;
+          cfg.items[Number(e.target.dataset.li)][e.target.dataset.f] = e.target.value;
           emit();
         })
       );
@@ -337,52 +347,42 @@ export function openBlockConfig(anchorEl, block, onChange) {
   }
 }
 
+const sel = (label, key, opts, cur) => `
+  <label class="cfg-row">${label}
+    <select class="select" data-cfg="${key}">
+      ${opts.map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('')}
+    </select>
+  </label>`;
+
 const FIELDS = {
   clock: (c) => `
-    <label class="cfg-row">스타일
-      <select class="select" data-cfg="style">
-        <option value="flip" ${c.style === 'flip' ? 'selected' : ''}>레트로 플립</option>
-        <option value="analog" ${c.style === 'analog' ? 'selected' : ''}>아날로그</option>
-        <option value="digital" ${c.style === 'digital' ? 'selected' : ''}>디지털</option>
-      </select>
-    </label>
+    ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털']], c.style || 'flip')}
+    ${sel('테마', 'theme', [['wood', '우드'], ['classic', '클래식'], ['brass', '브라스'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'wood')}
     <label class="cfg-row"><input type="checkbox" data-cfg="showSeconds" ${c.showSeconds ? 'checked' : ''}/> 초 표시</label>`,
-  dateCard: () => `<p class="cfg-note">오늘 날짜를 자동으로 보여줍니다.</p>`,
-  flipCalendar: () => `<p class="cfg-note">한 장씩 넘기는 형태의 오늘 날짜 달력입니다.</p>`,
+  dateCard: (c) => sel('테마', 'theme', [['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'paper'),
+  flipCalendar: (c) => sel('테마', 'theme', [['classic', '클래식(빨강)'], ['ink', '잉크'], ['minimal', '미니멀']], c.theme || 'classic'),
   text: (c) => `
     <label class="cfg-row">내용<textarea class="input" data-cfg="content" rows="3">${escapeHtml(c.content || '')}</textarea></label>
-    <label class="cfg-row">크기
-      <select class="select" data-cfg="fontSize">
-        ${['sm', 'md', 'lg', 'xl'].map((s) => `<option value="${s}" ${c.fontSize === s ? 'selected' : ''}>${{ sm: '작게', md: '보통', lg: '크게', xl: '아주 크게' }[s]}</option>`).join('')}
-      </select>
-    </label>
-    <label class="cfg-row">정렬
-      <select class="select" data-cfg="align">
-        ${['left', 'center', 'right'].map((a) => `<option value="${a}" ${c.align === a ? 'selected' : ''}>${{ left: '왼쪽', center: '가운데', right: '오른쪽' }[a]}</option>`).join('')}
-      </select>
-    </label>
+    ${sel('스타일', 'variant', [['plain', '기본'], ['heading', '제목'], ['note', '메모지'], ['quote', '인용문']], c.variant || 'plain')}
+    ${sel('크기', 'fontSize', [['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']], c.fontSize || 'lg')}
+    ${sel('정렬', 'align', [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']], c.align || 'left')}
     <label class="cfg-row">색상<input type="color" data-cfg="color" value="${c.color || '#333333'}" /></label>`,
   link: (c) => `
     <label class="cfg-row">제목<input class="input" data-cfg="title" value="${escapeHtml(c.title || '')}" placeholder="바로가기" /></label>
+    ${sel('모양', 'layout', [['list', '목록'], ['grid', '아이콘 격자']], c.layout || 'list')}
     <div class="cfg-link-items"></div>
     <button class="btn-secondary" data-add-link style="margin-top:6px;">+ 링크 추가</button>
-    <p class="cfg-note">http/https 주소나 윈도우 폴더 경로(C:\\… 또는 \\\\서버\\공유)를 넣을 수 있어요.</p>`,
+    <p class="cfg-note">http/https 주소나 윈도우 폴더 경로(C:\\… / \\\\서버\\공유)를 넣을 수 있어요.</p>`,
   image: (c) => `
     <label class="cfg-row">사진<input type="file" accept="image/*" /></label>
-    <label class="cfg-row">채우기
-      <select class="select" data-cfg="fit">
-        <option value="cover" ${c.fit === 'cover' ? 'selected' : ''}>꽉 채우기(잘림)</option>
-        <option value="contain" ${c.fit === 'contain' ? 'selected' : ''}>비율 유지(여백)</option>
-      </select>
-    </label>
-    <label class="cfg-row">모서리 둥글기<input type="number" data-cfg="radius" min="0" max="40" value="${Number(c.radius) || 0}" /></label>
-    <label class="cfg-row"><input type="checkbox" data-cfg="shadow" ${c.shadow ? 'checked' : ''}/> 그림자</label>
+    ${sel('액자', 'frame', [['polaroid', '폴라로이드'], ['tape', '테이프'], ['rounded', '둥근 모서리'], ['plain', '없음']], c.frame || 'polaroid')}
+    ${sel('채우기', 'fit', [['cover', '꽉 채우기(잘림)'], ['contain', '비율 유지(여백)']], c.fit || 'cover')}
     <label class="cfg-row">캡션<input class="input" data-cfg="caption" value="${escapeHtml(c.caption || '')}" placeholder="사진 아래 문구(선택)" /></label>`,
 };
 
-// 파일 → maxPx 안에 들어오게 축소한 JPEG dataURL. 설정 JSON에 통째로 저장되므로 원본은 안 넣는다.
-// ponytail: 설정 행에 base64로 저장(수십~수백 KB). 사진을 많이/크게 붙이면 dashboard-images/ 폴더 저장으로 옮길 것.
-function readImageDownscaled(file, maxPx) {
+// 파일 → maxPx 이하 JPEG dataURL. config/설정에 통째로 저장.
+// ponytail: 설정 행에 base64(수십~수백 KB). 사진을 많이/크게 붙이면 dashboard-images/ 폴더 저장으로 옮길 것.
+export function readImageDownscaled(file, maxPx) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
