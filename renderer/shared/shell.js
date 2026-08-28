@@ -315,9 +315,13 @@ export async function applyTheme() {
 export const UI_THEMES = [
   { id: 'light', label: '라이트', dark: false, uitheme: '' },
   { id: 'dark', label: '다크', dark: true, uitheme: '' },
+  { id: 'midnight', label: '미드나잇', dark: true, uitheme: 'midnight' },
   { id: 'cozy', label: '코지 · 웜', dark: false, uitheme: 'cozy' },
-  { id: 'retro', label: '레트로', dark: false, uitheme: 'retro' },
+  { id: 'soft', label: '소프트', dark: false, uitheme: 'soft' },
+  { id: 'cool', label: '쿨', dark: false, uitheme: 'cool' },
+  { id: 'pastel', label: '파스텔', dark: false, uitheme: 'pastel' },
   { id: 'glass', label: '글래스', dark: false, uitheme: 'glass' },
+  { id: 'retro', label: '레트로', dark: false, uitheme: 'retro' },
   { id: 'minimal', label: '미니멀', dark: false, uitheme: 'minimal' },
   { id: 'professional', label: '프로페셔널', dark: false, uitheme: 'professional' },
 ];

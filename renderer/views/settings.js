@@ -671,9 +671,13 @@ export async function mount(root) {
     const SW = {
       light: '#F7F7FB',
       dark: '#1E2027',
+      midnight: 'linear-gradient(135deg,#151C2E,#5B8CFF)',
       cozy: 'linear-gradient(135deg,#F3EBDD,#C08552)',
-      retro: 'linear-gradient(135deg,#FFFBF0,#D2691E)',
+      soft: 'linear-gradient(135deg,#FBFAFF,#7C7FE0)',
+      cool: 'linear-gradient(135deg,#FBFDFF,#2C9AB8)',
+      pastel: 'linear-gradient(135deg,#FFFDFE,#E289B0)',
       glass: 'linear-gradient(135deg,#DBE6F6,#EEE3F4)',
+      retro: 'linear-gradient(135deg,#FFFBF0,#D2691E)',
       minimal: '#FFFFFF',
       professional: 'linear-gradient(135deg,#EDF0F4,#2C5CC5)',
     };
