@@ -218,16 +218,18 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   let updateReadyToInstall = false;
   let installTriggered = false;
 
-  // 자동 설치+재시작을 최대한 확실하게 — 과거엔 quitAndInstall만 호출했는데,
-  //  (a) 이벤트 핸들러 안에서 곧바로 부르면 electron-updater가 무시하는 경우가 있고,
-  //  (b) 트레이 상주 앱이라 메인 창 'close'가 preventDefault로 막혀 app.quit() 시퀀스가
-  //      중단되면 설치가 영영 안 걸린다.
-  // 그래서: 스냅샷/플러시 실패가 설치를 막지 않게 감싸고 → 다음 tick에 → 모든 창을 destroy로
-  // (close 핸들러를 우회) 강제로 닫고 → quitAndInstall → 그래도 몇 초 안에 안 죽으면 app.exit().
+  // 자동 설치 + 재시작.
+  // 이전 시도들이 실패한 원인: (1) isSilent=true(/S)면 NSIS가 설치 후 앱을 다시 띄우는 게
+  // 불안정했다(--force-run에 의존). 수동 버튼(비-silent)은 항상 재시작이 잘 됐는데, 그건
+  // electron-builder NSIS 기본 설치 프로그램에 "설치 후 앱 실행"이 켜져 있기 때문. (2) 창을
+  // destroy로 먼저 닫으니 main.js의 window-all-closed → app.quit()이 quitAndInstall보다 먼저
+  // 돌면서 설치 시퀀스가 꼬였다.
+  // → 이제 수동 버튼과 똑같이 비-silent(false) + forceRunAfter(true)로 호출하고, 창은 직접
+  //   닫지 않는다(quitAndInstall이 app.quit을 부르고, app.isQuittingItda=true라 창도 정상 종료).
   async function performSilentInstall() {
     if (installTriggered) return;
     installTriggered = true;
-    app.isQuittingItda = true;
+    app.isQuittingItda = true; // main.js 'close' 핸들러가 창을 숨기지 않고 실제로 닫게
     try {
       snapshotOpenWidgets(settings);
     } catch (e) {
@@ -238,29 +240,26 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
     } catch (e) {
       console.error('[itda:updater] 자동저장 플러시 실패(무시하고 설치 진행):', e.message);
     }
+    // 이벤트 핸들러 콜스택을 벗어난 뒤 호출 — 이벤트 안에서 바로 부르면 무시되는 케이스가 있다.
     setImmediate(() => {
       try {
-        BrowserWindow.getAllWindows().forEach((w) => {
-          if (!w.isDestroyed()) w.destroy();
-        });
+        console.log('[itda:updater] quitAndInstall(false, true) 호출');
+        autoUpdater.quitAndInstall(false, true);
       } catch (e) {
-        /* 창 파괴 실패해도 설치는 시도 */
-      }
-      try {
-        autoUpdater.quitAndInstall(true, true); // isSilent, isForceRunAfter
-      } catch (e) {
-        console.error('[itda:updater] quitAndInstall 호출 실패:', e.message);
-      }
-      // quitAndInstall이 어떤 이유로든 프로세스를 못 끝내면, 5초 뒤 app.quit()으로 한 번 더 —
-      // autoInstallOnAppQuit=true라 이때라도 대기 중인 설치가 적용된다. 그래도 안 죽으면 강제 종료.
-      setTimeout(() => {
+        console.error('[itda:updater] quitAndInstall 실패, app.relaunch 폴백:', e.message);
         try {
-          app.quit();
-        } catch (e) {
+          app.relaunch();
+        } catch (e2) {
           /* noop */
         }
-        setTimeout(() => app.exit(0), 3000);
-      }, 5000);
+        app.exit(0);
+      }
+      // quitAndInstall이 30초가 지나도 프로세스를 못 끝냈으면(설치 파일 잠금 등) 마지막 안전장치.
+      // autoInstallOnAppQuit=true라 이 app.quit()에서라도 대기 중 설치가 적용된다.
+      setTimeout(() => {
+        console.warn('[itda:updater] 30초 경과 — app.quit() 폴백');
+        app.quit();
+      }, 30 * 1000);
     });
   }
 
@@ -291,9 +290,10 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
   ipcMain.handle('updater:quitAndInstall', async () => {
     // 수동 모드에서 사용자가 재시작 버튼을 직접 눌러도, 다른 창(위젯 등)에 아직 안 끝난
     // 자동저장이 있을 수 있으니 마찬가지로 먼저 플러시하고, 열려있던 위젯도 스냅샷 떠둔다.
+    app.isQuittingItda = true;
     snapshotOpenWidgets(settings);
     await flushAllWindowsThenInstall();
-    autoUpdater.quitAndInstall();
+    autoUpdater.quitAndInstall(false, true); // 설치 후 자동 재실행
     return { status: 'ok' };
   });
 
