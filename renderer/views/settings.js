@@ -1,7 +1,7 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
-import { applyTheme, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
+import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
@@ -68,12 +68,19 @@ export async function mount(root) {
             <div class="update-row">
               <div>
                 <div class="settings-row-title">다크 모드</div>
-                <div class="settings-row-desc">어두운 화면으로 바꿔요. 다른 테마(색상 선택 등)는 추후 추가될 예정이에요.</div>
+                <div class="settings-row-desc">어두운 화면으로 바꿔요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="theme-darkToggle" />
                 <span class="switch-track"><span class="switch-thumb"></span></span>
               </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div class="settings-row-title">테마 색</div>
+                <div class="settings-row-desc">강조색을 바꾸면 사이드바·버튼·포커스 등 앱 전체가 따라 바뀌어요. 다크 모드와 함께 쓸 수 있어요.</div>
+              </div>
+              <div class="app-theme-swatches" id="app-themeSwatches"></div>
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
@@ -461,6 +468,24 @@ export async function mount(root) {
         errorToast(e, '테마를 저장하지 못했어요');
         toggle.checked = !toggle.checked;
       }
+    });
+
+    // 테마 색(앱 전체 강조색)
+    const swWrap = $('app-themeSwatches');
+    const curApp = (await window.itda.settings.get('app_theme')) || '';
+    swWrap.innerHTML = APP_THEMES.map(
+      (t) => `<button class="app-theme-swatch ${curApp === t.id ? 'active' : ''}" data-app-theme="${t.id}" title="${escapeHtml(t.label)}" style="background:${t.brand}"></button>`
+    ).join('');
+    swWrap.querySelectorAll('[data-app-theme]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        swWrap.querySelectorAll('[data-app-theme]').forEach((x) => x.classList.toggle('active', x === b));
+        try {
+          await window.itda.settings.set({ key: 'app_theme', value: b.dataset.appTheme });
+          await applyTheme();
+        } catch (e) {
+          errorToast(e, '테마 색을 저장하지 못했어요');
+        }
+      });
     });
 
     const scaleRange = $('display-scaleRange');

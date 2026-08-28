@@ -285,9 +285,22 @@ export async function toggleTheme() {
 
 
 // 다른 화면(settings.js)에서도 토글 직후 반영해야 해서 재사용 가능하게 export.
+export const APP_THEMES = [
+  { id: '', label: '기본(블루)', brand: '#6C8CF5' },
+  { id: 'green', label: '그린', brand: '#2FA279' },
+  { id: 'purple', label: '퍼플', brand: '#8A5CD1' },
+  { id: 'rose', label: '로즈', brand: '#D9628A' },
+  { id: 'amber', label: '앰버', brand: '#D5891F' },
+  { id: 'teal', label: '틸', brand: '#1F9AA8' },
+  { id: 'graphite', label: '그래파이트', brand: '#5A6270' },
+];
+
 export async function applyTheme() {
   const theme = await window.itda.settings.get('theme');
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
+  const appTheme = await window.itda.settings.get('app_theme');
+  if (appTheme && APP_THEMES.some((t) => t.id === appTheme)) document.documentElement.dataset.apptheme = appTheme;
+  else delete document.documentElement.dataset.apptheme;
   await applyTextColorOverride(); // 라이트/다크 전환 시 그 모드에 저장된 글자색(없으면 기본값)을 다시 맞춘다
 }
 

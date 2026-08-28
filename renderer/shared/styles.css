@@ -91,6 +91,18 @@ html[data-theme="dark"]{
   --tone-blue-fg:#7EABFF;
 }
 
+/* ================= 앱 전체 테마 (설정 > 화면 > 테마) — 강조색을 바꾸면 사이드바·버튼·
+   포커스 등 앱 전체가 따라 바뀐다. 라이트/다크 모드와 함께 겹쳐 쓸 수 있다.
+   --brand-soft는 현재 강조색을 현재 표면색에 옅게 섞어 자동 계산 → 모드 상관없이 어울림. ================= */
+html[data-apptheme]{--brand-soft:color-mix(in srgb, var(--brand) 14%, var(--surface));}
+html[data-apptheme="green"]{--brand:#2FA279;--success:#2FA279;}
+html[data-apptheme="purple"]{--brand:#8A5CD1;}
+html[data-apptheme="rose"]{--brand:#D9628A;}
+html[data-apptheme="amber"]{--brand:#D5891F;}
+html[data-apptheme="teal"]{--brand:#1F9AA8;}
+html[data-apptheme="graphite"]{--brand:#5A6270;--bg:#F0F0F2;}
+html[data-theme="dark"][data-apptheme="graphite"]{--bg:#17181C;}
+
 /* ================= 스크롤바 =================
    OS 기본 스크롤바는 테마와 무관하게 밝은 회색이라, 다크 모드에서 유독 튀어 보였다(특히
    메모 화면처럼 스크롤 영역이 큰 곳). 테마 변수를 그대로 써서 라이트/다크 둘 다 배경과
@@ -1007,11 +1019,14 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-main{min-width:0;position:relative;z-index:1;}
 /* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음. */
 .dash-bg{position:absolute;top:-26px;left:-28px;right:-28px;bottom:-60px;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;}
+/* 대시보드 전체 테마 = .dash-bg 캔버스 색만 바꾼다(카드는 각자 테마로) */
 .dash-layout[data-dashtheme="warm"] .dash-bg{background-color:#f2e8d8;}
 .dash-layout[data-dashtheme="mono"] .dash-bg{background-color:#ededed;}
 .dash-layout[data-dashtheme="dark"] .dash-bg{background-color:#1b1b21;}
-/* 다크 테마: 위젯 카드가 어두운 배경에서도 읽히도록 살짝 밝게 */
-.dash-layout[data-dashtheme="dark"] .dash-widget.panel:not(.dash-block){background:#26262e;border-color:#33333d;}
+.dash-layout[data-dashtheme="yellow"] .dash-bg{background-color:#fdf4dc;}
+.dash-layout[data-dashtheme="blue"] .dash-bg{background-color:#eef4ff;}
+.dash-layout[data-dashtheme="mint"] .dash-bg{background-color:#e9f7f0;}
+.dash-layout[data-dashtheme="pink"] .dash-bg{background-color:#fdf0f4;}
 .dash-layout[data-dashtheme="dark"] .dash-greeting h1,.dash-layout[data-dashtheme="dark"] .dash-greeting p,
 .dash-layout[data-dashtheme="dark"] .dash-time,.dash-layout[data-dashtheme="dark"] .date-nav{color:#f0f0f4;}
 .dash-side-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.32);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:60;}
@@ -1034,17 +1049,31 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .summary-collapsed-bar:hover{border-color:var(--brand);color:var(--brand);}
 .summary-grid.summary-empty{display:none;}
 
-/* ---- 대시보드 카드 테마/투명도 ---- */
-.dash-widget.panel:not(.dash-block){--card-bg:var(--surface);background:color-mix(in srgb, var(--card-bg) calc(var(--dash-op, 1) * 100%), transparent);}
-.dash-widget[data-cardtheme="dark"]{--card-bg:#26262e;color:#e8e8ee;border-color:#3a3a44;}
-.dash-widget[data-cardtheme="dark"] h3,.dash-widget[data-cardtheme="dark"] .btn-icon{color:#e8e8ee;}
-.dash-widget[data-cardtheme="glass"]{--dash-op:.5;}
-.dash-widget[data-cardtheme="yellow"]{--card-bg:#fff6d9;border-color:#f0e2a8;}
-.dash-widget[data-cardtheme="blue"]{--card-bg:#e8f0ff;border-color:#c9dbf6;}
-.dash-widget[data-cardtheme="mint"]{--card-bg:#e4f6ee;border-color:#bfe6d3;}
-.dash-widget[data-cardtheme="pink"]{--card-bg:#fdeef2;border-color:#f3cdd9;}
-/* 블록은 배경이 없으니 내용에만 투명도 적용(그립/툴은 그대로 보이게) */
+/* ---- 카드·블록 테마 + 투명도 ----
+   기본값은 낮은 특이도(.dash-widget)로 두고, 테마 규칙(.dash-widget[data-cardtheme])이 이긴다.
+   테마는 그 위젯 서브트리의 디자인 토큰(--surface/--border/--text 등)을 통째로 바꿔서
+   카드 배경은 물론 안쪽 목록·버튼까지 같이 물든다. */
+.dash-widget{--card-bg:var(--surface);}
+/* 업무 카드: 테마색을 배경에 그대로 + 투명도는 요소 opacity로(배경이 비쳐서 유리처럼) */
+.dash-widget.panel:not(.dash-block){background:var(--card-bg);opacity:var(--dash-op, 1);}
+.dash-widget.panel.dragging{opacity:.95;}
+/* 블록: 통짜로 안 흐려지게, 내용만 투명도 적용(그립/툴은 선명) */
 .dash-block-body{opacity:var(--dash-op, 1);}
+
+.dash-widget[data-cardtheme="dark"]{--card-bg:#26262e;--surface:#26262e;--bg:#1f1f26;--border:#3a3a44;--divider:#33333d;--text:#e8e8ee;--text-soft:#b6b6c2;--text-faint:#83838f;color:#e8e8ee;}
+.dash-widget[data-cardtheme="dark"] h3,.dash-widget[data-cardtheme="dark"] h4,.dash-widget[data-cardtheme="dark"] b,
+.dash-widget[data-cardtheme="dark"] a,.dash-widget[data-cardtheme="dark"] .btn-icon,.dash-widget[data-cardtheme="dark"] .txt{color:#e8e8ee;}
+.dash-block[data-cardtheme="dark"] .dash-block-body,.dash-block[data-cardtheme="dark"] .link-block-row,.dash-block[data-cardtheme="dark"] .link-block-title{color:#e8e8ee;}
+.dash-widget[data-cardtheme="glass"]{--dash-op:.45;}
+.dash-widget[data-cardtheme="yellow"]{--card-bg:#fff6d9;--surface:#fff6d9;--bg:#fdefc4;--border:#efe0a4;--divider:#f2e6b8;}
+.dash-widget[data-cardtheme="blue"]{--card-bg:#e8f0ff;--surface:#e8f0ff;--bg:#dae7fb;--border:#c6d8f4;--divider:#d5e2f7;}
+.dash-widget[data-cardtheme="mint"]{--card-bg:#e4f6ee;--surface:#e4f6ee;--bg:#d3efe2;--border:#bde5d2;--divider:#cfeadd;}
+.dash-widget[data-cardtheme="pink"]{--card-bg:#fdeef2;--surface:#fdeef2;--bg:#f9dde5;--border:#f2cad7;--divider:#f6d8e0;}
+.dash-widget[data-cardtheme="warm"]{--card-bg:#f6ecdc;--surface:#f6ecdc;--bg:#efe0c9;--border:#e5d3b6;--divider:#ecdec5;}
+.dash-widget[data-cardtheme="mono"]{--card-bg:#f0f0f0;--surface:#f0f0f0;--bg:#e6e6e6;--border:#d8d8d8;--divider:#e0e0e0;}
+/* 블록 테마: 링크/미니도구/날씨/인용문 표면이 var(--surface)/var(--border)를 쓰므로 위 토큰
+   오버라이드로 자동으로 같이 물든다(시계/사진처럼 자기 프레임이 있는 건 영향 적음). */
+.dash-block[data-cardtheme="dark"] .dash-block-body{color:#e8e8ee;}
 
 /* 카드 우클릭 메뉴 */
 .dash-card-menu{min-width:180px;}
@@ -1053,6 +1082,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dcm-swatch{width:22px;height:22px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
 .dcm-swatch.active{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft);}
 .dcm-op{width:calc(100% - 16px);margin:2px 8px 6px;}
+
+/* 설정 > 화면 > 테마 색 스와치 */
+.app-theme-swatches{display:flex;gap:8px;flex-wrap:wrap;}
+.app-theme-swatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);cursor:pointer;padding:0;}
+.app-theme-swatch.active{border-color:var(--text);box-shadow:0 0 0 2px var(--brand-soft);}
 
 /* ---- 대시보드 헤더(인사말 + 날짜 네비게이터 + 시계 + 테마토글 + 새로만들기) ---- */
 .dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px;}

@@ -20,11 +20,18 @@ import {
   readImageDownscaled,
 } from '../shared/dashboard-blocks.js';
 
+// 대시보드 전체 테마 · 카드별 테마 · 꾸미기 블록 테마 — 전부 이 하나의 팔레트를 쓴다.
+// id가 곧 CSS의 [data-dashtheme] / [data-cardtheme] 값.
 const DASH_THEMES = [
-  { id: 'default', label: '기본', swatch: 'var(--bg)' },
+  { id: 'default', label: '기본', swatch: 'var(--surface)' },
   { id: 'warm', label: '따뜻한', swatch: '#f0e6d6' },
   { id: 'mono', label: '모노', swatch: '#e9e9e9' },
-  { id: 'dark', label: '다크', swatch: '#1c1c22' },
+  { id: 'dark', label: '다크', swatch: '#26262e' },
+  { id: 'glass', label: '유리', swatch: 'rgba(255,255,255,.5)' },
+  { id: 'yellow', label: '노랑', swatch: '#fff6d9' },
+  { id: 'blue', label: '블루', swatch: '#e8f0ff' },
+  { id: 'mint', label: '민트', swatch: '#e4f6ee' },
+  { id: 'pink', label: '핑크', swatch: '#fdeef2' },
 ];
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
@@ -938,16 +945,9 @@ export async function mount(root) {
   }
   initAddPanel();
 
-  // ================= 위젯 투명도 (편집 바 슬라이더) + 카드별 테마/투명도(우클릭) + 요약 카드 =================
-  const CARD_THEMES = [
-    { id: '', label: '기본', sw: 'var(--surface)' },
-    { id: 'dark', label: '다크', sw: '#26262e' },
-    { id: 'glass', label: '유리', sw: 'rgba(255,255,255,.5)' },
-    { id: 'yellow', label: '노랑', sw: '#fff6d9' },
-    { id: 'blue', label: '블루', sw: '#e8f0ff' },
-    { id: 'mint', label: '민트', sw: '#e4f6ee' },
-    { id: 'pink', label: '핑크', sw: '#fdeef2' },
-  ];
+  // ================= 위젯 투명도 (편집 바 슬라이더) + 카드/블록별 테마·투명도(우클릭) + 요약 카드 =================
+  // 카드·블록 우클릭 테마는 상단 대시보드 테마(DASH_THEMES)와 같은 팔레트를 쓴다. '기본'은 id ''.
+  const CARD_THEMES = DASH_THEMES.map((t) => ({ id: t.id === 'default' ? '' : t.id, label: t.label, sw: t.swatch }));
 
   async function initCustomization() {
     const grid = $('d-widgetGrid');
@@ -981,7 +981,7 @@ export async function mount(root) {
       const el = grid.querySelector(`.dash-widget[data-card="${id}"]`);
       if (!el) return;
       const s = cardStyles[id] || {};
-      if (!el.classList.contains('dash-block')) el.dataset.cardtheme = s.theme || '';
+      el.dataset.cardtheme = s.theme || '';
       if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
     };
@@ -1003,14 +1003,10 @@ export async function mount(root) {
       const menu = document.createElement('div');
       menu.className = 'ctx-menu dash-card-menu';
       menu.innerHTML = `
-        ${
-          isBlock
-            ? ''
-            : `<div class="dcm-label">테마</div>
+        <div class="dcm-label">테마</div>
         <div class="dcm-themes">
           ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
-        </div>`
-        }
+        </div>
         <div class="dcm-label">투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
         <input type="range" class="dcm-op" min="30" max="100" step="5" value="${s.opacity ?? 100}" />
         ${isBlock ? '' : `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`}`;

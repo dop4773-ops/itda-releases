@@ -241,10 +241,12 @@ function initUpdater(app, ipcMain, mainWindow, settings) {
       console.error('[itda:updater] 자동저장 플러시 실패(무시하고 설치 진행):', e.message);
     }
     // 이벤트 핸들러 콜스택을 벗어난 뒤 호출 — 이벤트 안에서 바로 부르면 무시되는 케이스가 있다.
+    // isSilent=true: 설치 창을 안 띄우고 조용히. (재시작이 안 되던 건 창을 미리 destroy하던
+    //  경합 때문이었고 그건 제거했다. 그래도 안 되면 autoInstallOnAppQuit + 다음 실행 재탐지가 백업.)
     setImmediate(() => {
       try {
-        console.log('[itda:updater] quitAndInstall(false, true) 호출');
-        autoUpdater.quitAndInstall(false, true);
+        console.log('[itda:updater] quitAndInstall(true, true) 호출');
+        autoUpdater.quitAndInstall(true, true);
       } catch (e) {
         console.error('[itda:updater] quitAndInstall 실패, app.relaunch 폴백:', e.message);
         try {

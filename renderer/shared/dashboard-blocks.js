@@ -574,8 +574,11 @@ export function openBlockConfig(anchorEl, block, onChange) {
     });
     if (ev === 'change' && n.tagName === 'INPUT') {
       n.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') n.blur();
-      }); // 엔터로 확정
+        if (e.key !== 'Enter') return;
+        cfg[n.dataset.cfg] = readVal(n);
+        emit();
+        closeBlockConfig(); // 엔터 = 확정 + 팝오버 닫기
+      });
     }
   });
 
