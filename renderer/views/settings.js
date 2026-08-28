@@ -1,7 +1,7 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
-import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride } from '../shared/shell.js';
+import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride, UI_THEMES, getUiTheme, setUiTheme, getUiAdjust, setUiAdjust, SIDEBAR_STYLES, getSidebarStyle, getSidebarWidth, setSidebarSetting, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, applyFabVisibility } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
@@ -64,23 +64,77 @@ export async function mount(root) {
           </div>
 
           <div class="panel">
-            <div class="panel-head"><h3>화면</h3></div>
-            <div class="update-row">
+            <div class="panel-head"><h3>테마</h3></div>
+            <p class="settings-panel-desc">테마를 고르면 앱 전체(배경·사이드바·헤더·카드·버튼·입력·팝업)의 기본 디자인이 한 번에 정해져요. 아래 "세부 디자인"에서 더 조정할 수 있어요.</p>
+            <div id="theme-cardGrid" class="theme-card-grid"></div>
+            <div class="update-row" style="margin-top:14px;">
+              <div>
+                <div class="settings-row-title">강조색</div>
+                <div class="settings-row-desc">액션 버튼·링크·포커스·사이드바 선택 항목의 색이에요.</div>
+              </div>
+              <div class="app-theme-swatches" id="app-themeSwatches"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
               <div>
                 <div class="settings-row-title">다크 모드</div>
-                <div class="settings-row-desc">어두운 화면으로 바꿔요.</div>
+                <div class="settings-row-desc">어두운 화면으로 바꿔요. 위 테마와 함께 쓸 수 있어요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="theme-darkToggle" />
                 <span class="switch-track"><span class="switch-thumb"></span></span>
               </label>
             </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>세부 디자인</h3></div>
+            <p class="settings-panel-desc">고른 테마를 기준으로 형태만 미세 조정해요.</p>
+            <div class="update-row">
+              <div><div class="settings-row-title">모서리 둥글기</div></div>
+              <div class="seg" id="theme-radiusSeg"></div>
+            </div>
             <div class="update-row" style="margin-top:10px;">
-              <div>
-                <div class="settings-row-title">테마 색</div>
-                <div class="settings-row-desc">강조색을 바꾸면 사이드바·버튼·포커스 등 앱 전체가 따라 바뀌어요. 다크 모드와 함께 쓸 수 있어요.</div>
+              <div><div class="settings-row-title">그림자 강도</div></div>
+              <div class="seg" id="theme-shadowSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div><div class="settings-row-title">UI 밀도</div><div class="settings-row-desc">여백과 글자 크기를 좁게/넓게 조정해요.</div></div>
+              <div class="seg" id="theme-densitySeg"></div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>사이드바</h3></div>
+            <p class="settings-panel-desc">프로그램 통일성을 유지하는 범위에서 사이드바를 개인화해요. 메뉴 순서 변경·즐겨찾기 고정은 준비 중이에요.</p>
+            <div class="update-row">
+              <div><div class="settings-row-title">스타일</div></div>
+              <div class="seg" id="sb-styleSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div><div class="settings-row-title">메뉴 표시</div></div>
+              <div class="seg" id="sb-labelSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div><div class="settings-row-title">너비</div><div class="settings-row-desc">접힌 상태에서는 적용되지 않아요.</div></div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <input type="range" id="sb-widthRange" style="width:140px;" />
+                <span id="sb-widthValue" style="font-size:12px;color:var(--text-soft);width:44px;text-align:right;">220px</span>
               </div>
-              <div class="app-theme-swatches" id="app-themeSwatches"></div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>글자 &amp; 배율</h3></div>
+            <div class="update-row">
+              <div>
+                <div class="settings-row-title">글꼴</div>
+                <div class="settings-row-desc">목록에서 각 글꼴의 실제 모양을 미리 볼 수 있어요.</div>
+              </div>
+              <select id="display-fontSelect" class="select" style="width:140px;">
+                ${Object.entries(FONT_FAMILY_OPTIONS)
+                  .map(([key, f]) => `<option value="${key}" style='font-family:${f.stack};'>${escapeHtml(f.label)}</option>`)
+                  .join('')}
+              </select>
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
@@ -94,19 +148,8 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
-                <div class="settings-row-title">글꼴</div>
-                <div class="settings-row-desc">목록에서 각 글꼴의 실제 모양을 미리 볼 수 있어요.</div>
-              </div>
-              <select id="display-fontSelect" class="select" style="width:140px;">
-                ${Object.entries(FONT_FAMILY_OPTIONS)
-                  .map(([key, f]) => `<option value="${key}" style='font-family:${f.stack};'>${escapeHtml(f.label)}</option>`)
-                  .join('')}
-              </select>
-            </div>
-            <div class="update-row" style="margin-top:10px;">
-              <div>
                 <div class="settings-row-title">라이트 모드 글자색</div>
-                <div class="settings-row-desc">화면 전체 기본 글자색이에요. 잘못 골라서 안 보이게 되면 옆 "기본값" 버튼으로 되돌리세요.</div>
+                <div class="settings-row-desc">잘못 골라서 안 보이게 되면 옆 "기본값" 버튼으로 되돌리세요.</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <input type="color" id="display-textColorLight" class="rich-color-btn" style="width:30px;height:30px;" />
@@ -122,6 +165,20 @@ export async function mount(root) {
                 <input type="color" id="display-textColorDark" class="rich-color-btn" style="width:30px;height:30px;" />
                 <button class="btn-danger" id="display-textColorDarkReset">기본값</button>
               </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>기타</h3></div>
+            <div class="update-row">
+              <div>
+                <div class="settings-row-title">빠른 입력(+) 버튼 숨기기</div>
+                <div class="settings-row-desc">우측 하단의 + 버튼을 숨겨요. 숨겨도 ⌘K(Ctrl+K) 단축키로는 계속 열 수 있어요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="display-fabToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
             </div>
           </div>
         </div>
@@ -552,6 +609,108 @@ export async function mount(root) {
     }
     await initTextColorRow('light', 'display-textColorLight', 'display-textColorLightReset');
     await initTextColorRow('dark', 'display-textColorDark', 'display-textColorDarkReset');
+
+    const fabToggle = $('display-fabToggle');
+    fabToggle.checked = (await window.itda.settings.get('fab_hidden')) === '1';
+    fabToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'fab_hidden', value: fabToggle.checked ? '1' : '0' });
+        await applyFabVisibility();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        fabToggle.checked = !fabToggle.checked;
+      }
+    });
+  }
+
+  // 세그먼트 컨트롤 한 줄 — options: [[value, label], ...]. 클릭하면 onPick(value)를 부른다.
+  function segRow(containerId, current, options, onPick) {
+    const wrap = $(containerId);
+    if (!wrap) return;
+    wrap.innerHTML = options
+      .map(([v, l]) => `<button type="button" data-v="${v}" class="${v === current ? 'active' : ''}">${escapeHtml(l)}</button>`)
+      .join('');
+    wrap.querySelectorAll('button').forEach((b) => {
+      b.addEventListener('click', async () => {
+        wrap.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+        try {
+          await onPick(b.dataset.v);
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+        }
+      });
+    });
+  }
+
+  // ================= 테마 & 디자인 (전역 UI 테마 + 세부 조정) =================
+  async function initThemeDesignPanel() {
+    const grid = $('theme-cardGrid');
+    if (!grid) return;
+    const curUi = (await getUiTheme()) || (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+    const SW = {
+      light: '#F7F7FB',
+      dark: '#1E2027',
+      cozy: 'linear-gradient(135deg,#F3EBDD,#C08552)',
+      retro: 'linear-gradient(135deg,#FFFBF0,#D2691E)',
+      glass: 'linear-gradient(135deg,#DBE6F6,#EEE3F4)',
+      minimal: '#FFFFFF',
+      professional: 'linear-gradient(135deg,#EDF0F4,#2C5CC5)',
+    };
+    grid.innerHTML = UI_THEMES.map(
+      (t) => `<button type="button" class="theme-card ${t.id === curUi ? 'active' : ''}" data-ui="${t.id}">
+        <div class="sw" style="background:${SW[t.id] || 'var(--surface)'}"></div>${escapeHtml(t.label)}
+      </button>`
+    ).join('');
+    grid.querySelectorAll('[data-ui]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        grid.querySelectorAll('[data-ui]').forEach((x) => x.classList.toggle('active', x === b));
+        try {
+          await setUiTheme(b.dataset.ui);
+          const darkToggle = $('theme-darkToggle');
+          if (darkToggle) darkToggle.checked = document.documentElement.dataset.theme === 'dark';
+        } catch (e) {
+          errorToast(e, '테마를 저장하지 못했어요');
+        }
+      });
+    });
+
+    segRow('theme-radiusSeg', await getUiAdjust('radius'),
+      [['sharp', '각지게'], ['default', '기본'], ['round', '둥글게']], (v) => setUiAdjust('radius', v));
+    segRow('theme-shadowSeg', await getUiAdjust('shadow'),
+      [['none', '없음'], ['soft', '약하게'], ['default', '기본'], ['strong', '강하게']], (v) => setUiAdjust('shadow', v));
+    segRow('theme-densitySeg', await getUiAdjust('density'),
+      [['compact', '좁게'], ['default', '기본'], ['comfortable', '넓게']], (v) => setUiAdjust('density', v));
+  }
+
+  // ================= 사이드바 개인화 =================
+  async function initSidebarPanel() {
+    if (!$('sb-styleSeg')) return;
+    const STYLE_LABEL = { default: '기본', compact: '컴팩트', floating: '플로팅', glass: '글래스', retro: '레트로' };
+    segRow('sb-styleSeg', await getSidebarStyle(),
+      SIDEBAR_STYLES.map((s) => [s, STYLE_LABEL[s]]), (v) => setSidebarSetting('sidebar_style', v));
+
+    const labels = (await window.itda.settings.get('sidebar_labels')) === 'icon' ? 'icon' : 'both';
+    segRow('sb-labelSeg', labels,
+      [['both', '아이콘 + 텍스트'], ['icon', '아이콘만']], (v) => setSidebarSetting('sidebar_labels', v));
+
+    const wr = $('sb-widthRange');
+    const wv = $('sb-widthValue');
+    wr.min = String(SIDEBAR_WIDTH_MIN);
+    wr.max = String(SIDEBAR_WIDTH_MAX);
+    wr.step = '4';
+    wr.value = String(await getSidebarWidth());
+    wv.textContent = wr.value + 'px';
+    wr.addEventListener('input', () => {
+      wv.textContent = wr.value + 'px';
+      document.documentElement.style.setProperty('--sidebar-w', wr.value + 'px'); // 드래그 중 라이브 미리보기
+    });
+    wr.addEventListener('change', async () => {
+      try {
+        await setSidebarSetting('sidebar_width', wr.value);
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    });
   }
 
   // ================= 단축키 =================
@@ -1547,6 +1706,8 @@ export async function mount(root) {
 
   await initUserPanel();
   await initDisplayPanel();
+  await initThemeDesignPanel();
+  await initSidebarPanel();
   await initDashboardCardsPanel();
   const unmountTagsPanel = await mountTagsPanel($('tags-panelRoot'));
   await initWidgetAppearancePanel();

@@ -15,6 +15,17 @@ const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const MON_EN = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const pad = (n) => String(n).padStart(2, '0');
 
+// 한글 텍스트 시계 — "오후 세시 반" 같은 식으로 표현.
+const HOUR_WORDS = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열', '열한', '열두'];
+function timeInWords(d) {
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const period = h < 6 ? '새벽' : h < 12 ? '오전' : h < 18 ? '오후' : '밤';
+  const h12 = (h % 12) || 12;
+  const mm = m === 0 ? '정각' : m === 30 ? '반' : `${m}분`;
+  return `${period} ${HOUR_WORDS[h12]}시 ${mm}`;
+}
+
 // ────────────────────────────── 타입 레지스트리 ──────────────────────────────
 export const BLOCK_TYPES = {
   clock: {
@@ -77,7 +88,62 @@ export const BLOCK_TYPES = {
     defaultSize: { w: 3, h: 3 },
     defaultConfig: { tool: 'calc', notes: '' },
   },
+  countdown: {
+    label: '카운트다운',
+    icon: '⏳',
+    defaultSize: { w: 3, h: 2 },
+    defaultConfig: { label: '목표일', target: '', theme: 'soft' },
+  },
+  progressBar: {
+    label: '진행 막대',
+    icon: '▰',
+    defaultSize: { w: 4, h: 1 },
+    defaultConfig: { label: '진행률', percent: 60, color: '#5b8def' },
+  },
+  progressRing: {
+    label: '진행 링',
+    icon: '◍',
+    defaultSize: { w: 2, h: 2 },
+    defaultConfig: { label: '', percent: 65, color: '#5b8def' },
+  },
+  metric: {
+    label: '지표 카드',
+    icon: '📈',
+    defaultSize: { w: 3, h: 2 },
+    defaultConfig: { label: '이번 주', value: '12', unit: '건', trend: '', theme: 'soft' },
+  },
+  badge: {
+    label: '배지',
+    icon: '🏷',
+    defaultSize: { w: 2, h: 1 },
+    defaultConfig: { text: 'NEW', icon: '', color: '#ffd76a' },
+  },
+  divider: {
+    label: '구분선',
+    icon: '―',
+    defaultSize: { w: 6, h: 1 },
+    defaultConfig: { label: '', style: 'solid' },
+  },
 };
+
+// "위젯 추가 > 꾸미기" 패널에서 종류가 많아져 카테고리로 묶어 보여준다(검색도 같이).
+export const BLOCK_CATEGORIES = [
+  { id: 'time', label: '시간' },
+  { id: 'text', label: '텍스트' },
+  { id: 'media', label: '이미지 · 장식' },
+  { id: 'info', label: '정보' },
+  { id: 'tool', label: '도구' },
+];
+const BLOCK_CATEGORY = {
+  clock: 'time', dateCard: 'time', flipCalendar: 'time', countdown: 'time',
+  text: 'text', quote: 'text', badge: 'text', divider: 'text',
+  image: 'media', sticker: 'media',
+  weather: 'info', progressBar: 'info', progressRing: 'info', metric: 'info',
+  link: 'tool', miniTool: 'tool',
+};
+export function blockCategory(type) {
+  return BLOCK_CATEGORY[type] || 'tool';
+}
 
 export function makeBlockId() {
   return 'blk-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -106,7 +172,7 @@ export function renderBlockElement(block) {
   return el;
 }
 
-const BARE_TYPES = ['clock', 'image', 'text', 'sticker', 'quote'];
+const BARE_TYPES = ['clock', 'image', 'text', 'sticker', 'quote', 'badge', 'divider', 'progressBar', 'progressRing', 'countdown', 'metric'];
 
 export function paintBlock(el, block) {
   const body = el.querySelector('.dash-block-body');
@@ -186,6 +252,12 @@ const PAINTERS = {
     }
     if (c.style === 'led') {
       return `<div class="clk clk-led"><span class="clk-led-ghost">88:88</span><span class="clk-led-time">00:00</span></div>`;
+    }
+    if (c.style === 'word') {
+      return `<div class="clk clk-word" data-theme="${theme}"><p class="clk-word-text">—</p></div>`;
+    }
+    if (c.style === 'minimal') {
+      return `<div class="clk clk-min" data-theme="${theme}"><span class="clk-min-time">00:00</span><span class="clk-min-sub"></span></div>`;
     }
     // flip (split-flap)
     return `<div class="clk clk-flip" data-theme="${theme}"><div class="flip-frame">
@@ -284,6 +356,54 @@ const PAINTERS = {
       </div>
     </div>`;
   },
+  countdown(c) {
+    return `<div class="countdown-block" data-theme="${escapeHtml(c.theme || 'soft')}">
+      <span class="cd-label">${escapeHtml(c.label || '')}</span>
+      <span class="cd-main">—</span>
+      <span class="cd-sub"></span>
+    </div>`;
+  },
+  progressBar(c) {
+    const pct = Math.max(0, Math.min(100, Math.round(Number(c.percent) || 0)));
+    return `<div class="progress-block">
+      <div class="pb-top"><span>${escapeHtml(c.label || '')}</span><b>${pct}%</b></div>
+      <div class="pb-track"><div class="pb-fill" style="width:${pct}%;background:${escapeHtml(c.color || '#5b8def')}"></div></div>
+    </div>`;
+  },
+  progressRing(c) {
+    const pct = Math.max(0, Math.min(100, Math.round(Number(c.percent) || 0)));
+    const color = escapeHtml(c.color || '#5b8def');
+    const R = 42;
+    const circ = 2 * Math.PI * R;
+    const off = circ * (1 - pct / 100);
+    return `<div class="ring-block">
+      <svg viewBox="0 0 100 100" class="ring-svg">
+        <circle cx="50" cy="50" r="${R}" class="ring-track"/>
+        <circle cx="50" cy="50" r="${R}" class="ring-fill" style="stroke:${color};stroke-dasharray:${circ.toFixed(1)};stroke-dashoffset:${off.toFixed(1)}"/>
+      </svg>
+      <div class="ring-center"><b>${pct}<i>%</i></b>${c.label ? `<span>${escapeHtml(c.label)}</span>` : ''}</div>
+    </div>`;
+  },
+  metric(c) {
+    const trend = String(c.trend || '').trim();
+    const dir = trend.startsWith('-') ? 'down' : trend.startsWith('+') ? 'up' : '';
+    return `<div class="metric-block" data-theme="${escapeHtml(c.theme || 'soft')}">
+      <span class="mtr-label">${escapeHtml(c.label || '')}</span>
+      <span class="mtr-value">${escapeHtml(c.value || '0')}<i>${escapeHtml(c.unit || '')}</i></span>
+      ${trend ? `<span class="mtr-trend mtr-${dir}">${escapeHtml(trend)}</span>` : ''}
+    </div>`;
+  },
+  badge(c) {
+    return `<div class="badge-block" style="--bdg:${escapeHtml(c.color || '#ffd76a')}">
+      ${c.icon ? `<span class="bdg-ico">${escapeHtml(c.icon)}</span>` : ''}
+      <span class="bdg-text">${escapeHtml(c.text || 'BADGE')}</span>
+    </div>`;
+  },
+  divider(c) {
+    return `<div class="divider-block dv-${escapeHtml(c.style || 'solid')}${c.label ? ' has-label' : ''}">
+      ${c.label ? `<span class="dv-label">${escapeHtml(c.label)}</span>` : ''}
+    </div>`;
+  },
   miniTool(c) {
     if (c.tool === 'notepad') {
       return `<div class="minitool mt-notepad"><textarea class="mt-notes" placeholder="메모…">${escapeHtml(c.notes || '')}</textarea></div>`;
@@ -328,8 +448,8 @@ export function tickBlock(el, block) {
       hand('.an-sec', 33, s * 6, 8);
       return;
     }
-    if (cfg.style === 'digital' || cfg.style === 'led') {
-      const t = el.querySelector('.clk-dig-time, .clk-led-time');
+    if (cfg.style === 'digital' || cfg.style === 'led' || cfg.style === 'minimal') {
+      const t = el.querySelector('.clk-dig-time, .clk-led-time, .clk-min-time');
       if (t) {
         t.textContent = cfg.showSeconds
           ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
@@ -337,6 +457,13 @@ export function tickBlock(el, block) {
       }
       const ghost = el.querySelector('.clk-led-ghost');
       if (ghost) ghost.textContent = cfg.showSeconds ? '88:88:88' : '88:88';
+      const sub = el.querySelector('.clk-min-sub');
+      if (sub) sub.textContent = `${WD[now.getDay()]}요일 · ${now.getMonth() + 1}/${now.getDate()}`;
+      return;
+    }
+    if (cfg.style === 'word') {
+      const p = el.querySelector('.clk-word-text');
+      if (p) p.textContent = timeInWords(now);
       return;
     }
     // flip
@@ -377,6 +504,26 @@ export function tickBlock(el, block) {
     set('.fcal-mon', MON_EN[now.getMonth()]);
     set('.fcal-day', now.getDate());
     set('.fcal-wd', `${WD[now.getDay()]}요일`);
+    return;
+  }
+
+  if (block.type === 'countdown') {
+    const main = el.querySelector('.cd-main');
+    const sub = el.querySelector('.cd-sub');
+    const target = cfg.target ? new Date(cfg.target) : null;
+    if (!target || isNaN(target.getTime())) {
+      if (main) main.textContent = '설정 필요';
+      if (sub) sub.textContent = '⚙에서 목표 일시를 정하세요';
+      return;
+    }
+    const diff = target.getTime() - now.getTime();
+    const abs = Math.abs(diff);
+    const d = Math.floor(abs / 86400000);
+    const h = Math.floor((abs % 86400000) / 3600000);
+    const m = Math.floor((abs % 3600000) / 60000);
+    const s = Math.floor((abs % 60000) / 1000);
+    if (main) main.textContent = diff < 0 ? `D+${d}` : d > 0 ? `D-${d}` : 'D-DAY';
+    if (sub) sub.textContent = `${pad(h)}:${pad(m)}:${pad(s)}${diff < 0 ? ' 지남' : ''}`;
     return;
   }
 
@@ -702,10 +849,20 @@ const sel = (label, key, opts, cur) => `
 
 const FIELDS = {
   clock: (c) => `
-    ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털'], ['led', 'LED']], c.style || 'flip')}
+    ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털'], ['led', 'LED'], ['minimal', '미니멀'], ['word', '텍스트(한글)']], c.style || 'flip')}
     ${sel('테마', 'theme', [['wood', '우드'], ['classic', '클래식'], ['brass', '브라스'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'wood')}
     <label class="cfg-row"><input type="checkbox" data-cfg="showSeconds" ${c.showSeconds ? 'checked' : ''}/> 초 표시</label>`,
-  dateCard: (c) => sel('테마', 'theme', [['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'paper'),
+  dateCard: (c) => sel('테마', 'theme', [['soft', '소프트'], ['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'paper'),
+  progressRing: (c) => `
+    <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="(선택)" /></label>
+    <label class="cfg-row">퍼센트<input class="input" type="number" min="0" max="100" data-cfg="percent" value="${Math.round(Number(c.percent) || 0)}" /></label>
+    <label class="cfg-row">색상<input type="color" data-cfg="color" value="${c.color || '#5b8def'}" /></label>`,
+  metric: (c) => `
+    <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="이번 주" /></label>
+    <label class="cfg-row">값<input class="input" data-cfg="value" value="${escapeHtml(c.value || '')}" placeholder="12" /></label>
+    <label class="cfg-row">단위<input class="input" data-cfg="unit" value="${escapeHtml(c.unit || '')}" placeholder="건 (선택)" /></label>
+    <label class="cfg-row">추이<input class="input" data-cfg="trend" value="${escapeHtml(c.trend || '')}" placeholder="+3 / -2 (선택)" /></label>
+    ${sel('테마', 'theme', [['soft', '소프트'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'soft')}`,
   flipCalendar: (c) => sel('테마', 'theme', [['classic', '클래식(빨강)'], ['ink', '잉크'], ['minimal', '미니멀']], c.theme || 'classic'),
   text: (c) => `
     <label class="cfg-row">내용<textarea class="input" data-cfg="content" rows="3">${escapeHtml(c.content || '')}</textarea></label>
@@ -732,7 +889,7 @@ const FIELDS = {
   quote: (c) => `
     <label class="cfg-row">문구<textarea class="input" data-cfg="text" rows="3">${escapeHtml(c.text || '')}</textarea></label>
     <label class="cfg-row">출처<input class="input" data-cfg="author" value="${escapeHtml(c.author || '')}" placeholder="예: 잇다 팀 (선택)" /></label>
-    ${sel('테마', 'theme', [['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
+    ${sel('테마', 'theme', [['soft', '소프트'], ['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
   weather: (c) => `
     <label class="cfg-row">도시
       <input class="input" data-cfg="city" data-cfg-ev="change" list="wx-city-list" value="${escapeHtml(c.city || '서울')}" placeholder="목록에서 고르거나 직접 입력" autocomplete="off" />
@@ -740,6 +897,21 @@ const FIELDS = {
     </label>
     <p class="cfg-note">국내 도시는 목록에서 고르고, 해외는 영어 도시명을 직접 입력하세요. 30분마다 자동 갱신되며 인터넷이 필요합니다.</p>`,
   miniTool: (c) => sel('도구', 'tool', [['calc', '계산기'], ['notepad', '메모지'], ['timer', '스톱워치']], c.tool || 'calc'),
+  countdown: (c) => `
+    <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="목표일" /></label>
+    <label class="cfg-row">목표 일시<input class="input" type="datetime-local" data-cfg="target" data-cfg-ev="change" value="${escapeHtml(c.target || '')}" /></label>
+    ${sel('테마', 'theme', [['soft', '소프트'], ['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'soft')}`,
+  progressBar: (c) => `
+    <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="진행률" /></label>
+    <label class="cfg-row">퍼센트<input class="input" type="number" min="0" max="100" data-cfg="percent" data-cfg-ev="input" value="${Math.round(Number(c.percent) || 0)}" /></label>
+    <label class="cfg-row">색상<input type="color" data-cfg="color" value="${c.color || '#5b8def'}" /></label>`,
+  badge: (c) => `
+    <label class="cfg-row">텍스트<input class="input" data-cfg="text" value="${escapeHtml(c.text || '')}" placeholder="NEW" /></label>
+    <label class="cfg-row">아이콘<input class="input" data-cfg="icon" value="${escapeHtml(c.icon || '')}" placeholder="이모지(선택)" /></label>
+    <label class="cfg-row">색상<input type="color" data-cfg="color" value="${c.color || '#ffd76a'}" /></label>`,
+  divider: (c) => `
+    <label class="cfg-row">가운데 문구<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="(선택)" /></label>
+    ${sel('선 모양', 'style', [['solid', '실선'], ['dashed', '점선'], ['dots', '점'], ['wave', '물결']], c.style || 'solid')}`,
 };
 
 // 파일 → maxPx 이하 JPEG dataURL. config/설정에 통째로 저장.

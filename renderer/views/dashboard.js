@@ -11,6 +11,8 @@ import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shar
 import { attachContextMenu } from '../shared/context-menu.js';
 import {
   BLOCK_TYPES,
+  BLOCK_CATEGORIES,
+  blockCategory,
   makeBlockId,
   renderBlockElement,
   paintBlock,
@@ -149,10 +151,11 @@ export async function mount(root) {
           <span class="dash-edit-presets">
             <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
             <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
-            <label class="dash-edit-opacity" title="모든 위젯 투명도">투명도
+            <label class="dash-edit-opacity" title="모든 위젯 배경 투명도">배경 투명도
               <input type="range" id="d-opacityRange" min="30" max="100" step="5" value="100" />
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
+            <button class="btn-secondary" id="d-arrangeBtn" title="위젯 자동 정렬">🧹 자동 정리 ▾</button>
             <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
           <button class="btn" id="d-editDoneBtn">완료</button>
@@ -202,11 +205,6 @@ export async function mount(root) {
           </div>
         </div>
 
-        <div class="inbox-bar">
-          <input type="text" id="d-inboxInput" placeholder="오늘 받은 업무나 해야 할 일을 입력하세요…" />
-          <kbd>어디서든 ⌘K</kbd>
-          <button class="btn" id="d-inboxAddBtn">추가</button>
-        </div>
       </div>
 
       <div class="dash-side-backdrop" id="d-sideBackdrop"></div>
@@ -715,6 +713,80 @@ export async function mount(root) {
       applyAll();
       persist();
     }
+
+    // "레이아웃 자동 정리" — 6가지 정렬. grid/compact은 y까지 바꿔 겹침 없이 다시 깔고,
+    // left/center/even/distribute는 "같은 y에 있는 위젯 = 한 줄"로 보고 그 줄 안에서 x만 재배치한다.
+    // ponytail: 한 줄 폭 합이 12칸을 넘으면 겹칠 수 있음 — 그런 배치는 grid/compact로 먼저 정리하는 걸 권장.
+    function arrangeLayout(mode) {
+      const list = widgets
+        .filter((w) => w.style.display !== 'none' && positions[w.dataset.card])
+        .map((w) => ({ id: w.dataset.card, p: positions[w.dataset.card] }));
+      if (!list.length) return;
+
+      if (mode === 'grid') {
+        const ordered = [...list].sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x);
+        let x = 0;
+        let y = 0;
+        let rowH = 0;
+        ordered.forEach(({ p }) => {
+          const w = Math.min(p.w, GRID_COLS);
+          if (x > 0 && x + w > GRID_COLS) {
+            x = 0;
+            y += rowH;
+            rowH = 0;
+          }
+          p.x = x;
+          p.y = y;
+          p.w = w;
+          x += w;
+          rowH = Math.max(rowH, p.h);
+        });
+      } else if (mode === 'compact') {
+        const ordered = [...list].sort((a, b) => a.p.y - b.p.y || a.p.x - b.p.x);
+        const placed = [];
+        ordered.forEach(({ p }) => {
+          let y = 0;
+          while (placed.some((q) => p.x < q.x + q.w && p.x + p.w > q.x && y < q.y + q.h && y + p.h > q.y)) y++;
+          p.y = y;
+          placed.push({ x: p.x, y, w: p.w, h: p.h });
+        });
+      } else {
+        const rows = new Map();
+        list.forEach((it) => {
+          if (!rows.has(it.p.y)) rows.set(it.p.y, []);
+          rows.get(it.p.y).push(it);
+        });
+        for (const items of rows.values()) {
+          items.sort((a, b) => a.p.x - b.p.x);
+          const totalW = items.reduce((s, it) => s + it.p.w, 0);
+          const free = Math.max(0, GRID_COLS - totalW);
+          if (mode === 'left') {
+            let x = 0;
+            items.forEach((it) => { it.p.x = x; x += it.p.w; });
+          } else if (mode === 'center') {
+            let x = Math.floor(free / 2);
+            items.forEach((it) => { it.p.x = x; x += it.p.w; });
+          } else if (mode === 'even') {
+            const gap = free / (items.length + 1);
+            let acc = gap;
+            items.forEach((it) => { it.p.x = Math.round(acc); acc += it.p.w + gap; });
+          } else if (mode === 'distribute') {
+            if (items.length === 1) {
+              items[0].p.x = Math.floor(free / 2);
+            } else {
+              const gap = free / (items.length - 1);
+              let acc = 0;
+              items.forEach((it) => { it.p.x = Math.round(acc); acc += it.p.w + gap; });
+              const last = items[items.length - 1];
+              last.p.x = GRID_COLS - last.p.w;
+            }
+          }
+          items.forEach((it) => { it.p.x = clamp(it.p.x, 0, GRID_COLS - it.p.w); });
+        }
+      }
+      applyAll();
+      persist();
+    }
     $('d-layoutEditBtn').addEventListener('click', () => setEditing(!editing));
     $('d-editDoneBtn').addEventListener('click', () => setEditing(false));
     $('d-editBar').querySelectorAll('[data-preset]').forEach((btn) => {
@@ -739,6 +811,7 @@ export async function mount(root) {
       isEditing: () => editing,
       setEditing,
       persist,
+      arrangeLayout,
       // 런타임에 추가된 블록 엘리먼트를 그리드에 편입: 위치 잡고 드래그/리사이즈 배선.
       attach: (el, size) => {
         widgets.push(el);
@@ -868,7 +941,7 @@ export async function mount(root) {
   }
 
   // 실시간 갱신이 필요한 블록(시계/날짜/날씨/스톱워치)이 있을 때만 1초 타이머를 돈다.
-  const TICKING_TYPES = ['clock', 'dateCard', 'flipCalendar', 'weather', 'miniTool'];
+  const TICKING_TYPES = ['clock', 'dateCard', 'flipCalendar', 'weather', 'miniTool', 'countdown'];
   let blockTickTimer = null;
   function tickAllBlocks() {
     blocks.forEach((b) => {
@@ -908,14 +981,42 @@ export async function mount(root) {
       });
     });
 
-    // 꾸미기 탭 — 블록 추가 버튼들
-    $('d-addBodyDeco').innerHTML = Object.entries(BLOCK_TYPES)
-      .map(
-        ([type, def]) =>
-          `<button class="dash-add-item" data-blocktype="${type}"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</button>`
-      )
-      .join('');
-    $('d-addBodyDeco').querySelectorAll('[data-blocktype]').forEach((b) => b.addEventListener('click', () => addBlock(b.dataset.blocktype)));
+    // 꾸미기 탭 — 종류가 많아져 카테고리로 묶고 검색창을 붙인다.
+    const decoBody = $('d-addBodyDeco');
+    const decoGroups = BLOCK_CATEGORIES.map((cat) => ({
+      cat,
+      items: Object.entries(BLOCK_TYPES).filter(([type]) => blockCategory(type) === cat.id),
+    })).filter((g) => g.items.length);
+    decoBody.innerHTML = `
+      <input type="search" class="input dash-add-search" id="d-decoSearch" placeholder="꾸미기 검색…" autocomplete="off" />
+      <div class="dash-add-groups">
+        ${decoGroups
+          .map(
+            (g) => `<div class="dash-add-group">
+              <div class="dash-add-group-label">${escapeHtml(g.cat.label)}</div>
+              ${g.items
+                .map(
+                  ([type, def]) =>
+                    `<button class="dash-add-item" data-blocktype="${type}" data-name="${escapeHtml(def.label)}"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</button>`
+                )
+                .join('')}
+            </div>`
+          )
+          .join('')}
+      </div>`;
+    decoBody.querySelectorAll('[data-blocktype]').forEach((b) => b.addEventListener('click', () => addBlock(b.dataset.blocktype)));
+    $('d-decoSearch').addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      decoBody.querySelectorAll('.dash-add-group').forEach((grp) => {
+        let any = false;
+        grp.querySelectorAll('[data-blocktype]').forEach((btn) => {
+          const hit = !q || btn.dataset.name.toLowerCase().includes(q) || btn.dataset.blocktype.toLowerCase().includes(q);
+          btn.style.display = hit ? '' : 'none';
+          if (hit) any = true;
+        });
+        grp.style.display = any ? '' : 'none';
+      });
+    });
 
     // 업무 탭 — 카드 on/off (설정 화면의 dashboard_cards와 같은 값을 씀)
     (async () => {
@@ -949,6 +1050,94 @@ export async function mount(root) {
     })();
   }
   initAddPanel();
+
+  // ================= 레이아웃 자동 정리 메뉴 + 편집 모드 빈 공간 우클릭 메뉴 =================
+  const ARRANGE_MODES = [
+    { m: 'grid', label: '⊞ 그리드 정렬' },
+    { m: 'compact', label: '⬆ 빈 공간 최적화' },
+    { m: 'left', label: '⇤ 왼쪽 정렬' },
+    { m: 'center', label: '↔ 가운데 정렬' },
+    { m: 'even', label: '≡ 균등 간격' },
+    { m: 'distribute', label: '⇹ 균등 분배' },
+  ];
+  let arrangeMenu = null;
+  const closeArrangeMenu = () => {
+    arrangeMenu?.remove();
+    arrangeMenu = null;
+    document.removeEventListener('mousedown', onArrangeOutside, true);
+  };
+  function onArrangeOutside(e) {
+    if (arrangeMenu && !arrangeMenu.contains(e.target)) closeArrangeMenu();
+  }
+  function openArrangeMenu(x, y) {
+    closeArrangeMenu();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = ARRANGE_MODES.map((a) => `<button class="ctx-menu-item" data-arrange="${a.m}">${a.label}</button>`).join('');
+    document.body.appendChild(menu);
+    arrangeMenu = menu;
+    menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
+    setTimeout(() => document.addEventListener('mousedown', onArrangeOutside, true), 0);
+    menu.querySelectorAll('[data-arrange]').forEach((b) => {
+      b.addEventListener('click', () => {
+        closeArrangeMenu();
+        widgetGrid.arrangeLayout(b.dataset.arrange);
+        toast('레이아웃을 정리했어요');
+      });
+    });
+  }
+  $('d-arrangeBtn').addEventListener('click', (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    openArrangeMenu(r.left, r.bottom + 4);
+  });
+
+  let gridMenu = null;
+  const closeGridMenu = () => {
+    gridMenu?.remove();
+    gridMenu = null;
+    document.removeEventListener('mousedown', onGridMenuOutside, true);
+  };
+  function onGridMenuOutside(e) {
+    if (gridMenu && !gridMenu.contains(e.target)) closeGridMenu();
+  }
+  $('d-widgetGrid').addEventListener('contextmenu', (e) => {
+    if (!widgetGrid.isEditing()) return; // 편집 모드에서만
+    if (e.target.closest('.dash-widget')) return; // 위젯 위 우클릭은 카드별 메뉴가 처리
+    e.preventDefault();
+    closeGridMenu();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = `
+      <button class="ctx-menu-item" data-g="add">＋ 위젯 추가</button>
+      <button class="ctx-menu-item" data-g="bg">🎨 배경 바꾸기</button>
+      <div class="ctx-menu-divider"></div>
+      <button class="ctx-menu-item" data-g="arrange">🧹 레이아웃 자동 정리 ▸</button>
+      <button class="ctx-menu-item" data-g="reset">↺ 기본 배치로 복원</button>
+      <div class="ctx-menu-divider"></div>
+      <button class="ctx-menu-item" data-g="done">✓ 편집 완료</button>`;
+    document.body.appendChild(menu);
+    gridMenu = menu;
+    menu.style.left = `${Math.max(8, Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(e.clientY, window.innerHeight - menu.offsetHeight - 8))}px`;
+    setTimeout(() => document.addEventListener('mousedown', onGridMenuOutside, true), 0);
+    menu.querySelectorAll('[data-g]').forEach((b) => {
+      b.addEventListener('click', () => {
+        const act = b.dataset.g;
+        if (act === 'arrange') {
+          const r = b.getBoundingClientRect();
+          closeGridMenu();
+          openArrangeMenu(r.right - 4, r.top);
+          return;
+        }
+        closeGridMenu();
+        if (act === 'add') $('d-addWidgetBtn').click();
+        else if (act === 'bg') $('d-bgBtn').click();
+        else if (act === 'reset') $('d-layoutResetBtn').click();
+        else if (act === 'done') $('d-editDoneBtn').click();
+      });
+    });
+  });
 
   // ================= 위젯 투명도 (편집 바 슬라이더) + 카드/블록별 테마·투명도(우클릭) + 요약 카드 =================
   // 카드·블록 우클릭 테마는 상단 대시보드 테마(DASH_THEMES)와 같은 팔레트를 쓴다. '기본'은 id ''.
@@ -1012,7 +1201,7 @@ export async function mount(root) {
         <div class="dcm-themes">
           ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
         </div>
-        <div class="dcm-label">투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
+        <div class="dcm-label">배경 투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
         <input type="range" class="dcm-op" min="30" max="100" step="5" value="${s.opacity ?? 100}" />
         ${isBlock ? '' : `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`}`;
       document.body.appendChild(menu);
@@ -1379,28 +1568,6 @@ export async function mount(root) {
     });
   }
 
-  let inboxBusy = false;
-  async function handleInboxSubmit() {
-    if (inboxBusy) return;
-    const input = $('d-inboxInput');
-    const content = input.value.trim();
-    if (!content) return;
-    inboxBusy = true;
-    try {
-      await window.itda.inbox.add(content);
-      input.value = '';
-      toast('Inbox에 저장했어요');
-    } catch (err) {
-      errorToast(err, '저장하지 못했어요');
-    } finally {
-      inboxBusy = false;
-    }
-  }
-  $('d-inboxAddBtn').addEventListener('click', handleInboxSubmit);
-  $('d-inboxInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleInboxSubmit();
-  });
-
   // ================= 연결된 업무 — 오늘 첫 일정에 연결된 항목들을 보여줌 =================
   async function loadLinkedRow() {
     const rowEl = $('d-linkedRow');
@@ -1765,6 +1932,8 @@ export async function mount(root) {
     clearInterval(blockTickTimer);
     closeBlockConfig();
     closeBgPop();
+    closeArrangeMenu();
+    closeGridMenu();
     customization?.closeCardMenu();
     summaryRow?.closeSumMenu();
     document.removeEventListener('keydown', handleDashKeys);

@@ -301,7 +301,102 @@ export async function applyTheme() {
   const appTheme = await window.itda.settings.get('app_theme');
   if (appTheme && APP_THEMES.some((t) => t.id === appTheme)) document.documentElement.dataset.apptheme = appTheme;
   else delete document.documentElement.dataset.apptheme;
+  // 전역 UI 테마(분위기) — 라이트/다크·강조색 위에 겹쳐서 앱 전체 팔레트/형태를 바꾼다.
+  const uiTheme = await window.itda.settings.get('ui_theme');
+  const uit = UI_THEMES.find((t) => t.id === uiTheme);
+  if (uit && uit.uitheme) document.documentElement.dataset.uitheme = uit.uitheme;
+  else delete document.documentElement.dataset.uitheme;
   await applyTextColorOverride(); // 라이트/다크 전환 시 그 모드에 저장된 글자색(없으면 기본값)을 다시 맞춘다
+}
+
+// ================= 전역 UI 테마 + 세부 조정(모서리/그림자/밀도) =================
+// 테마는 "기본 디자인 언어"를 한 번에 정하고, 세부 조정은 그 위에서 몇 가지만 더 튜닝한다.
+// 전부 documentElement의 data-* 속성 하나로 표현되고 CSS 변수 오버라이드로만 동작한다(컴포넌트 코드 무변경).
+export const UI_THEMES = [
+  { id: 'light', label: '라이트', dark: false, uitheme: '' },
+  { id: 'dark', label: '다크', dark: true, uitheme: '' },
+  { id: 'cozy', label: '코지 · 웜', dark: false, uitheme: 'cozy' },
+  { id: 'retro', label: '레트로', dark: false, uitheme: 'retro' },
+  { id: 'glass', label: '글래스', dark: false, uitheme: 'glass' },
+  { id: 'minimal', label: '미니멀', dark: false, uitheme: 'minimal' },
+  { id: 'professional', label: '프로페셔널', dark: false, uitheme: 'professional' },
+];
+
+const UI_ADJUSTS = {
+  radius: { key: 'ui_radius', values: ['sharp', 'default', 'round'], def: 'default' },
+  shadow: { key: 'ui_shadow', values: ['none', 'soft', 'default', 'strong'], def: 'default' },
+  density: { key: 'ui_density', values: ['compact', 'default', 'comfortable'], def: 'default' },
+};
+
+export async function getUiTheme() {
+  const saved = await window.itda.settings.get('ui_theme');
+  return UI_THEMES.some((t) => t.id === saved) ? saved : null; // null = 아직 안 골랐음(하위호환: 다크토글만 사용)
+}
+
+export async function setUiTheme(id) {
+  const t = UI_THEMES.find((x) => x.id === id);
+  if (!t) return;
+  await window.itda.settings.set({ key: 'ui_theme', value: id });
+  await window.itda.settings.set({ key: 'theme', value: t.dark ? 'dark' : 'light' });
+  await applyTheme();
+}
+
+export async function getUiAdjust(name) {
+  const cfg = UI_ADJUSTS[name];
+  const saved = await window.itda.settings.get(cfg.key);
+  return cfg.values.includes(saved) ? saved : cfg.def;
+}
+
+export async function setUiAdjust(name, value) {
+  const cfg = UI_ADJUSTS[name];
+  if (!cfg || !cfg.values.includes(value)) return;
+  await window.itda.settings.set({ key: cfg.key, value });
+  await applyUiAdjusts();
+}
+
+export async function applyUiAdjusts() {
+  for (const [name, cfg] of Object.entries(UI_ADJUSTS)) {
+    const saved = await window.itda.settings.get(cfg.key);
+    const v = cfg.values.includes(saved) ? saved : cfg.def;
+    if (v === cfg.def) delete document.documentElement.dataset[name];
+    else document.documentElement.dataset[name] = v;
+  }
+}
+
+// ================= 사이드바 개인화 (통일성 유지 범위 안에서) =================
+export const SIDEBAR_STYLES = ['default', 'compact', 'floating', 'glass', 'retro'];
+export const SIDEBAR_WIDTH_MIN = 176;
+export const SIDEBAR_WIDTH_MAX = 300;
+const SIDEBAR_WIDTH_DEFAULT = 220;
+
+export async function getSidebarWidth() {
+  const n = Number(await window.itda.settings.get('sidebar_width'));
+  return n >= SIDEBAR_WIDTH_MIN && n <= SIDEBAR_WIDTH_MAX ? n : SIDEBAR_WIDTH_DEFAULT;
+}
+
+export async function getSidebarStyle() {
+  const s = await window.itda.settings.get('sidebar_style');
+  return SIDEBAR_STYLES.includes(s) ? s : 'default';
+}
+
+export async function applySidebarPersonalization() {
+  const sb = document.getElementById('sidebar');
+  document.documentElement.style.setProperty('--sidebar-w', (await getSidebarWidth()) + 'px');
+  if (!sb) return;
+  const style = await getSidebarStyle();
+  SIDEBAR_STYLES.forEach((s) => sb.classList.toggle('sb-' + s, s === style));
+  sb.classList.toggle('icon-only', (await window.itda.settings.get('sidebar_labels')) === 'icon');
+}
+
+export async function setSidebarSetting(key, value) {
+  await window.itda.settings.set({ key, value: String(value) });
+  await applySidebarPersonalization();
+}
+
+// 우측 하단 빠른 입력(+) 버튼 표시/숨김 — 숨겨도 ⌘K 단축키는 그대로 동작한다.
+export async function applyFabVisibility() {
+  const hidden = (await window.itda.settings.get('fab_hidden')) === '1';
+  document.body.classList.toggle('fab-hidden', hidden);
 }
 
 // 라이트/다크 모드별 기본 글자색(--text) 직접 지정 — 설정 → 화면에서 색상피커로 고른다.
@@ -545,6 +640,9 @@ function initAltShortcutOverlay() {
 export async function initShell() {
   await preloadShortcuts(); // 아래 키다운 리스너들이 걸리기 전에 사용자가 바꾼 단축키를 먼저 읽어둠
   await applyTheme();
+  await applyUiAdjusts();
+  await applySidebarPersonalization();
+  await applyFabVisibility();
   await applyDisplayScale();
   await applyFontFamily();
   await initSidebarCollapse();
