@@ -38,6 +38,19 @@ const DASH_THEMES = [
   { id: 'pink', label: '핑크', swatch: '#fdeef2' },
 ];
 
+// 대시보드 스타일 프리셋 (설정 > 대시보드) — 카드 표면·여백·라운드·그림자·기본 강조색·배경을
+// 한 세트로 바꾼다. 전역 UI 테마(html[data-uitheme])와 독립적이고 대시보드에만 적용된다.
+// 실제 스타일은 styles.css의 .dash-layout[data-dashstyle="<id>"] 규칙에 있다.
+export const DASHBOARD_STYLE_PRESETS = [
+  { id: 'default', label: '기본', hint: '앱 테마 그대로' },
+  { id: 'minimal', label: 'Minimal', hint: '넓은 여백 · 그림자 없음' },
+  { id: 'soft', label: 'Soft', hint: '큰 라운드 · 은은한 톤' },
+  { id: 'glass', label: 'Glass', hint: '반투명 · 블러' },
+  { id: 'paper', label: 'Paper', hint: '종이 질감 · 얇은 테두리' },
+  { id: 'command', label: 'Command', hint: '좁은 간격 · 고밀도' },
+  { id: 'cozy', label: 'Cozy', hint: '따뜻한 색감 · 부드러운 카드' },
+];
+
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
 export const DASHBOARD_CARDS = [
@@ -338,6 +351,16 @@ export async function mount(root) {
   async function initBackgroundAndTheme() {
     const layout = $('d-layout');
     const bgEl = $('d-bg');
+
+    // 대시보드 스타일 프리셋 — 전역 UI 테마와 별개로 대시보드만의 분위기(카드 표면·여백·
+    // 라운드·그림자·기본 강조색·배경)를 한 번에 바꾼다. CSS가 .dash-layout[data-dashstyle]로 처리.
+    try {
+      const sp = await window.itda.settings.get('dashboard_style_preset');
+      if (DASHBOARD_STYLE_PRESETS.some((p) => p.id === sp && p.id !== 'default')) layout.dataset.dashstyle = sp;
+      else delete layout.dataset.dashstyle;
+    } catch (e) {
+      /* none */
+    }
 
     let theme = 'default';
     try {

@@ -5,7 +5,7 @@ import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCAL
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
-import { DASHBOARD_CARDS } from './dashboard.js';
+import { DASHBOARD_CARDS, DASHBOARD_STYLE_PRESETS } from './dashboard.js';
 import { LAYOUT_PRESETS, getPreset, scaleForPreview, WIDGET_CARD_IDS } from '../shared/dashboard-layouts.js';
 import { promptText } from '../shared/text-prompt.js';
 
@@ -188,6 +188,12 @@ export async function mount(root) {
 
         <div class="settings-panel" data-panel="dashboard">
           <div class="panel">
+            <div class="panel-head"><h3>대시보드 스타일</h3></div>
+            <p class="settings-panel-desc">전역 앱 테마와 별개로, 대시보드 카드·여백·라운드·그림자·강조색·배경을 한 번에 바꿔요. 레이아웃(위젯 배치)은 그대로 유지돼요.</p>
+            <div id="dash-stylePresetGrid" class="theme-card-grid"></div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>위젯 헤더 스타일</h3></div>
             <p class="settings-panel-desc">대시보드 업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 하나만 바꿔도 대시보드 분위기가 크게 달라져요.</p>
             <div class="seg" id="dash-headerStyleSeg"></div>
@@ -1236,6 +1242,38 @@ export async function mount(root) {
 
   // ================= 대시보드 구성 =================
   async function initDashboardCardsPanel() {
+    // 대시보드 스타일 프리셋 — 대시보드가 열릴 때 .dash-layout[data-dashstyle]로 적용된다.
+    const spGrid = $('dash-stylePresetGrid');
+    if (spGrid) {
+      const curSp = (await window.itda.settings.get('dashboard_style_preset')) || 'default';
+      const SP_SW = {
+        default: 'var(--surface)',
+        minimal: '#ffffff',
+        soft: 'linear-gradient(160deg,#f3f0fb,#f6f4fa)',
+        glass: 'linear-gradient(135deg,#dbe6f6,#efe4f5)',
+        paper: '#f4ecdd',
+        command: 'linear-gradient(160deg,#eef1f5,#2f5cc5)',
+        cozy: '#f3ebdd',
+      };
+      spGrid.innerHTML = DASHBOARD_STYLE_PRESETS.map(
+        (p) => `<button type="button" class="theme-card ${p.id === curSp ? 'active' : ''}" data-sp="${p.id}">
+          <div class="sw" style="background:${SP_SW[p.id] || 'var(--surface)'}"></div>${escapeHtml(p.label)}
+          <span style="display:block;font-size:10px;color:var(--text-faint);margin-top:2px;">${escapeHtml(p.hint)}</span>
+        </button>`
+      ).join('');
+      spGrid.querySelectorAll('[data-sp]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          spGrid.querySelectorAll('[data-sp]').forEach((x) => x.classList.toggle('active', x === b));
+          try {
+            await window.itda.settings.set({ key: 'dashboard_style_preset', value: b.dataset.sp });
+            toast('대시보드로 이동하면 반영돼요');
+          } catch (e) {
+            errorToast(e, '저장하지 못했어요');
+          }
+        });
+      });
+    }
+
     // 위젯 헤더 스타일 — 대시보드가 열릴 때 #d-widgetGrid[data-headerstyle]로 적용된다.
     const hsCur = (await window.itda.settings.get('dashboard_header_style')) || 'standard';
     segRow('dash-headerStyleSeg', ['standard', 'minimal', 'accent', 'label', 'floating', 'hidden'].includes(hsCur) ? hsCur : 'standard',

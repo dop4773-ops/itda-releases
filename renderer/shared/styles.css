@@ -1119,6 +1119,39 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-layout[data-dashtheme="pink"] .dash-bg{background-color:#fdf0f4;}
 .dash-layout[data-dashtheme="dark"] .dash-greeting h1,.dash-layout[data-dashtheme="dark"] .dash-greeting p,
 .dash-layout[data-dashtheme="dark"] .dash-time,.dash-layout[data-dashtheme="dark"] .date-nav{color:#f0f0f4;}
+
+/* ================= 대시보드 스타일 프리셋 (설정 > 대시보드) =================
+   전역 UI 테마와 별개로, .dash-layout 하위(=대시보드)만 팔레트/여백/라운드/그림자/강조색을
+   한 세트로 덮어쓴다. --surface를 그리드에 오버라이드하면 .dash-widget의 --card-bg가 자동으로
+   따라오고(::before 배경 레이어), 안쪽 목록/구분선도 같이 물든다. dashtheme 배경보다 뒤에 와서
+   스타일 프리셋을 고르면 배경도 이쪽이 이긴다. */
+.dash-layout[data-dashstyle] .dash-widget-grid{
+  --surface:var(--dsp-surface,#fff);--border:var(--dsp-border,#eaeaf2);--divider:var(--dsp-divider,#f2f1f8);
+  --shadow:var(--dsp-shadow,none);--brand:var(--dsp-brand,#6c8cf5);--brand-soft:var(--dsp-brand-soft,#eef2fe);
+  --radius-lg:var(--dsp-rl,16px);--radius-md:var(--dsp-rm,13px);--radius-sm:var(--dsp-rs,10px);
+  gap:var(--dsp-gap,14px);
+}
+.dash-layout[data-dashstyle="minimal"]{--dsp-surface:#fff;--dsp-border:#ededed;--dsp-divider:#f4f4f4;--dsp-shadow:none;--dsp-rl:12px;--dsp-rm:9px;--dsp-gap:20px;}
+.dash-layout[data-dashstyle="minimal"] .dash-bg{background-color:#ffffff;}
+.dash-layout[data-dashstyle="minimal"] .dash-widget.panel{box-shadow:none;}
+
+.dash-layout[data-dashstyle="soft"]{--dsp-surface:#fdfcff;--dsp-border:#ececf6;--dsp-divider:#f3f2fb;--dsp-shadow:0 2px 10px rgba(80,70,140,.06);--dsp-brand:#7c8cf0;--dsp-brand-soft:#eef0fd;--dsp-rl:22px;--dsp-rm:17px;--dsp-rs:13px;--dsp-gap:16px;}
+.dash-layout[data-dashstyle="soft"] .dash-bg{background:linear-gradient(160deg,#f3f0fb,#f6f4fa);}
+
+.dash-layout[data-dashstyle="glass"]{--dsp-surface:rgba(255,255,255,.55);--dsp-border:rgba(255,255,255,.7);--dsp-divider:rgba(255,255,255,.5);--dsp-shadow:0 8px 30px rgba(40,60,110,.13);--dsp-brand:#5b7ce0;--dsp-brand-soft:rgba(255,255,255,.55);--dsp-rl:20px;--dsp-rm:15px;--dsp-gap:14px;}
+.dash-layout[data-dashstyle="glass"] .dash-bg{background:linear-gradient(135deg,#dbe6f6,#efe4f5);}
+.dash-layout[data-dashstyle="glass"] .dash-widget.panel{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+
+.dash-layout[data-dashstyle="paper"]{--dsp-surface:#fdfaf2;--dsp-border:#e6dcc6;--dsp-divider:#efe7d6;--dsp-shadow:0 1px 3px rgba(120,100,60,.1);--dsp-brand:#c08552;--dsp-brand-soft:#f2e6d5;--dsp-rl:8px;--dsp-rm:6px;--dsp-rs:5px;--dsp-gap:14px;}
+.dash-layout[data-dashstyle="paper"] .dash-bg{background-color:#f4ecdd;}
+
+.dash-layout[data-dashstyle="command"]{--dsp-surface:#fff;--dsp-border:#d3d9e2;--dsp-divider:#e9edf2;--dsp-shadow:0 1px 2px rgba(20,30,50,.08);--dsp-brand:#2f5cc5;--dsp-brand-soft:#e4ecfb;--dsp-rl:8px;--dsp-rm:6px;--dsp-rs:5px;--dsp-gap:8px;}
+.dash-layout[data-dashstyle="command"] .dash-bg{background-color:#eef1f5;}
+.dash-layout[data-dashstyle="command"] .dash-widget.panel{padding:11px;}
+.dash-layout[data-dashstyle="command"] .dash-widget-grid{--fs-body:12px;}
+
+.dash-layout[data-dashstyle="cozy"]{--dsp-surface:#fdf6ea;--dsp-border:#e8dcc6;--dsp-divider:#efe6d5;--dsp-shadow:0 3px 12px rgba(120,90,50,.08);--dsp-brand:#c98a5b;--dsp-brand-soft:#f4e7d6;--dsp-rl:20px;--dsp-rm:15px;--dsp-rs:11px;--dsp-gap:16px;}
+.dash-layout[data-dashstyle="cozy"] .dash-bg{background-color:#f3ebdd;}
 .dash-side-backdrop{position:fixed;inset:0;background:rgba(16,24,40,.32);opacity:0;pointer-events:none;transition:opacity .18s ease;z-index:60;}
 .dash-side-backdrop.open{opacity:1;pointer-events:auto;}
 .dash-side{position:fixed;top:0;right:0;bottom:0;width:min(380px,92vw);background:var(--surface);border-left:1px solid var(--border);box-shadow:-12px 0 32px rgba(16,24,40,.16);
