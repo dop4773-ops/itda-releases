@@ -35,6 +35,7 @@ const registerWidgetControlsIpc = require('./widgetControls.ipc');
 const registerItemWidgetIpc = require('./itemWidget.ipc');
 const registerAppIpc = require('./app.ipc');
 const registerMemoAttachmentsIpc = require('./memoAttachments.ipc');
+const registerDashboardImagesIpc = require('./dashboardImages.ipc');
 const registerAuthIpc = require('./auth.ipc');
 const { initTrashCleanup } = require('../trash-cleanup');
 
@@ -45,6 +46,7 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   const { closeItemWidgetIfOpen } = registerItemWidgetIpc(ipcMain, repos);
   registerAppIpc(ipcMain, getMainWindow);
   registerMemoAttachmentsIpc(ipcMain, repos);
+  registerDashboardImagesIpc(ipcMain);
   registerAuthIpc(ipcMain, repos);
 
   const { deleteLinksFor } = registerLinksIpc(ipcMain, repos);

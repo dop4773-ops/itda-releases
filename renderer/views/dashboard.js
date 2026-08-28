@@ -770,6 +770,13 @@ export async function mount(root) {
 
   const widgetGrid = await initWidgetGrid();
 
+  // 블록 안에서(메모지 등) config가 바뀌면 저장
+  let blockCfgSaveTimer = null;
+  $('d-widgetGrid').addEventListener('block-config-change', () => {
+    clearTimeout(blockCfgSaveTimer);
+    blockCfgSaveTimer = setTimeout(persistBlocks, 300);
+  });
+
   function wireBlockTools(el, block) {
     el.querySelector('[data-act="config"]').addEventListener('click', (e) => {
       e.stopPropagation();
@@ -777,6 +784,7 @@ export async function mount(root) {
         block.config = newCfg;
         paintBlock(el, block);
         persistBlocks();
+        restartBlockTick();
       });
     });
     el.querySelector('[data-act="duplicate"]').addEventListener('click', (e) => {
@@ -818,6 +826,10 @@ export async function mount(root) {
   }
   function removeBlock(block) {
     closeBlockConfig();
+    // 저장해둔 사진 파일도 같이 정리
+    if (block.type === 'image' && block.config?.imageFile) {
+      window.itda.dashboardImages?.delete(block.config.imageFile).catch(() => {});
+    }
     const el = blockEls.get(block.id);
     const i = blocks.indexOf(block);
     if (i >= 0) blocks.splice(i, 1);
@@ -827,7 +839,8 @@ export async function mount(root) {
     restartBlockTick();
   }
 
-  // 시계/날짜 블록만 1초마다 갱신 — 그런 블록이 없으면 타이머 자체를 안 돈다.
+  // 실시간 갱신이 필요한 블록(시계/날짜/날씨/스톱워치)이 있을 때만 1초 타이머를 돈다.
+  const TICKING_TYPES = ['clock', 'dateCard', 'flipCalendar', 'weather', 'miniTool'];
   let blockTickTimer = null;
   function tickAllBlocks() {
     blocks.forEach((b) => {
@@ -838,7 +851,7 @@ export async function mount(root) {
   function restartBlockTick() {
     clearInterval(blockTickTimer);
     blockTickTimer = null;
-    if (blocks.some((b) => b.type === 'clock' || b.type === 'dateCard' || b.type === 'flipCalendar')) {
+    if (blocks.some((b) => TICKING_TYPES.includes(b.type))) {
       tickAllBlocks();
       blockTickTimer = setInterval(tickAllBlocks, 1000);
     }

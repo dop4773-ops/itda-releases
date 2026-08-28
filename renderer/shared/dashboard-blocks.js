@@ -51,7 +51,31 @@ export const BLOCK_TYPES = {
     label: '사진',
     icon: '🖼',
     defaultSize: { w: 3, h: 3 },
-    defaultConfig: { dataUrl: '', fit: 'cover', frame: 'polaroid', caption: '' },
+    defaultConfig: { imageFile: '', dataUrl: '', fit: 'cover', frame: 'polaroid', caption: '' },
+  },
+  sticker: {
+    label: '스티커',
+    icon: '🌟',
+    defaultSize: { w: 2, h: 2 },
+    defaultConfig: { emoji: '⭐', text: '', color: '#ffe08a', tilt: true },
+  },
+  quote: {
+    label: '인용문',
+    icon: '❝',
+    defaultSize: { w: 4, h: 2 },
+    defaultConfig: { text: '오늘의 최선을 다하면 내일의 내가 달라집니다.', author: '', theme: 'paper' },
+  },
+  weather: {
+    label: '날씨',
+    icon: '⛅',
+    defaultSize: { w: 3, h: 2 },
+    defaultConfig: { city: '서울' },
+  },
+  miniTool: {
+    label: '미니 도구',
+    icon: '🧮',
+    defaultSize: { w: 3, h: 3 },
+    defaultConfig: { tool: 'calc', notes: '' },
   },
 };
 
@@ -82,13 +106,49 @@ export function renderBlockElement(block) {
   return el;
 }
 
+const BARE_TYPES = ['clock', 'image', 'text', 'sticker', 'quote'];
+
 export function paintBlock(el, block) {
   const body = el.querySelector('.dash-block-body');
   const cfg = block.config || {};
   const painter = PAINTERS[block.type];
   body.innerHTML = painter ? painter(cfg) : `<div class="dash-block-empty">알 수 없는 블록</div>`;
-  el.dataset.bare = block.type === 'clock' || block.type === 'image' || block.type === 'text' ? '1' : '';
+  el.dataset.bare = BARE_TYPES.includes(block.type) ? '1' : '';
+  hydrateBlock(el, block);
   tickBlock(el, block);
+}
+
+// 렌더 후 비동기로 채워야 하는 것들: 저장된 사진 파일 로드, 링크 favicon, 미니 도구 배선.
+function hydrateBlock(el, block) {
+  const cfg = block.config || {};
+
+  if (block.type === 'image' && cfg.imageFile && !cfg.dataUrl && window.itda?.dashboardImages) {
+    const img = el.querySelector('img[data-img-file]');
+    if (img) {
+      window.itda.dashboardImages
+        .get(cfg.imageFile)
+        .then((url) => {
+          if (url) img.src = url;
+        })
+        .catch(() => {});
+    }
+  }
+
+  if (block.type === 'link') {
+    el.querySelectorAll('img[data-fav]').forEach((img) => {
+      const fallback = img.previousElementSibling;
+      img.addEventListener('load', () => {
+        img.style.display = '';
+        if (fallback) fallback.style.display = 'none';
+      });
+      img.addEventListener('error', () => img.remove());
+      img.src = `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(img.dataset.fav)}`;
+    });
+  }
+
+  if (block.type === 'weather') refreshWeather(el, block, false);
+
+  if (block.type === 'miniTool') wireMiniTool(el, block);
 }
 
 const digitCard = () => `<span class="flip-card"><span class="fc-top"><b>0</b></span><span class="fc-bot"><b>0</b></span></span>`;
@@ -122,6 +182,9 @@ const PAINTERS = {
     }
     if (c.style === 'digital') {
       return `<div class="clk clk-digital" data-theme="${theme}"><span class="clk-dig-time">00:00</span></div>`;
+    }
+    if (c.style === 'led') {
+      return `<div class="clk clk-led"><span class="clk-led-ghost">88:88</span><span class="clk-led-time">00:00</span></div>`;
     }
     // flip (split-flap)
     return `<div class="clk clk-flip" data-theme="${theme}"><div class="flip-frame">
@@ -159,14 +222,26 @@ const PAINTERS = {
   link(c) {
     const layout = c.layout === 'grid' ? 'grid' : 'list';
     const items = Array.isArray(c.items) ? c.items : [];
+    const iconCell = (it) => {
+      // 아이콘을 안 넣었고 http(s) 주소면 사이트 favicon 자동 표시(로드 실패하면 기본 아이콘).
+      const isWeb = /^https?:\/\//i.test(it.url || '');
+      if (!it.icon && isWeb) {
+        try {
+          const host = new URL(it.url).hostname;
+          return `<span class="lb-ico">🔗</span><img class="lb-fav" data-fav="${escapeHtml(host)}" alt="" style="display:none" />`;
+        } catch (e) {
+          /* 잘못된 URL */
+        }
+      }
+      return `<span class="lb-ico">${escapeHtml(it.icon || '🔗')}</span>`;
+    };
     const rows = items
       .map((it) => {
         const href = escapeHtml(it.url || '#');
-        const icon = escapeHtml(it.icon || '🔗');
         const label = escapeHtml(it.label || it.url || '링크');
         return layout === 'grid'
-          ? `<a class="link-tile" href="${href}" target="_blank" rel="noopener"><span class="lt-icon">${icon}</span><span class="lt-label">${label}</span></a>`
-          : `<a class="link-block-row" href="${href}" target="_blank" rel="noopener"><span class="link-block-icon">${icon}</span><span class="link-block-label">${label}</span></a>`;
+          ? `<a class="link-tile" href="${href}" target="_blank" rel="noopener"><span class="lt-icon">${iconCell(it)}</span><span class="lt-label">${label}</span></a>`
+          : `<a class="link-block-row" href="${href}" target="_blank" rel="noopener"><span class="link-block-icon">${iconCell(it)}</span><span class="link-block-label">${label}</span></a>`;
       })
       .join('');
     return `<div class="link-block lb-${layout}">
@@ -176,13 +251,54 @@ const PAINTERS = {
   },
   image(c) {
     const frame = escapeHtml(c.frame || 'polaroid');
-    if (!c.dataUrl) {
-      return `<figure class="image-block ib-${frame}"><div class="ib-photo image-block-empty">설정(⚙)에서 사진을 선택하세요</div></figure>`;
-    }
+    const fitCss = c.fit === 'contain' ? 'contain' : 'cover';
+    let photo;
+    if (c.dataUrl) photo = `<img src="${c.dataUrl}" alt="" style="object-fit:${fitCss}" />`;
+    else if (c.imageFile) photo = `<img data-img-file="${escapeHtml(c.imageFile)}" alt="" style="object-fit:${fitCss}" />`;
+    else photo = `<div class="image-block-empty">설정(⚙)에서 사진을 선택하세요</div>`;
     return `<figure class="image-block ib-${frame}">
-      <div class="ib-photo"><img src="${c.dataUrl}" alt="" style="object-fit:${c.fit === 'contain' ? 'contain' : 'cover'}" /></div>
+      <div class="ib-photo">${photo}</div>
       ${c.caption ? `<figcaption>${escapeHtml(c.caption)}</figcaption>` : ''}
     </figure>`;
+  },
+  sticker(c) {
+    return `<div class="sticker-block ${c.tilt ? 'is-tilt' : ''}" style="--stk:${escapeHtml(c.color || '#ffe08a')}">
+      <span class="stk-emoji">${escapeHtml(c.emoji || '⭐')}</span>
+      ${c.text ? `<span class="stk-text">${escapeHtml(c.text)}</span>` : ''}
+    </div>`;
+  },
+  quote(c) {
+    return `<div class="quote-block" data-theme="${escapeHtml(c.theme || 'paper')}">
+      <span class="qb-mark">&ldquo;</span>
+      <p class="qb-text">${escapeHtml(c.text || '').replace(/\n/g, '<br>') || '문구를 입력하세요'}</p>
+      ${c.author ? `<span class="qb-author">— ${escapeHtml(c.author)}</span>` : ''}
+    </div>`;
+  },
+  weather(c) {
+    return `<div class="weather-block">
+      <div class="wx-loading">날씨 불러오는 중…</div>
+      <div class="wx-main" style="display:none">
+        <span class="wx-icon"></span>
+        <div class="wx-info"><span class="wx-temp"></span><span class="wx-desc"></span><span class="wx-city">${escapeHtml(c.city || '')}</span></div>
+      </div>
+    </div>`;
+  },
+  miniTool(c) {
+    if (c.tool === 'notepad') {
+      return `<div class="minitool mt-notepad"><textarea class="mt-notes" placeholder="메모…">${escapeHtml(c.notes || '')}</textarea></div>`;
+    }
+    if (c.tool === 'timer') {
+      return `<div class="minitool mt-timer">
+        <span class="mt-time">00:00</span>
+        <div class="mt-btns"><button data-t="start">시작</button><button data-t="stop">정지</button><button data-t="reset">리셋</button></div>
+      </div>`;
+    }
+    // calc
+    const keys = ['7', '8', '9', '/', '4', '5', '6', '*', '1', '2', '3', '-', '0', '.', '=', '+', 'C'];
+    return `<div class="minitool mt-calc">
+      <input class="mt-display" value="0" readonly />
+      <div class="mt-pad">${keys.map((k) => `<button data-k="${k}" ${k === 'C' ? 'class="mt-wide"' : ''}>${k}</button>`).join('')}</div>
+    </div>`;
   },
 };
 
@@ -211,13 +327,15 @@ export function tickBlock(el, block) {
       hand('.an-sec', 33, s * 6, 8);
       return;
     }
-    if (cfg.style === 'digital') {
-      const t = el.querySelector('.clk-dig-time');
+    if (cfg.style === 'digital' || cfg.style === 'led') {
+      const t = el.querySelector('.clk-dig-time, .clk-led-time');
       if (t) {
         t.textContent = cfg.showSeconds
           ? `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
           : `${pad(now.getHours())}:${pad(now.getMinutes())}`;
       }
+      const ghost = el.querySelector('.clk-led-ghost');
+      if (ghost) ghost.textContent = cfg.showSeconds ? '88:88:88' : '88:88';
       return;
     }
     // flip
@@ -258,7 +376,139 @@ export function tickBlock(el, block) {
     set('.fcal-mon', MON_EN[now.getMonth()]);
     set('.fcal-day', now.getDate());
     set('.fcal-wd', `${WD[now.getDay()]}요일`);
+    return;
   }
+
+  if (block.type === 'weather') {
+    if (Date.now() >= (el._wxNext || 0)) refreshWeather(el, block, false);
+    return;
+  }
+
+  if (block.type === 'miniTool' && cfg.tool === 'timer' && el._timer) {
+    const t = el.querySelector('.mt-time');
+    if (t) {
+      const ms = el._timer.elapsed + (el._timer.running ? Date.now() - el._timer.start : 0);
+      const s = Math.floor(ms / 1000);
+      t.textContent = `${pad(Math.floor(s / 60))}:${pad(s % 60)}`;
+    }
+  }
+}
+
+// ────────────────────────────── 날씨 (open-meteo, 키 불필요) ──────────────────────────────
+const WMO = {
+  0: ['☀️', '맑음'], 1: ['🌤️', '대체로 맑음'], 2: ['⛅', '구름 조금'], 3: ['☁️', '흐림'],
+  45: ['🌫️', '안개'], 48: ['🌫️', '안개'],
+  51: ['🌦️', '이슬비'], 53: ['🌦️', '이슬비'], 55: ['🌧️', '강한 이슬비'],
+  61: ['🌧️', '비'], 63: ['🌧️', '비'], 65: ['🌧️', '강한 비'],
+  71: ['🌨️', '눈'], 73: ['🌨️', '눈'], 75: ['❄️', '강한 눈'], 77: ['🌨️', '싸락눈'],
+  80: ['🌦️', '소나기'], 81: ['🌧️', '소나기'], 82: ['⛈️', '강한 소나기'],
+  85: ['🌨️', '눈 소나기'], 86: ['❄️', '눈 소나기'],
+  95: ['⛈️', '뇌우'], 96: ['⛈️', '뇌우·우박'], 99: ['⛈️', '강한 뇌우'],
+};
+async function refreshWeather(el, block, force) {
+  const now = Date.now();
+  if (!force && now < (el._wxNext || 0)) return;
+  el._wxNext = now + 30 * 60 * 1000;
+  const city = (block.config?.city || '서울').trim();
+  const loading = el.querySelector('.wx-loading');
+  const main = el.querySelector('.wx-main');
+  try {
+    const geo = await fetch(
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=ko&format=json`
+    ).then((r) => r.json());
+    const place = geo?.results?.[0];
+    if (!place) throw new Error('city not found');
+    const wx = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code`
+    ).then((r) => r.json());
+    const cur = wx?.current;
+    if (!cur) throw new Error('no data');
+    const [icon, desc] = WMO[cur.weather_code] || ['🌡️', ''];
+    if (el.querySelector('.wx-icon')) el.querySelector('.wx-icon').textContent = icon;
+    if (el.querySelector('.wx-temp')) el.querySelector('.wx-temp').textContent = `${Math.round(cur.temperature_2m)}°`;
+    if (el.querySelector('.wx-desc')) el.querySelector('.wx-desc').textContent = desc;
+    if (el.querySelector('.wx-city')) el.querySelector('.wx-city').textContent = place.name || city;
+    if (loading) loading.style.display = 'none';
+    if (main) main.style.display = '';
+  } catch (e) {
+    if (loading) {
+      loading.style.display = '';
+      loading.textContent = '날씨를 불러올 수 없어요';
+    }
+    if (main) main.style.display = 'none';
+    el._wxNext = now + 5 * 60 * 1000; // 실패 시 5분 뒤 재시도
+  }
+}
+
+// ────────────────────────────── 미니 도구 배선 ──────────────────────────────
+function wireMiniTool(el, block) {
+  const tool = block.config?.tool || 'calc';
+
+  if (tool === 'notepad') {
+    const ta = el.querySelector('.mt-notes');
+    if (!ta) return;
+    let t = null;
+    ta.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        block.config.notes = ta.value;
+        el.dispatchEvent(new CustomEvent('block-config-change', { bubbles: true }));
+      }, 400);
+    });
+    return;
+  }
+
+  if (tool === 'timer') {
+    if (!el._timer) el._timer = { running: false, start: 0, elapsed: 0 };
+    el.querySelectorAll('.mt-btns button').forEach((b) => {
+      b.addEventListener('click', () => {
+        const st = el._timer;
+        if (b.dataset.t === 'start' && !st.running) {
+          st.running = true;
+          st.start = Date.now();
+        } else if (b.dataset.t === 'stop' && st.running) {
+          st.elapsed += Date.now() - st.start;
+          st.running = false;
+        } else if (b.dataset.t === 'reset') {
+          st.running = false;
+          st.elapsed = 0;
+        }
+        tickBlock(el, block);
+      });
+    });
+    return;
+  }
+
+  // calc
+  const disp = el.querySelector('.mt-display');
+  if (!disp) return;
+  let expr = '';
+  const safe = /^[0-9+\-*/.() ]*$/;
+  el.querySelectorAll('.mt-pad button').forEach((b) => {
+    b.addEventListener('click', () => {
+      const k = b.dataset.k;
+      if (k === 'C') {
+        expr = '';
+        disp.value = '0';
+        return;
+      }
+      if (k === '=') {
+        try {
+          if (!safe.test(expr) || !expr) throw new Error('bad');
+          // eslint-disable-next-line no-new-func
+          const r = Function('"use strict";return (' + expr + ')')();
+          disp.value = String(r);
+          expr = String(r);
+        } catch (e) {
+          disp.value = '오류';
+          expr = '';
+        }
+        return;
+      }
+      expr += k;
+      disp.value = expr;
+    });
+  });
 }
 
 // ────────────────────────────── 설정 팝오버 ──────────────────────────────
@@ -302,7 +552,17 @@ export function openBlockConfig(anchorEl, block, onChange) {
       const f = fileInput.files?.[0];
       if (!f) return;
       try {
-        cfg.dataUrl = await readImageDownscaled(f, 1400);
+        const dataUrl = await readImageDownscaled(f, 1400);
+        const oldFile = cfg.imageFile;
+        if (window.itda?.dashboardImages?.save) {
+          // 축소본을 userData/dashboard-images/ 파일로 저장하고 설정엔 파일명만 둔다(설정 JSON 비대화 방지).
+          const res = await window.itda.dashboardImages.save({ dataUrl });
+          cfg.imageFile = res?.name || '';
+          cfg.dataUrl = '';
+          if (oldFile && oldFile !== cfg.imageFile) window.itda.dashboardImages.delete(oldFile).catch(() => {});
+        } else {
+          cfg.dataUrl = dataUrl; // 구버전 폴백
+        }
         emit();
       } catch (err) {
         console.error('[itda] 이미지 로드 실패:', err);
@@ -356,7 +616,7 @@ const sel = (label, key, opts, cur) => `
 
 const FIELDS = {
   clock: (c) => `
-    ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털']], c.style || 'flip')}
+    ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털'], ['led', 'LED']], c.style || 'flip')}
     ${sel('테마', 'theme', [['wood', '우드'], ['classic', '클래식'], ['brass', '브라스'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'wood')}
     <label class="cfg-row"><input type="checkbox" data-cfg="showSeconds" ${c.showSeconds ? 'checked' : ''}/> 초 표시</label>`,
   dateCard: (c) => sel('테마', 'theme', [['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'paper'),
@@ -378,6 +638,19 @@ const FIELDS = {
     ${sel('액자', 'frame', [['polaroid', '폴라로이드'], ['tape', '테이프'], ['rounded', '둥근 모서리'], ['plain', '없음']], c.frame || 'polaroid')}
     ${sel('채우기', 'fit', [['cover', '꽉 채우기(잘림)'], ['contain', '비율 유지(여백)']], c.fit || 'cover')}
     <label class="cfg-row">캡션<input class="input" data-cfg="caption" value="${escapeHtml(c.caption || '')}" placeholder="사진 아래 문구(선택)" /></label>`,
+  sticker: (c) => `
+    <label class="cfg-row">이모지<input class="input" data-cfg="emoji" value="${escapeHtml(c.emoji || '⭐')}" placeholder="⭐" /></label>
+    <label class="cfg-row">문구<input class="input" data-cfg="text" value="${escapeHtml(c.text || '')}" placeholder="짧은 문구(선택)" /></label>
+    <label class="cfg-row">색상<input type="color" data-cfg="color" value="${c.color || '#ffe08a'}" /></label>
+    <label class="cfg-row"><input type="checkbox" data-cfg="tilt" ${c.tilt ? 'checked' : ''}/> 살짝 기울이기</label>`,
+  quote: (c) => `
+    <label class="cfg-row">문구<textarea class="input" data-cfg="text" rows="3">${escapeHtml(c.text || '')}</textarea></label>
+    <label class="cfg-row">출처<input class="input" data-cfg="author" value="${escapeHtml(c.author || '')}" placeholder="예: 잇다 팀 (선택)" /></label>
+    ${sel('테마', 'theme', [['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
+  weather: (c) => `
+    <label class="cfg-row">도시<input class="input" data-cfg="city" value="${escapeHtml(c.city || '서울')}" placeholder="예: 서울, Busan, Tokyo" /></label>
+    <p class="cfg-note">open-meteo에서 30분마다 자동으로 갱신해요. 인터넷 연결이 필요합니다.</p>`,
+  miniTool: (c) => sel('도구', 'tool', [['calc', '계산기'], ['notepad', '메모지'], ['timer', '스톱워치']], c.tool || 'calc'),
 };
 
 // 파일 → maxPx 이하 JPEG dataURL. config/설정에 통째로 저장.

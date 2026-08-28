@@ -172,6 +172,11 @@ contextBridge.exposeInMainWorld('itda', {
     get: (key) => ipcRenderer.invoke('settings:get', key),
     set: (payload) => ipcRenderer.invoke('settings:set', payload),
   },
+  dashboardImages: {
+    save: (payload) => ipcRenderer.invoke('dashboardImages:save', payload),
+    get: (name) => ipcRenderer.invoke('dashboardImages:get', name),
+    delete: (name) => ipcRenderer.invoke('dashboardImages:delete', name),
+  },
   shortcuts: {
     reregisterGlobal: () => ipcRenderer.invoke('shortcuts:reregisterGlobal'),
     getGlobalStatus: () => ipcRenderer.invoke('shortcuts:getGlobalStatus'),
