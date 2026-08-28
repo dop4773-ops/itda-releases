@@ -885,7 +885,11 @@ export async function mount(root) {
         }
       });
       $('sec-disableBtn').addEventListener('click', async () => {
-        const pw = prompt('잠금을 끄려면 현재 비밀번호를 입력해주세요');
+        const pw = await promptText($('sec-disableBtn'), {
+          title: '잠금을 끄려면 현재 비밀번호를 입력해주세요',
+          placeholder: '비밀번호',
+          password: true,
+        });
         if (pw === null) return;
         try {
           await window.itda.auth.disable({ currentPassword: pw });
