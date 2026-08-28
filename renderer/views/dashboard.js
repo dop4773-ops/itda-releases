@@ -152,7 +152,7 @@ export async function mount(root) {
             <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
             <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
             <label class="dash-edit-opacity" title="모든 위젯 배경 투명도">배경 투명도
-              <input type="range" id="d-opacityRange" min="30" max="100" step="5" value="100" />
+              <input type="range" id="d-opacityRange" min="0" max="100" step="5" value="100" />
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-arrangeBtn" title="위젯 자동 정렬">🧹 자동 정리 ▾</button>
@@ -981,42 +981,73 @@ export async function mount(root) {
       });
     });
 
-    // 꾸미기 탭 — 종류가 많아져 카테고리로 묶고 검색창을 붙인다.
+    // 꾸미기 탭 — 카테고리 + 검색으로 종류를 고르면, 바로 추가하지 않고 미리보기를 보여주고
+    // "이 위젯 추가" 버튼을 누를 때 추가한다(요청: 종류를 고르고 추가).
     const decoBody = $('d-addBodyDeco');
     const decoGroups = BLOCK_CATEGORIES.map((cat) => ({
       cat,
       items: Object.entries(BLOCK_TYPES).filter(([type]) => blockCategory(type) === cat.id),
     })).filter((g) => g.items.length);
-    decoBody.innerHTML = `
-      <input type="search" class="input dash-add-search" id="d-decoSearch" placeholder="꾸미기 검색…" autocomplete="off" />
-      <div class="dash-add-groups">
-        ${decoGroups
-          .map(
-            (g) => `<div class="dash-add-group">
-              <div class="dash-add-group-label">${escapeHtml(g.cat.label)}</div>
-              ${g.items
-                .map(
-                  ([type, def]) =>
-                    `<button class="dash-add-item" data-blocktype="${type}" data-name="${escapeHtml(def.label)}"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</button>`
-                )
-                .join('')}
-            </div>`
-          )
-          .join('')}
-      </div>`;
-    decoBody.querySelectorAll('[data-blocktype]').forEach((b) => b.addEventListener('click', () => addBlock(b.dataset.blocktype)));
-    $('d-decoSearch').addEventListener('input', (e) => {
-      const q = e.target.value.trim().toLowerCase();
-      decoBody.querySelectorAll('.dash-add-group').forEach((grp) => {
-        let any = false;
-        grp.querySelectorAll('[data-blocktype]').forEach((btn) => {
-          const hit = !q || btn.dataset.name.toLowerCase().includes(q) || btn.dataset.blocktype.toLowerCase().includes(q);
-          btn.style.display = hit ? '' : 'none';
-          if (hit) any = true;
+
+    function renderDecoList() {
+      decoBody.innerHTML = `
+        <input type="search" class="input dash-add-search" id="d-decoSearch" placeholder="꾸미기 검색…" autocomplete="off" />
+        <div class="dash-add-groups">
+          ${decoGroups
+            .map(
+              (g) => `<div class="dash-add-group">
+                <div class="dash-add-group-label">${escapeHtml(g.cat.label)}</div>
+                ${g.items
+                  .map(
+                    ([type, def]) =>
+                      `<button class="dash-add-item" data-blocktype="${type}" data-name="${escapeHtml(def.label)}"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}<span class="dash-add-item-go">›</span></button>`
+                  )
+                  .join('')}
+              </div>`
+            )
+            .join('')}
+        </div>`;
+      decoBody.querySelectorAll('[data-blocktype]').forEach((b) => b.addEventListener('click', () => renderDecoDetail(b.dataset.blocktype)));
+      $('d-decoSearch').addEventListener('input', (e) => {
+        const q = e.target.value.trim().toLowerCase();
+        decoBody.querySelectorAll('.dash-add-group').forEach((grp) => {
+          let any = false;
+          grp.querySelectorAll('[data-blocktype]').forEach((btn) => {
+            const hit = !q || btn.dataset.name.toLowerCase().includes(q) || btn.dataset.blocktype.toLowerCase().includes(q);
+            btn.style.display = hit ? '' : 'none';
+            if (hit) any = true;
+          });
+          grp.style.display = any ? '' : 'none';
         });
-        grp.style.display = any ? '' : 'none';
       });
-    });
+    }
+
+    function renderDecoDetail(type) {
+      const def = BLOCK_TYPES[type];
+      if (!def) return renderDecoList();
+      decoBody.innerHTML = `
+        <button class="dash-add-back" id="d-decoBack">‹ 목록으로</button>
+        <div class="dash-add-preview" id="d-decoPreview"></div>
+        <div class="dash-add-detail-name"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</div>
+        <p class="dash-add-foot" style="margin:0;">추가한 뒤 위젯의 ⚙ 아이콘에서 스타일·내용을 바꿀 수 있어요.</p>
+        <button class="btn" id="d-decoAdd" style="width:100%;">＋ 이 위젯 추가</button>`;
+      const previewBlock = { id: 'preview-' + type, type, config: JSON.parse(JSON.stringify(def.defaultConfig || {})) };
+      const el = renderBlockElement(previewBlock);
+      el.classList.add('dash-add-preview-block');
+      $('d-decoPreview').appendChild(el);
+      try {
+        tickBlock(el, previewBlock);
+      } catch (e) {
+        /* 미리보기 tick 실패는 무시 */
+      }
+      $('d-decoBack').addEventListener('click', renderDecoList);
+      $('d-decoAdd').addEventListener('click', () => {
+        addBlock(type);
+        renderDecoList();
+      });
+    }
+
+    renderDecoList();
 
     // 업무 탭 — 카드 on/off (설정 화면의 dashboard_cards와 같은 값을 씀)
     (async () => {
@@ -1155,6 +1186,15 @@ export async function mount(root) {
     }
     const applyGlobalOp = () => grid.style.setProperty('--dash-op', globalOp / 100);
     applyGlobalOp();
+
+    // 위젯 헤더 스타일(설정 > 대시보드) — 업무 카드 제목 표시 방식. CSS가 나머지를 처리.
+    try {
+      const hs = (await window.itda.settings.get('dashboard_header_style')) || 'standard';
+      if (['minimal', 'accent', 'label', 'floating', 'hidden'].includes(hs)) grid.dataset.headerstyle = hs;
+      else delete grid.dataset.headerstyle;
+    } catch (e) {
+      /* standard */
+    }
     $('d-opacityRange').value = globalOp;
     $('d-opacityRange').addEventListener('input', (e) => {
       globalOp = Number(e.target.value);
@@ -1202,7 +1242,7 @@ export async function mount(root) {
           ${CARD_THEMES.map((t) => `<button class="dcm-swatch ${(s.theme || '') === t.id ? 'active' : ''}" data-theme="${t.id}" title="${t.label}" style="background:${t.sw}"></button>`).join('')}
         </div>
         <div class="dcm-label">배경 투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
-        <input type="range" class="dcm-op" min="30" max="100" step="5" value="${s.opacity ?? 100}" />
+        <input type="range" class="dcm-op" min="0" max="100" step="5" value="${s.opacity ?? 100}" />
         ${isBlock ? '' : `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`}`;
       document.body.appendChild(menu);
       cardMenu = menu;

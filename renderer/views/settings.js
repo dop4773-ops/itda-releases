@@ -188,6 +188,12 @@ export async function mount(root) {
 
         <div class="settings-panel" data-panel="dashboard">
           <div class="panel">
+            <div class="panel-head"><h3>위젯 헤더 스타일</h3></div>
+            <p class="settings-panel-desc">대시보드 업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 하나만 바꿔도 대시보드 분위기가 크게 달라져요.</p>
+            <div class="seg" id="dash-headerStyleSeg"></div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>카드 구성</h3></div>
             <p class="settings-panel-desc">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 직접 바꿀 수 있어요.</p>
             <div id="dashboard-cardList"></div>
@@ -1230,6 +1236,12 @@ export async function mount(root) {
 
   // ================= 대시보드 구성 =================
   async function initDashboardCardsPanel() {
+    // 위젯 헤더 스타일 — 대시보드가 열릴 때 #d-widgetGrid[data-headerstyle]로 적용된다.
+    const hsCur = (await window.itda.settings.get('dashboard_header_style')) || 'standard';
+    segRow('dash-headerStyleSeg', ['standard', 'minimal', 'accent', 'label', 'floating', 'hidden'].includes(hsCur) ? hsCur : 'standard',
+      [['standard', '기본'], ['minimal', '미니멀'], ['accent', '악센트'], ['label', '라벨'], ['floating', '플로팅'], ['hidden', '숨김']],
+      (v) => window.itda.settings.set({ key: 'dashboard_header_style', value: v }));
+
     const listEl = $('dashboard-cardList');
     const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
     let config = defaults;
