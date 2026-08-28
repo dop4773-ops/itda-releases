@@ -9,6 +9,15 @@ import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import {
+  BLOCK_TYPES,
+  makeBlockId,
+  renderBlockElement,
+  paintBlock,
+  tickBlock,
+  openBlockConfig,
+  closeBlockConfig,
+} from '../shared/dashboard-blocks.js';
 
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
@@ -35,6 +44,7 @@ const WIDGET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none"
 const LINK_ROW_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07l1.5-1.5"/></svg>`;
 const GRIP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6"/><circle cx="16" cy="6" r="1.6"/><circle cx="8" cy="12" r="1.6"/><circle cx="16" cy="12" r="1.6"/><circle cx="8" cy="18" r="1.6"/><circle cx="16" cy="18" r="1.6"/></svg>`;
 const EDIT_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>`;
+const PLUS_MINI_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
 const RESET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.7 3L3 9"/><path d="M3 4v5h5"/></svg>`;
 
 const TYPE_META = {
@@ -88,6 +98,7 @@ export async function mount(root) {
             </div>
             <span class="dash-time" id="d-timeNow"></span>
             ${widgetLaunchButtonHtml('d-ddayWidgetBtn', 'D-DAY 위젯 열기')}
+            <button class="btn-icon" id="d-addWidgetBtn" title="위젯 추가 (W)">${PLUS_MINI_ICON}</button>
             <button class="btn-icon" id="d-layoutEditBtn" title="레이아웃 편집 (E)">${EDIT_ICON}</button>
             <button class="btn-icon" id="d-sideToggle" title="사이드 패널 열기 (S)">${CHEVRON_LEFT}</button>
             <button class="btn" id="d-newBtn">+ 새로 만들기</button>
@@ -210,6 +221,21 @@ export async function mount(root) {
           <div class="panel-head"><h3>포스트잇</h3><a class="btn-icon" href="#/postit">+ 새 포스트잇</a></div>
           <div class="side-postit-grid" id="d-postitGrid"></div>
         </div>
+      </aside>
+
+      <div class="dash-add-backdrop" id="d-addBackdrop"></div>
+      <aside class="dash-add-panel" id="d-addPanel">
+        <div class="dash-add-head">
+          <b>위젯 추가</b>
+          <button class="btn-icon" id="d-addClose" title="닫기">✕</button>
+        </div>
+        <div class="tabs dash-add-tabs">
+          <button class="tab active" data-addtab="work">업무</button>
+          <button class="tab" data-addtab="deco">꾸미기</button>
+        </div>
+        <div class="dash-add-body" id="d-addBodyWork"></div>
+        <div class="dash-add-body" id="d-addBodyDeco" style="display:none;"></div>
+        <p class="dash-add-foot">추가한 위젯은 편집 모드에서 드래그해 옮기고 크기를 바꿀 수 있어요.</p>
       </aside>
     </div>
   `;
@@ -405,14 +431,16 @@ export async function mount(root) {
       return { sx: colW + gap, sy: rowH + gap };
     }
 
-    // 이동 — 그립을 끌면 놓일 칸을 고스트로 표시.
-    grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
-      grip.addEventListener('mousedown', (e) => {
+    // 한 위젯(업무 카드든 꾸미기 블록이든)에 그립 이동 + 우하단 리사이즈 핸들을 건다.
+    // 런타임에 새로 추가되는 블록에도 그대로 다시 불러 쓸 수 있게 함수로 뺐다.
+    function wireWidget(widget) {
+      const grip = widget.querySelector('.dash-widget-grip');
+      const cardId = widget.dataset.card;
+      grip?.addEventListener('mousedown', (e) => {
         if (!editing) return;
         e.preventDefault();
-        const widget = grip.closest('.dash-widget');
-        const cardId = widget.dataset.card;
         const p = positions[cardId];
+        if (!p) return;
         const startX = e.clientX;
         const startY = e.clientY;
         const start = { ...p };
@@ -424,10 +452,7 @@ export async function mount(root) {
           (ev) => {
             const dCol = Math.round((ev.clientX - startX) / sx);
             const dRow = Math.round((ev.clientY - startY) / sy);
-            target = {
-              x: clamp(start.x + dCol, 0, GRID_COLS - p.w),
-              y: Math.max(0, start.y + dRow),
-            };
+            target = { x: clamp(start.x + dCol, 0, GRID_COLS - p.w), y: Math.max(0, start.y + dRow) };
             showGhost(target.x, target.y, p.w, p.h);
             updateAutoScroll(ev.clientY);
           },
@@ -440,10 +465,7 @@ export async function mount(root) {
           }
         );
       });
-    });
 
-    // 크기조절 — 우하단 핸들을 끌면 놓일 크기를 고스트로 표시(칸 단위 스냅).
-    widgets.forEach((widget) => {
       const handle = document.createElement('span');
       handle.className = 'dash-widget-resize';
       handle.title = '드래그해서 크기 조절';
@@ -452,8 +474,8 @@ export async function mount(root) {
         if (!editing) return;
         e.preventDefault();
         e.stopPropagation();
-        const cardId = widget.dataset.card;
         const p = positions[cardId];
+        if (!p) return;
         const startX = e.clientX;
         const startY = e.clientY;
         const start = { ...p };
@@ -465,10 +487,7 @@ export async function mount(root) {
           (ev) => {
             const dCol = Math.round((ev.clientX - startX) / sx);
             const dRow = Math.round((ev.clientY - startY) / sy);
-            target = {
-              w: clamp(start.w + dCol, 2, GRID_COLS - p.x),
-              h: clamp(start.h + dRow, 1, 30),
-            };
+            target = { w: clamp(start.w + dCol, 2, GRID_COLS - p.x), h: clamp(start.h + dRow, 1, 30) };
             showGhost(p.x, p.y, target.w, target.h);
             updateAutoScroll(ev.clientY);
           },
@@ -481,7 +500,19 @@ export async function mount(root) {
           }
         );
       });
-    });
+    }
+    widgets.forEach(wireWidget);
+
+    // 새 블록을 놓을 빈 자리 — 맨 아래 줄 왼쪽.
+    function placeAtBottom(id, size) {
+      let maxY = 0;
+      widgets.forEach((w) => {
+        if (w.style.display === 'none') return;
+        const p = positions[w.dataset.card];
+        if (p) maxY = Math.max(maxY, p.y + p.h);
+      });
+      positions[id] = { x: 0, y: maxY, w: size?.w || 4, h: size?.h || 2 };
+    }
 
     // --- 편집 모드 토글 + 프리셋 + 복원 ---
     function setEditing(on) {
@@ -517,9 +548,202 @@ export async function mount(root) {
         clearGhost();
         document.body.style.userSelect = '';
       },
+      isEditing: () => editing,
+      setEditing,
+      persist,
+      // 런타임에 추가된 블록 엘리먼트를 그리드에 편입: 위치 잡고 드래그/리사이즈 배선.
+      attach: (el, size) => {
+        widgets.push(el);
+        widgetById.set(el.dataset.card, el);
+        if (!positions[el.dataset.card]) placeAtBottom(el.dataset.card, size);
+        wireWidget(el);
+        applyPosition(el.dataset.card);
+        persist();
+      },
+      detach: (el) => {
+        const id = el.dataset.card;
+        const i = widgets.indexOf(el);
+        if (i >= 0) widgets.splice(i, 1);
+        widgetById.delete(id);
+        delete positions[id];
+        persist();
+        el.remove();
+      },
+      // 꺼져 있던 업무 카드를 다시 켤 때 — 저장된 위치가 없으면 맨 아래에 새로 잡아준다.
+      ensurePosition: (el, size) => {
+        const id = el.dataset.card;
+        if (positions[id]) return;
+        placeAtBottom(id, size);
+        applyPosition(id);
+        persist();
+      },
     };
   }
+
+  // ================= 꾸미기 블록 (시계/사진/텍스트/링크 …) =================
+  // dashboard_blocks = [{id,type,config}]  — 위치/크기는 업무 카드와 똑같이 dashboard_layout에 저장.
+  let blocks = [];
+  const blockEls = new Map(); // id -> DOM 엘리먼트
+  try {
+    const raw = await window.itda.settings.get('dashboard_blocks');
+    const arr = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(arr)) blocks = arr.filter((b) => b && b.id && BLOCK_TYPES[b.type]);
+  } catch (e) {
+    blocks = [];
+  }
+  function persistBlocks() {
+    window.itda.settings
+      .set({ key: 'dashboard_blocks', value: JSON.stringify(blocks.map((b) => ({ id: b.id, type: b.type, config: b.config }))) })
+      .catch(() => {});
+  }
+
+  // initWidgetGrid가 초기 위젯으로 인식하도록 그 호출 전에 블록 DOM을 먼저 그리드에 넣는다.
+  for (const b of blocks) {
+    const el = renderBlockElement(b);
+    $('d-widgetGrid').appendChild(el);
+    blockEls.set(b.id, el);
+  }
+
   const widgetGrid = await initWidgetGrid();
+
+  function wireBlockTools(el, block) {
+    el.querySelector('[data-act="config"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openBlockConfig(el, block, (newCfg) => {
+        block.config = newCfg;
+        paintBlock(el, block);
+        persistBlocks();
+      });
+    });
+    el.querySelector('[data-act="duplicate"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      duplicateBlock(block);
+    });
+    el.querySelector('[data-act="delete"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeBlock(block);
+    });
+  }
+  blocks.forEach((b) => wireBlockTools(blockEls.get(b.id), b));
+
+  function addBlock(type) {
+    const def = BLOCK_TYPES[type];
+    if (!def) return;
+    const block = { id: makeBlockId(), type, config: JSON.parse(JSON.stringify(def.defaultConfig || {})) };
+    blocks.push(block);
+    const el = renderBlockElement(block);
+    $('d-widgetGrid').appendChild(el);
+    blockEls.set(block.id, el);
+    wireBlockTools(el, block);
+    widgetGrid.attach(el, def.defaultSize);
+    persistBlocks();
+    if (!widgetGrid.isEditing()) widgetGrid.setEditing(true);
+    restartBlockTick();
+    toast(`${def.label} 위젯을 추가했어요`);
+  }
+  function duplicateBlock(src) {
+    const block = { id: makeBlockId(), type: src.type, config: JSON.parse(JSON.stringify(src.config || {})) };
+    blocks.push(block);
+    const el = renderBlockElement(block);
+    $('d-widgetGrid').appendChild(el);
+    blockEls.set(block.id, el);
+    wireBlockTools(el, block);
+    widgetGrid.attach(el, BLOCK_TYPES[src.type]?.defaultSize);
+    persistBlocks();
+    restartBlockTick();
+  }
+  function removeBlock(block) {
+    closeBlockConfig();
+    const el = blockEls.get(block.id);
+    const i = blocks.indexOf(block);
+    if (i >= 0) blocks.splice(i, 1);
+    if (el) widgetGrid.detach(el);
+    blockEls.delete(block.id);
+    persistBlocks();
+    restartBlockTick();
+  }
+
+  // 시계/날짜 블록만 1초마다 갱신 — 그런 블록이 없으면 타이머 자체를 안 돈다.
+  let blockTickTimer = null;
+  function tickAllBlocks() {
+    blocks.forEach((b) => {
+      const el = blockEls.get(b.id);
+      if (el) tickBlock(el, b);
+    });
+  }
+  function restartBlockTick() {
+    clearInterval(blockTickTimer);
+    blockTickTimer = null;
+    if (blocks.some((b) => b.type === 'clock' || b.type === 'dateCard' || b.type === 'flipCalendar')) {
+      tickAllBlocks();
+      blockTickTimer = setInterval(tickAllBlocks, 1000);
+    }
+  }
+  restartBlockTick();
+
+  // ---- "위젯 추가" 패널 ----
+  function initAddPanel() {
+    const panel = $('d-addPanel');
+    const backdrop = $('d-addBackdrop');
+    const setOpen = (v) => {
+      panel.classList.toggle('open', v);
+      backdrop.classList.toggle('open', v);
+    };
+    $('d-addWidgetBtn').addEventListener('click', () => {
+      setOpen(true);
+      if (!widgetGrid.isEditing()) widgetGrid.setEditing(true);
+    });
+    $('d-addClose').addEventListener('click', () => setOpen(false));
+    backdrop.addEventListener('click', () => setOpen(false));
+    panel.querySelectorAll('[data-addtab]').forEach((t) => {
+      t.addEventListener('click', () => {
+        panel.querySelectorAll('[data-addtab]').forEach((x) => x.classList.toggle('active', x === t));
+        $('d-addBodyWork').style.display = t.dataset.addtab === 'work' ? '' : 'none';
+        $('d-addBodyDeco').style.display = t.dataset.addtab === 'deco' ? '' : 'none';
+      });
+    });
+
+    // 꾸미기 탭 — 블록 추가 버튼들
+    $('d-addBodyDeco').innerHTML = Object.entries(BLOCK_TYPES)
+      .map(
+        ([type, def]) =>
+          `<button class="dash-add-item" data-blocktype="${type}"><span class="dash-add-item-icon">${def.icon}</span>${escapeHtml(def.label)}</button>`
+      )
+      .join('');
+    $('d-addBodyDeco').querySelectorAll('[data-blocktype]').forEach((b) => b.addEventListener('click', () => addBlock(b.dataset.blocktype)));
+
+    // 업무 탭 — 카드 on/off (설정 화면의 dashboard_cards와 같은 값을 씀)
+    (async () => {
+      const body = $('d-addBodyWork');
+      const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
+      let cfg = { ...defaults };
+      try {
+        const raw = await window.itda.settings.get('dashboard_cards');
+        if (raw) cfg = { ...defaults, ...JSON.parse(raw) };
+      } catch (e) {
+        /* 기본값 */
+      }
+      body.innerHTML = DASHBOARD_CARDS.map(
+        (c) =>
+          `<label class="dash-add-toggle"><span>${escapeHtml(c.label)}</span><input type="checkbox" data-card-toggle="${c.id}" ${cfg[c.id] ? 'checked' : ''} /></label>`
+      ).join('');
+      body.querySelectorAll('[data-card-toggle]').forEach((cb) => {
+        cb.addEventListener('change', async () => {
+          const id = cb.dataset.cardToggle;
+          cfg[id] = cb.checked;
+          await window.itda.settings.set({ key: 'dashboard_cards', value: JSON.stringify(cfg) }).catch(() => {});
+          const el = $(`d-card-${id}`);
+          if (el) el.style.display = cb.checked ? '' : 'none';
+          if (id === 'sideCalendar' || id === 'sidePostit') {
+            $('d-sideToggle').style.display = cfg.sideCalendar || cfg.sidePostit ? '' : 'none';
+          } else if (cb.checked && el) {
+            widgetGrid.ensurePosition(el, { w: 4, h: 2 });
+          }
+        });
+      });
+    })();
+  }
+  initAddPanel();
 
 
   // 일정 상세/수정 팝업 — 캘린더 화면으로 이동하지 않고 대시보드 안에서 바로 뜨도록
@@ -1083,6 +1307,7 @@ export async function mount(root) {
   // ================= 대시보드 단축키 (Alt 누르면 안내 오버레이) =================
   setScreenShortcuts('대시보드', [
     { label: '새로 만들기', keys: 'N' },
+    { label: '위젯 추가', keys: 'W' },
     { label: '레이아웃 편집', keys: 'E' },
     { label: '사이드 패널', keys: 'S' },
     { label: '이전 / 다음 날짜', keys: '← / →' },
@@ -1094,6 +1319,7 @@ export async function mount(root) {
     if (document.querySelector('.modal-overlay.open')) return;
     switch (e.key) {
       case 'n': case 'N': e.preventDefault(); $('d-newBtn').click(); break;
+      case 'w': case 'W': e.preventDefault(); $('d-addWidgetBtn').click(); break;
       case 'e': case 'E': e.preventDefault(); $('d-layoutEditBtn').click(); break;
       case 's': case 'S':
         e.preventDefault();
@@ -1115,6 +1341,8 @@ export async function mount(root) {
 
   return () => {
     clearInterval(clockTimer);
+    clearInterval(blockTickTimer);
+    closeBlockConfig();
     document.removeEventListener('keydown', handleDashKeys);
     setScreenShortcuts(null, []);
     eventDetailModal.destroy();
