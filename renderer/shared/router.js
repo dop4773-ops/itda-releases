@@ -46,6 +46,7 @@ async function navigate() {
   }
   unmountCurrent = null;
   root.innerHTML = '';
+  root.dataset.view = hash.replace('#/', ''); // 화면별 CSS 훅 (예: .main[data-view="memo"])
   setActiveNav(hash);
 
   try {
