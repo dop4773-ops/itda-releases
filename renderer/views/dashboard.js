@@ -171,7 +171,7 @@ export async function mount(root) {
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-arrangeBtn" title="위젯 자동 정렬">🧹 자동 정리 ▾</button>
-            <button class="btn-secondary" id="d-layoutBtn" title="배치 저장/불러오기">💾 레이아웃 ▾</button>
+            <button class="btn-secondary" id="d-layoutBtn" title="배치·워크스페이스 저장/불러오기">💾 저장 ▾</button>
             <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
           <button class="btn" id="d-editDoneBtn">완료</button>
@@ -1252,6 +1252,49 @@ export async function mount(root) {
       return [];
     }
   };
+
+  // ---- 워크스페이스: 배치 + 스타일(프리셋·헤더·배경·카드별·표현방식·테마·투명도·카드구성)을 한 세트로 ----
+  const WS_KEYS = [
+    'dashboard_layout',
+    'dashboard_style_preset',
+    'dashboard_header_style',
+    'dashboard_bg',
+    'dashboard_card_styles',
+    'dashboard_widget_views',
+    'dashboard_theme',
+    'dashboard_widget_opacity',
+    'dashboard_cards',
+  ];
+  const loadWorkspaces = async () => {
+    try {
+      const raw = await window.itda.settings.get('dashboard_workspaces');
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  async function saveWorkspace(name) {
+    const snap = {};
+    for (const k of WS_KEYS) snap[k] = (await window.itda.settings.get(k)) || '';
+    // 편집 중 최신 위치를 반영
+    snap.dashboard_layout = JSON.stringify({ preset: 'flow', widgets: widgetGrid.snapshotLayout() });
+    const list = await loadWorkspaces();
+    list.push({ id: `ws-${Date.now()}`, label: name, snap });
+    await window.itda.settings.set({ key: 'dashboard_workspaces', value: JSON.stringify(list) }).catch(() => {});
+  }
+  async function applyWorkspace(ws) {
+    for (const k of WS_KEYS) {
+      if (ws.snap[k] != null) await window.itda.settings.set({ key: k, value: ws.snap[k] });
+    }
+    toast(`"${ws.label}" 워크스페이스를 불러왔어요`);
+    // 워크스페이스 설정들은 대시보드 mount 시점에 읽히므로, 대시보드 뷰만 다시 mount시킨다.
+    // (전체 새로고침은 비밀번호 잠금 화면이 다시 떠서 피함)
+    location.hash = '#/inbox';
+    setTimeout(() => {
+      location.hash = '#/dashboard';
+    }, 60);
+  }
   let layoutMenu = null;
   const closeLayoutMenu = () => {
     layoutMenu?.remove();
@@ -1263,48 +1306,81 @@ export async function mount(root) {
   }
   async function openLayoutMenu(x, y) {
     closeLayoutMenu();
-    const presets = await loadLayoutPresets();
+    const [presets, workspaces] = await Promise.all([loadLayoutPresets(), loadWorkspaces()]);
     const menu = document.createElement('div');
     menu.className = 'ctx-menu';
-    menu.innerHTML =
-      (presets.length
-        ? presets
-            .map(
-              (p) =>
-                `<button class="ctx-menu-item" data-apply="${escapeHtml(p.id)}"><span>📐 ${escapeHtml(p.label)}</span><span class="ctx-menu-x" data-del="${escapeHtml(p.id)}" title="삭제">✕</span></button>`
-            )
-            .join('') + '<div class="ctx-menu-divider"></div>'
-        : '<div class="ctx-menu-empty">저장된 레이아웃이 없어요</div>') +
-      `<button class="ctx-menu-item" data-act="save">＋ 현재 배치 저장…</button>`;
+    const layoutRows = presets.length
+      ? presets
+          .map(
+            (p) =>
+              `<button class="ctx-menu-item" data-apply-layout="${escapeHtml(p.id)}"><span>📐 ${escapeHtml(p.label)}</span><span class="ctx-menu-x" data-del-layout="${escapeHtml(p.id)}" title="삭제">✕</span></button>`
+          )
+          .join('')
+      : '<div class="ctx-menu-empty">저장된 배치 없음</div>';
+    const wsRows = workspaces.length
+      ? workspaces
+          .map(
+            (w) =>
+              `<button class="ctx-menu-item" data-apply-ws="${escapeHtml(w.id)}"><span>🗂 ${escapeHtml(w.label)}</span><span class="ctx-menu-x" data-del-ws="${escapeHtml(w.id)}" title="삭제">✕</span></button>`
+          )
+          .join('')
+      : '<div class="ctx-menu-empty">저장된 워크스페이스 없음</div>';
+    menu.innerHTML = `
+      <div class="dcm-label">배치 (위치·크기만)</div>
+      ${layoutRows}
+      <button class="ctx-menu-item" data-act="save-layout">＋ 현재 배치 저장…</button>
+      <div class="ctx-menu-divider"></div>
+      <div class="dcm-label">워크스페이스 (배치 + 스타일 전체)</div>
+      ${wsRows}
+      <button class="ctx-menu-item" data-act="save-ws">＋ 현재 전체를 워크스페이스로 저장…</button>`;
     document.body.appendChild(menu);
     layoutMenu = menu;
     menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`;
     menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`;
     setTimeout(() => document.addEventListener('mousedown', onLayoutMenuOutside, true), 0);
+    const reopen = () => {
+      const r = $('d-layoutBtn').getBoundingClientRect();
+      openLayoutMenu(r.left, r.bottom + 4);
+    };
 
-    menu.querySelectorAll('[data-apply]').forEach((b) => {
+    menu.querySelectorAll('[data-apply-layout]').forEach((b) => {
       b.addEventListener('click', async (e) => {
-        if (e.target.closest('[data-del]')) return;
+        if (e.target.closest('[data-del-layout]')) return;
         closeLayoutMenu();
-        const p = (await loadLayoutPresets()).find((x) => x.id === b.dataset.apply);
+        const p = (await loadLayoutPresets()).find((x) => x.id === b.dataset.applyLayout);
         if (p) {
           widgetGrid.applyCustomLayout(p.widgets);
           toast(`"${p.label}" 배치를 적용했어요`);
         }
       });
     });
-    menu.querySelectorAll('[data-del]').forEach((x) => {
+    menu.querySelectorAll('[data-del-layout]').forEach((x) => {
       x.addEventListener('click', async (e) => {
         e.stopPropagation();
-        const remaining = (await loadLayoutPresets()).filter((p) => p.id !== x.dataset.del);
+        const remaining = (await loadLayoutPresets()).filter((p) => p.id !== x.dataset.delLayout);
         await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(remaining) }).catch(() => {});
-        const r = $('d-layoutBtn').getBoundingClientRect();
-        openLayoutMenu(r.left, r.bottom + 4);
+        reopen();
       });
     });
-    menu.querySelector('[data-act="save"]').addEventListener('click', async () => {
+    menu.querySelectorAll('[data-apply-ws]').forEach((b) => {
+      b.addEventListener('click', async (e) => {
+        if (e.target.closest('[data-del-ws]')) return;
+        closeLayoutMenu();
+        const w = (await loadWorkspaces()).find((x) => x.id === b.dataset.applyWs);
+        if (w) await applyWorkspace(w);
+      });
+    });
+    menu.querySelectorAll('[data-del-ws]').forEach((x) => {
+      x.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const remaining = (await loadWorkspaces()).filter((w) => w.id !== x.dataset.delWs);
+        await window.itda.settings.set({ key: 'dashboard_workspaces', value: JSON.stringify(remaining) }).catch(() => {});
+        reopen();
+      });
+    });
+    menu.querySelector('[data-act="save-layout"]').addEventListener('click', async () => {
       closeLayoutMenu();
-      const name = await promptText($('d-layoutBtn'), { title: '레이아웃 이름', placeholder: '예: 회의 준비용' });
+      const name = await promptText($('d-layoutBtn'), { title: '배치 이름', placeholder: '예: 회의 준비용' });
       if (!name) return;
       const widgets = widgetGrid.snapshotLayout();
       if (!Object.keys(widgets).length) {
@@ -1314,7 +1390,14 @@ export async function mount(root) {
       const presetsNow = await loadLayoutPresets();
       presetsNow.push({ id: `custom-${Date.now()}`, label: name, widgets });
       await window.itda.settings.set({ key: 'dashboard_custom_presets', value: JSON.stringify(presetsNow) }).catch(() => {});
-      toast('레이아웃을 저장했어요');
+      toast('배치를 저장했어요');
+    });
+    menu.querySelector('[data-act="save-ws"]').addEventListener('click', async () => {
+      closeLayoutMenu();
+      const name = await promptText($('d-layoutBtn'), { title: '워크스페이스 이름', placeholder: '예: 집중 모드' });
+      if (!name) return;
+      await saveWorkspace(name);
+      toast('워크스페이스를 저장했어요');
     });
   }
   $('d-layoutBtn').addEventListener('click', (e) => {
