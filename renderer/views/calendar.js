@@ -349,7 +349,6 @@ export async function mount(root) {
         <span class="cal-period-label" id="c-periodLabel"></span>
         <button class="btn-icon" id="c-next">${CHEVRON_RIGHT}</button>
         <button class="btn-secondary" id="c-today">오늘</button>
-        <button class="btn-icon" id="c-miniToggle" title="미니 캘린더 보기">${CAL_ICON}</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;">
         <div class="cal-search" id="c-searchWrap">
@@ -364,8 +363,6 @@ export async function mount(root) {
         </div>
       </div>
     </div>
-
-    <div class="mini-month" id="c-miniMonth" style="display:none;"></div>
 
     <div id="c-gridArea"><div class="empty">불러오는 중…</div></div>
     <div class="cal-legend" id="c-legend"></div>
@@ -443,7 +440,6 @@ export async function mount(root) {
   let busy = false;
   let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
   let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
-  let miniOpen = false;
   let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
   let alldayExpanded = true; // 종일 일정 접기/펼치기(주/일 뷰) — 기본은 펼침(전부 보임)
   let alldayOrder = []; // 종일 일정 사용자 지정 순서(드래그) — app_settings: calendar_allday_order
@@ -664,47 +660,12 @@ export async function mount(root) {
     }
   });
 
-  // ---------- 미니 캘린더 (툴바의 달력 아이콘으로 열고 닫음) ----------
-  // 현재 뷰(월/주/일)와 무관하게 anchor가 속한 "월" 기준으로 그려서, 주/일 뷰에서도 빠르게 다른 날짜로 점프할 수 있게 한다.
-  async function loadMiniMonth() {
-    const el = $('c-miniMonth');
-    try {
-      const { fromDate, toDate } = queryRange('month', anchor);
-      const events = await window.itda.events.range({ fromDate, toDate });
-      const byDate = groupByDateKey(events);
-      el.innerHTML = buildMonthGridHtml(anchor, byDate, { compact: true });
-      el.querySelectorAll('.month-cell').forEach((cell) => {
-        cell.addEventListener('click', () => {
-          anchor = parseKey(cell.dataset.date);
-          currentView = 'day';
-          root.querySelectorAll('.cal-toolbar .tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
-          closeMini();
-          load();
-        });
-      });
-    } catch (e) {
-      errorToast(e, '미니 캘린더를 불러오지 못했어요');
-    }
-  }
-
-  function closeMini() {
-    miniOpen = false;
-    $('c-miniMonth').style.display = 'none';
-  }
-
-  $('c-miniToggle').addEventListener('click', async () => {
-    miniOpen = !miniOpen;
-    $('c-miniMonth').style.display = miniOpen ? 'block' : 'none';
-    if (miniOpen) await loadMiniMonth();
-  });
-
   // ---------- 네비게이션 ----------
   function step(dir) {
     if (currentView === 'month') anchor = addMonths(anchor, dir);
     else if (currentView === 'week') anchor = addDays(anchor, dir * 7);
     else anchor = addDays(anchor, dir);
     load();
-    if (miniOpen) loadMiniMonth();
   }
 
   $('c-prev').addEventListener('click', () => step(-1));
@@ -713,7 +674,6 @@ export async function mount(root) {
     anchor = new Date();
     anchor.setHours(0, 0, 0, 0);
     load();
-    if (miniOpen) loadMiniMonth();
   });
 
   root.querySelectorAll('.tab').forEach((tab) => {

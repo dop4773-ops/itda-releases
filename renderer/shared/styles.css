@@ -1098,12 +1098,6 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .cal-filters input[type="checkbox"]{width:13px;height:13px;accent-color:var(--brand);flex-shrink:0;}
 .cal-filters .filter-note{font-size:9.5px;color:var(--text-faint);margin-left:auto;background:var(--bg);padding:1px 6px;border-radius:var(--radius-pill);}
 
-.mini-month{border:1px solid var(--border);border-radius:var(--radius-md);padding:8px;margin-bottom:12px;}
-.mini-month .month-grid{border:none;border-radius:0;background:transparent;gap:1px;}
-.mini-month .month-weekday-header{padding:3px;font-size:9.5px;}
-.mini-month .month-cell{min-height:0;height:26px;padding:2px;align-items:center;}
-.mini-month .month-cell .date-num{font-size:10px;width:20px;height:20px;}
-.mini-month .month-event-pill,.mini-month .month-more{display:none;}
 
 .side-cal-grid{height:400px;overflow-y:auto;border-radius:var(--radius-md);}
 .side-cal-grid .time-body-scroll{max-height:none;overflow-y:visible;}

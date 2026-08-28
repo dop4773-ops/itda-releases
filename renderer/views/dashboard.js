@@ -45,9 +45,10 @@ const TYPE_META = {
 };
 
 function greetingByHour(hour) {
+  // 윈도우 Segoe UI Emoji에서 흑백으로 렌더되던 ☀️/🌤️ 대신 항상 컬러로 나오는 이모지로 교체
   if (hour < 6) return { icon: '🌙', text: '늦은 밤이네요' };
-  if (hour < 12) return { icon: '🌤️', text: '좋은 아침입니다' };
-  if (hour < 18) return { icon: '☀️', text: '좋은 오후입니다' };
+  if (hour < 12) return { icon: '🌅', text: '좋은 아침입니다' };
+  if (hour < 18) return { icon: '🌞', text: '좋은 오후입니다' };
   return { icon: '🌆', text: '수고 많으셨어요' };
 }
 
