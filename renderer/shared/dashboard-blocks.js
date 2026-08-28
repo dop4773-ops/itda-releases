@@ -511,7 +511,6 @@ function wireMiniTool(el, block) {
   const disp = el.querySelector('.mt-display');
   if (!disp) return;
   let expr = '';
-  const safe = /^[0-9+\-*/.() ]*$/;
   el.querySelectorAll('.mt-pad button').forEach((b) => {
     b.addEventListener('click', () => {
       const k = b.dataset.k;
@@ -522,9 +521,7 @@ function wireMiniTool(el, block) {
       }
       if (k === '=') {
         try {
-          if (!safe.test(expr) || !expr) throw new Error('bad');
-          // eslint-disable-next-line no-new-func
-          const r = Function('"use strict";return (' + expr + ')')();
+          const r = evalArith(expr);
           disp.value = String(r);
           expr = String(r);
         } catch (e) {
@@ -537,6 +534,59 @@ function wireMiniTool(el, block) {
       disp.value = expr;
     });
   });
+}
+
+// +,-,*,/,(),. 만 다루는 작은 재귀하강 파서 — eval/Function 안 씀(CSP unsafe-eval 불필요).
+function evalArith(input) {
+  const s = (input || '').replace(/\s/g, '');
+  if (!s || !/^[0-9+\-*/.()]+$/.test(s)) throw new Error('bad');
+  let i = 0;
+  const peek = () => s[i];
+  const num = () => {
+    let n = '';
+    while (i < s.length && /[0-9.]/.test(s[i])) n += s[i++];
+    if (!/^\d+\.?\d*$|^\.\d+$/.test(n)) throw new Error('bad');
+    return parseFloat(n);
+  };
+  const factor = () => {
+    if (peek() === '(') {
+      i++;
+      const v = expr();
+      if (peek() !== ')') throw new Error('bad');
+      i++;
+      return v;
+    }
+    if (peek() === '-') {
+      i++;
+      return -factor();
+    }
+    if (peek() === '+') {
+      i++;
+      return factor();
+    }
+    return num();
+  };
+  const term = () => {
+    let v = factor();
+    while (peek() === '*' || peek() === '/') {
+      const op = s[i++];
+      const r = factor();
+      v = op === '*' ? v * r : v / r;
+    }
+    return v;
+  };
+  function expr() {
+    let v = term();
+    while (peek() === '+' || peek() === '-') {
+      const op = s[i++];
+      const r = term();
+      v = op === '+' ? v + r : v - r;
+    }
+    return v;
+  }
+  const result = expr();
+  if (i !== s.length || !Number.isFinite(result)) throw new Error('bad');
+  return Math.round(result * 1e10) / 1e10; // 부동소수 오차 정리
 }
 
 // ────────────────────────────── 설정 팝오버 ──────────────────────────────

@@ -214,6 +214,7 @@ export async function mount(root) {
 
   function renderFolderRail() {
     const rail = $('m-folderRail');
+    if (!rail) return; // 비동기 콜백이 화면 언마운트 뒤에 도착한 경우
     const totalCount = memos.length;
     const unfiledCount = memos.filter((m) => !m.folder_id).length;
     rail.innerHTML = `
@@ -454,6 +455,7 @@ export async function mount(root) {
   function renderList() {
     renderFolderRail(); // 메모 개수가 바뀌었을 수 있으니(추가/삭제/폴더 이동) 매번 같이 갱신
     const listEl = $('m-list');
+    if (!listEl) return; // 언마운트 후 도착한 비동기 콜백 방어
     const byUpdatedDesc = (a, b) => (b.updated_at || '').localeCompare(a.updated_at || '');
     const all = filteredMemos();
 
@@ -590,6 +592,7 @@ export async function mount(root) {
 
   function renderDetail() {
     const detailEl = $('m-detail');
+    if (!detailEl) return; // 언마운트 후 도착한 비동기 콜백 방어
     const memo = memos.find((m) => m.id === selectedId);
     if (!memo) {
       detailEl.innerHTML = `

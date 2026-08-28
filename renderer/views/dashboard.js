@@ -613,6 +613,7 @@ export async function mount(root) {
         if (!p) return;
         const startX = e.clientX;
         const startY = e.clientY;
+        const startScroll = scroller ? scroller.scrollTop : 0;
         const start = { ...p };
         const { sx, sy } = cellStride();
         widget.classList.add('dragging');
@@ -620,11 +621,15 @@ export async function mount(root) {
         showGhost(p.x, p.y, p.w, p.h);
         startDrag(
           (ev) => {
-            // 카드는 커서를 픽셀 단위로 따라가고(부드럽게), 고스트가 칸에 스냅된 착지 위치를 보여준다.
-            widget.style.transform = `translate(${ev.clientX - startX}px, ${ev.clientY - startY}px)`;
-            const dCol = Math.round((ev.clientX - startX) / sx);
-            const dRow = Math.round((ev.clientY - startY) / sy);
-            target = { x: clamp(start.x + dCol, 0, GRID_COLS - p.w), y: Math.max(0, start.y + dRow) };
+            // 자동 스크롤로 그리드가 움직인 만큼도 이동량에 더해준다(화면보다 큰 배치로 옮길 때 정확).
+            const scrollDelta = scroller ? scroller.scrollTop - startScroll : 0;
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY + scrollDelta;
+            widget.style.transform = `translate(${dx}px, ${dy}px)`;
+            target = {
+              x: clamp(start.x + Math.round(dx / sx), 0, GRID_COLS - p.w),
+              y: Math.max(0, start.y + Math.round(dy / sy)),
+            };
             showGhost(target.x, target.y, p.w, p.h);
             updateAutoScroll(ev.clientY);
           },
@@ -1016,18 +1021,14 @@ export async function mount(root) {
       menu.style.top = `${Math.min(y, window.innerHeight - menu.offsetHeight - 8)}px`;
       setTimeout(() => document.addEventListener('mousedown', onCardMenuOutside, true), 0);
 
-      const save = () => {
-        cardStyles[cardId] = { ...cardStyles[cardId], ...(s.theme ? { theme: s.theme } : {}), ...(s.opacity != null ? { opacity: s.opacity } : {}) };
-        if (!s.theme) delete cardStyles[cardId]?.theme;
-        window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
-      };
+      const persist = () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
       menu.querySelectorAll('[data-theme]').forEach((b) => {
         b.addEventListener('click', () => {
           s.theme = b.dataset.theme;
           cardStyles[cardId] = { ...(cardStyles[cardId] || {}), theme: s.theme || undefined, opacity: s.opacity };
           menu.querySelectorAll('[data-theme]').forEach((x) => x.classList.toggle('active', x === b));
           applyCardStyle(cardId);
-          window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {});
+          persist();
         });
       });
       const opInput = menu.querySelector('.dcm-op');
@@ -1037,7 +1038,7 @@ export async function mount(root) {
         cardStyles[cardId] = { ...(cardStyles[cardId] || {}), opacity: s.opacity };
         applyCardStyle(cardId);
       });
-      opInput.addEventListener('change', () => window.itda.settings.set({ key: 'dashboard_card_styles', value: JSON.stringify(cardStyles) }).catch(() => {}));
+      opInput.addEventListener('change', persist);
       menu.querySelector('[data-act="hide"]')?.addEventListener('click', async () => {
         closeCardMenu();
         await toggleSummaryOrCard(cardId, false);
@@ -1699,10 +1700,12 @@ export async function mount(root) {
   // 다르게 종류를 계속 누적해서, 마지막 한 번만 이기는 게 아니라 그동안 바뀐 게 다 반영되게 한다).
   let pendingEntities = new Set();
   let flushTimer = null;
+  let unmounted = false;
   const scheduleDashboardRefresh = (entity) => {
     pendingEntities.add(entity);
     clearTimeout(flushTimer);
     flushTimer = setTimeout(() => {
+      if (unmounted) return;
       const entities = pendingEntities;
       pendingEntities = new Set();
       if (entities.has('todo')) loadTodos();
@@ -1757,6 +1760,7 @@ export async function mount(root) {
   document.addEventListener('keydown', handleDashKeys);
 
   return () => {
+    unmounted = true;
     clearInterval(clockTimer);
     clearInterval(blockTickTimer);
     closeBlockConfig();

@@ -438,6 +438,7 @@ export async function mount(root) {
   let anchor = new Date();
   anchor.setHours(0, 0, 0, 0);
   let busy = false;
+  let unmounted = false; // 비동기 콜백이 화면 전환 뒤에 도착했을 때 DOM 조작으로 크래시 나는 것 방지
   let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
   let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
   let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
@@ -462,6 +463,7 @@ export async function mount(root) {
 
   // ---------- 데이터 로드 + 렌더 ----------
   async function load() {
+    if (unmounted || !$('c-periodLabel')) return;
     $('c-periodLabel').textContent = periodLabel(currentView, anchor);
     const gridArea = $('c-gridArea');
     let localEvents = [];
@@ -1035,6 +1037,7 @@ export async function mount(root) {
   });
 
   return () => {
+    unmounted = true;
     unsubscribeEsc();
     document.removeEventListener('keydown', handleDeleteKey);
     document.removeEventListener('keydown', handleQuickKeys);

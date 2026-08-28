@@ -91,6 +91,7 @@ export async function mount(root) {
   let currentCategoryId = '';
   let currentView = 'board'; // 프로그램 전체에서 Todo는 기본적으로 칸반 보드로 시작 (요청에 따름)
   let busy = false; // 이중 클릭으로 같은 요청이 중복 발생하지 않도록
+  let unmounted = false; // 비동기 콜백이 화면 전환 뒤에 도착했을 때 크래시 방지
   let selectedTodoId = null;
   let doneSortMode = 'recent'; // '완료' 탭 전용 — 최근 완료순 vs 카테고리별 묶어보기
   const collapsedIds = new Set(); // 접어둔 카드(항목별 접기/펼치기) — 화면을 나가면 초기화되는 세션 상태
@@ -611,13 +612,16 @@ export async function mount(root) {
   }
 
   async function refresh() {
+    if (unmounted || !$('t-list')) return;
     try {
       allTodos = await window.itda.todos.list({});
     } catch (e) {
       errorToast(e, '할 일 목록을 불러오지 못했어요');
-      $('t-list').innerHTML = emptyStateBlock({ title: '목록을 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
+      const le = $('t-list');
+      if (le) le.innerHTML = emptyStateBlock({ title: '목록을 불러오지 못했어요', subtitle: '잠시 후 다시 시도해주세요' });
       return;
     }
+    if (unmounted || !$('t-list')) return;
     if (currentView === 'board') renderBoard();
     else renderList();
   }
@@ -720,6 +724,7 @@ export async function mount(root) {
   });
 
   return () => {
+    unmounted = true;
     unsubscribeEsc();
     offDataChanged?.();
     document.removeEventListener('keydown', handleQuickAddKey);

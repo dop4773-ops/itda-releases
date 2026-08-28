@@ -2,6 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8" />
+<!-- CSP: 로컬 리소스 + 날씨(open-meteo) + 사이트 아이콘(google)만. 인라인 스타일이 많아 style은
+     unsafe-inline. 인라인/외부 <script>, 외부 프레임, <object>는 차단. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.google.com; font-src 'self'; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com; media-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'" />
 <title>잇다 — Itda</title>
 <link rel="stylesheet" href="shared/styles.css" />
 </head>
