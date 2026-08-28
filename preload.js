@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('itda', {
     list: () => ipcRenderer.invoke('memoFolders:list'),
     add: (payload) => ipcRenderer.invoke('memoFolders:add', payload),
     rename: (payload) => ipcRenderer.invoke('memoFolders:rename', payload),
+    reorder: (ids) => ipcRenderer.invoke('memoFolders:reorder', ids),
     delete: (id) => ipcRenderer.invoke('memoFolders:delete', id),
   },
   postits: {

@@ -22,6 +22,13 @@ module.exports = function createMemoFoldersRepository(db) {
       db.prepare('UPDATE memo_folders SET name = ? WHERE id = ?').run(name, id);
     },
 
+    // ids 배열의 순서대로 sort_order를 0,1,2… 로 다시 매긴다(드래그로 폴더 순서 바꾸기).
+    reorder(ids) {
+      const stmt = db.prepare('UPDATE memo_folders SET sort_order = ? WHERE id = ?');
+      const tx = db.transaction((list) => list.forEach((id, i) => stmt.run(i, id)));
+      tx(ids);
+    },
+
     remove(id) {
       // 이 폴더에 있던 메모는 folder_id NULL로(FK ON DELETE SET NULL) — 메모 자체는 삭제 안 됨
       db.prepare('DELETE FROM memo_folders WHERE id = ?').run(id);

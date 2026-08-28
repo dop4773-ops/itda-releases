@@ -483,7 +483,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .allday-bar.is-google{border:1px dashed rgba(255,255,255,.7);cursor:default;}
 .allday-bar .event-del{position:absolute;top:50%;right:4px;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .15s;cursor:pointer;background:rgba(0,0,0,.28);border-radius:4px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:#fff;}
 .allday-bar:hover .event-del{opacity:1;pointer-events:auto;}
-.time-body-scroll{overflow-y:auto;max-height:600px;}
+.time-body-scroll{overflow-y:auto;max-height:calc(100vh - 300px);min-height:460px;}
 .time-body-grid{display:grid;}
 .time-hour-label{font-size:10px;color:var(--text-faint);text-align:right;padding:0 6px;border-right:1px solid var(--border);transform:translateY(-6px);}
 .time-day-container{position:relative;border-right:1px solid var(--divider);background-image:repeating-linear-gradient(to bottom, var(--divider) 0, var(--divider) 1px, transparent 1px, transparent 44px);}
@@ -771,6 +771,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .notes-folder-row{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-soft);font-size:12.5px;}
 .notes-folder-row:hover{background:var(--surface);}
 .notes-folder-row.active{background:var(--brand-soft);color:var(--brand);font-weight:600;}
+.notes-folder-row[draggable="true"]{cursor:grab;}
+.notes-folder-row.folder-dragging{opacity:.4;}
 .notes-folder-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .notes-folder-count{font-size:11px;color:var(--text-faint);flex-shrink:0;}
 .notes-folder-row.active .notes-folder-count{color:var(--brand);}
@@ -1039,6 +1041,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-widget-resize{display:none;position:absolute;right:1px;bottom:1px;width:16px;height:16px;cursor:nwse-resize;z-index:5;}
 .dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;border-right:2px solid var(--brand);border-bottom:2px solid var(--brand);opacity:.6;}
 .dash-widget-grid.editing .dash-widget-resize{display:block;}
+/* 드래그 중 놓일 자리를 보여주는 점선 고스트 */
+.dash-drop-ghost{border:2px dashed var(--brand);border-radius:var(--radius-lg);background:var(--brand-soft);opacity:.55;pointer-events:none;z-index:1;}
 .dash-widget .panel-head{justify-content:flex-start;}
 .dash-widget .panel-head > a{margin-left:auto;}
 

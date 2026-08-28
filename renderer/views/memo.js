@@ -228,7 +228,7 @@ export async function mount(root) {
       ${folders
         .map(
           (f) => `
-        <div class="notes-folder-row ${currentFolderId === f.id ? 'active' : ''}" data-folder="${f.id}">
+        <div class="notes-folder-row ${currentFolderId === f.id ? 'active' : ''}" data-folder="${f.id}" data-fid="${f.id}" draggable="true" title="우클릭: 메뉴 · 드래그: 순서 변경">
           ${FOLDER_ICON}<span class="notes-folder-name">${escapeHtml(f.name)}</span><span class="notes-folder-count">${f.memo_count}</span>
           <button class="btn-icon notes-folder-del" data-rename-folder="${f.id}" title="이름 바꾸기">✎</button>
           <button class="btn-icon notes-folder-del" data-delete-folder="${f.id}" title="폴더 삭제(메모는 안 지워지고 미분류로 이동)">${SMALL_X_ICON}</button>
@@ -284,6 +284,117 @@ export async function mount(root) {
         await loadFolders();
       } catch (err) {
         errorToast(err, '폴더를 추가하지 못했어요');
+      }
+    });
+
+    // ---- 폴더 우클릭 메뉴 + 드래그로 순서 변경 (커스텀 폴더만) ----
+    rail.querySelectorAll('.notes-folder-row[data-fid]').forEach((row) => {
+      const fid = Number(row.dataset.fid);
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        openFolderMenu(e.clientX, e.clientY, folders.find((f) => f.id === fid));
+      });
+      row.addEventListener('dragstart', (e) => {
+        e.dataTransfer.setData('text/plain', String(fid));
+        e.dataTransfer.effectAllowed = 'move';
+        row.classList.add('folder-dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('folder-dragging'));
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const draggedId = Number(e.dataTransfer.getData('text/plain'));
+        if (!draggedId || draggedId === fid) return;
+        const rect = row.getBoundingClientRect();
+        const before = e.clientY - rect.top < rect.height / 2;
+        reorderFolders(draggedId, fid, before);
+      });
+    });
+  }
+
+  async function reorderFolders(draggedId, targetId, before) {
+    const ids = folders.map((f) => f.id).filter((id) => id !== draggedId);
+    let ti = ids.indexOf(targetId);
+    if (ti === -1) ti = ids.length - 1;
+    ids.splice(before ? ti : ti + 1, 0, draggedId);
+    try {
+      await window.itda.memoFolders.reorder(ids);
+      await loadFolders();
+    } catch (err) {
+      errorToast(err, '폴더 순서를 바꾸지 못했어요');
+    }
+  }
+
+  let folderMenuEl = null;
+  function closeFolderMenu() {
+    folderMenuEl?.remove();
+    folderMenuEl = null;
+    document.removeEventListener('mousedown', onFolderMenuOutside, true);
+    document.removeEventListener('keydown', onFolderMenuEsc, true);
+  }
+  function onFolderMenuOutside(e) {
+    if (folderMenuEl && !folderMenuEl.contains(e.target)) closeFolderMenu();
+  }
+  function onFolderMenuEsc(e) {
+    if (e.key === 'Escape') closeFolderMenu();
+  }
+  function openFolderMenu(x, y, folder) {
+    if (!folder) return;
+    closeFolderMenu();
+    const menu = document.createElement('div');
+    menu.className = 'ctx-menu';
+    menu.innerHTML = `
+      <button class="ctx-menu-item" data-act="new">📝 이 폴더에 새 메모</button>
+      <button class="ctx-menu-item" data-act="open">📂 이 폴더 열기</button>
+      <div class="ctx-menu-divider"></div>
+      <button class="ctx-menu-item" data-act="rename">✎ 이름 바꾸기</button>
+      <button class="ctx-menu-item ctx-menu-danger" data-act="delete">🗑 폴더 삭제</button>
+    `;
+    document.body.appendChild(menu);
+    // 화면 밖으로 안 나가게 위치 보정
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    menu.style.left = `${Math.min(x, window.innerWidth - mw - 8)}px`;
+    menu.style.top = `${Math.min(y, window.innerHeight - mh - 8)}px`;
+    folderMenuEl = menu;
+    setTimeout(() => {
+      document.addEventListener('mousedown', onFolderMenuOutside, true);
+      document.addEventListener('keydown', onFolderMenuEsc, true);
+    }, 0);
+
+    menu.querySelector('[data-act="new"]').addEventListener('click', async () => {
+      closeFolderMenu();
+      await createNewMemo(folder.id);
+    });
+    menu.querySelector('[data-act="open"]').addEventListener('click', () => {
+      closeFolderMenu();
+      currentFolderId = folder.id;
+      renderFolderRail();
+      renderList();
+    });
+    menu.querySelector('[data-act="rename"]').addEventListener('click', async () => {
+      closeFolderMenu();
+      const anchor = $('m-folderRail')?.querySelector(`[data-fid="${folder.id}"]`) || document.body;
+      const name = await promptText(anchor, { title: '폴더 이름 바꾸기', placeholder: '폴더 이름', value: folder.name });
+      if (!name) return;
+      try {
+        await window.itda.memoFolders.rename({ id: folder.id, name });
+        await loadFolders();
+      } catch (err) {
+        errorToast(err, '폴더 이름을 바꾸지 못했어요');
+      }
+    });
+    menu.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      closeFolderMenu();
+      try {
+        await window.itda.memoFolders.delete(folder.id);
+        if (currentFolderId === folder.id) currentFolderId = undefined;
+        await load();
+      } catch (err) {
+        errorToast(err, '폴더를 삭제하지 못했어요');
       }
     });
   }
@@ -1011,9 +1122,11 @@ export async function mount(root) {
     renderDetail();
   }
 
-  async function createNewMemo() {
+  async function createNewMemo(folderIdArg) {
     try {
-      const folderId = currentFolderId ?? null; // "전체"/"미분류"에서 새로 만들면 미분류, 특정 폴더에서 만들면 그 폴더로
+      // 인자로 폴더를 주면(폴더 우클릭 메뉴) 그 폴더로, 아니면 현재 선택된 폴더 기준
+      // ("전체"/"미분류"에서 만들면 미분류, 특정 폴더 안에서 만들면 그 폴더로)
+      const folderId = folderIdArg !== undefined ? folderIdArg : currentFolderId ?? null;
       const { id } = await window.itda.memos.add({ content: '', folderId });
       await load();
       selectMemo(id);
@@ -1173,6 +1286,7 @@ export async function mount(root) {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
     document.removeEventListener('keydown', handleDeleteKey);
+    closeFolderMenu();
     unsubscribeEsc();
     offDataChanged?.();
     setScreenShortcuts(null, []); // 다른 화면으로 이동하면 이 화면 전용 단축키는 오버레이에서 빠져야 함

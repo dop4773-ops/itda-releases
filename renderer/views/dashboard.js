@@ -4,7 +4,7 @@ import { periodLabel, queryRange, groupByDateKey, buildMonthGridHtml, buildCompa
 import { computeNotifications } from '../shared/notifications.js';
 import { computeRecentActivity } from '../shared/recent-activity.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
-import { getUserName } from '../shared/shell.js';
+import { getUserName, setScreenShortcuts } from '../shared/shell.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
@@ -87,9 +87,8 @@ export async function mount(root) {
             </div>
             <span class="dash-time" id="d-timeNow"></span>
             ${widgetLaunchButtonHtml('d-ddayWidgetBtn', 'D-DAY 위젯 열기')}
-            <button class="btn-icon" id="d-layoutEditBtn" title="레이아웃 편집">${EDIT_ICON}</button>
-            <button class="btn-icon" id="d-layoutResetBtn" title="기본 배치로 복원">${RESET_ICON}</button>
-            <button class="btn-icon" id="d-sideToggle" title="사이드 패널 열기">${CHEVRON_LEFT}</button>
+            <button class="btn-icon" id="d-layoutEditBtn" title="레이아웃 편집 (E)">${EDIT_ICON}</button>
+            <button class="btn-icon" id="d-sideToggle" title="사이드 패널 열기 (S)">${CHEVRON_LEFT}</button>
             <button class="btn" id="d-newBtn">+ 새로 만들기</button>
           </div>
         </div>
@@ -122,6 +121,7 @@ export async function mount(root) {
           <span class="dash-edit-hint">레이아웃 편집 중 — 카드를 드래그해 옮기거나 모서리를 끌어 크기를 바꾸세요</span>
           <span class="dash-edit-presets">
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
+            <button class="btn-secondary" id="d-layoutResetBtn" title="기본 배치로 되돌리기">${RESET_ICON} 기본 배치로 복원</button>
           </span>
           <button class="btn" id="d-editDoneBtn">완료</button>
         </div>
@@ -332,16 +332,49 @@ export async function mount(root) {
     }
     persist();
 
-    // --- 그리드 기하 계산 (드래그 중 매번 새로 잰다 — 사이드바 열림 등으로 폭이 바뀔 수 있음) ---
-    function geom() {
-      const rect = grid.getBoundingClientRect();
-      const cs = getComputedStyle(grid);
-      const gap = parseFloat(cs.columnGap) || 14;
-      const rowH = parseFloat(cs.gridAutoRows) || 108;
-      const colW = (rect.width - gap * (GRID_COLS - 1)) / GRID_COLS;
-      return { rect, gap, rowH, colW };
-    }
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    // 드래그 중엔 카드 자체를 옮기지 않고(리플로우 피드백 루프 → 윈도우에서 덜덜거림/아래로 안 늘어남),
+    // 놓일 자리를 점선 고스트로만 보여주고 마우스를 뗄 때 한 번만 반영한다.
+    let ghost = null;
+    function showGhost(x, y, w, h) {
+      if (!ghost) {
+        ghost = document.createElement('div');
+        ghost.className = 'dash-drop-ghost';
+        grid.appendChild(ghost);
+      }
+      ghost.style.gridColumn = `${x + 1} / span ${w}`;
+      ghost.style.gridRow = `${y + 1} / span ${h}`;
+    }
+    function clearGhost() {
+      ghost?.remove();
+      ghost = null;
+    }
+
+    // 포인터가 창 위/아래 끝에 닿으면 본문을 자동 스크롤 — 화면보다 큰 배치로 늘릴 수 있게.
+    const scroller = grid.closest('.main') || document.scrollingElement;
+    let scrollRAF = null;
+    let scrollVel = 0;
+    function autoScrollTick() {
+      if (scrollVel && scroller) {
+        scroller.scrollTop += scrollVel;
+        scrollRAF = requestAnimationFrame(autoScrollTick);
+      } else {
+        scrollRAF = null;
+      }
+    }
+    function updateAutoScroll(clientY) {
+      const M = 56;
+      if (clientY < M) scrollVel = -Math.ceil((M - clientY) / 5);
+      else if (clientY > window.innerHeight - M) scrollVel = Math.ceil((clientY - (window.innerHeight - M)) / 5);
+      else scrollVel = 0;
+      if (scrollVel && !scrollRAF) scrollRAF = requestAnimationFrame(autoScrollTick);
+    }
+    function stopAutoScroll() {
+      scrollVel = 0;
+      if (scrollRAF) cancelAnimationFrame(scrollRAF);
+      scrollRAF = null;
+    }
 
     let activeMove = null;
     let activeUp = null;
@@ -352,13 +385,26 @@ export async function mount(root) {
         document.removeEventListener('mouseup', activeUp);
         activeMove = null;
         activeUp = null;
+        document.body.style.userSelect = '';
+        stopAutoScroll();
+        clearGhost();
         onUp(ev);
       };
+      document.body.style.userSelect = 'none';
       document.addEventListener('mousemove', activeMove);
       document.addEventListener('mouseup', activeUp);
     }
 
-    // 이동 — 그립을 끌면 카드가 셀 단위로 스냅해서 따라온다.
+    // 드래그 시작 시 셀 크기를 한 번만 잰다(드래그 중엔 폭이 안 바뀌므로 다시 안 잰다 = 리플로우 없음).
+    function cellStride() {
+      const cs = getComputedStyle(grid);
+      const gap = parseFloat(cs.columnGap) || 14;
+      const rowH = parseFloat(cs.gridAutoRows) || 108;
+      const colW = (grid.clientWidth - gap * (GRID_COLS - 1)) / GRID_COLS;
+      return { sx: colW + gap, sy: rowH + gap };
+    }
+
+    // 이동 — 그립을 끌면 놓일 칸을 고스트로 표시.
     grid.querySelectorAll('.dash-widget-grip').forEach((grip) => {
       grip.addEventListener('mousedown', (e) => {
         if (!editing) return;
@@ -366,28 +412,36 @@ export async function mount(root) {
         const widget = grip.closest('.dash-widget');
         const cardId = widget.dataset.card;
         const p = positions[cardId];
-        const wRect = widget.getBoundingClientRect();
-        const grabX = e.clientX - wRect.left;
-        const grabY = e.clientY - wRect.top;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const start = { ...p };
+        const { sx, sy } = cellStride();
         widget.classList.add('dragging');
+        let target = { ...p };
+        showGhost(p.x, p.y, p.w, p.h);
         startDrag(
           (ev) => {
-            const { rect, gap, rowH, colW } = geom();
-            const px = ev.clientX - rect.left - grabX;
-            const py = ev.clientY - rect.top - grabY;
-            p.x = clamp(Math.round(px / (colW + gap)), 0, GRID_COLS - p.w);
-            p.y = Math.max(0, Math.round(py / (rowH + gap)));
-            applyPosition(cardId);
+            const dCol = Math.round((ev.clientX - startX) / sx);
+            const dRow = Math.round((ev.clientY - startY) / sy);
+            target = {
+              x: clamp(start.x + dCol, 0, GRID_COLS - p.w),
+              y: Math.max(0, start.y + dRow),
+            };
+            showGhost(target.x, target.y, p.w, p.h);
+            updateAutoScroll(ev.clientY);
           },
           () => {
             widget.classList.remove('dragging');
+            p.x = target.x;
+            p.y = target.y;
+            applyPosition(cardId);
             persist();
           }
         );
       });
     });
 
-    // 크기조절 — 우하단 핸들을 끌면 열/행 span이 셀 단위로 바뀐다.
+    // 크기조절 — 우하단 핸들을 끌면 놓일 크기를 고스트로 표시(칸 단위 스냅).
     widgets.forEach((widget) => {
       const handle = document.createElement('span');
       handle.className = 'dash-widget-resize';
@@ -399,18 +453,29 @@ export async function mount(root) {
         e.stopPropagation();
         const cardId = widget.dataset.card;
         const p = positions[cardId];
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const start = { ...p };
+        const { sx, sy } = cellStride();
         widget.classList.add('dragging');
+        let target = { ...p };
+        showGhost(p.x, p.y, p.w, p.h);
         startDrag(
           (ev) => {
-            const { rect, gap, rowH, colW } = geom();
-            const px = ev.clientX - rect.left;
-            const py = ev.clientY - rect.top;
-            p.w = clamp(Math.round((px - p.x * (colW + gap)) / (colW + gap)), 2, GRID_COLS - p.x);
-            p.h = clamp(Math.round((py - p.y * (rowH + gap)) / (rowH + gap)), 1, 20);
-            applyPosition(cardId);
+            const dCol = Math.round((ev.clientX - startX) / sx);
+            const dRow = Math.round((ev.clientY - startY) / sy);
+            target = {
+              w: clamp(start.w + dCol, 2, GRID_COLS - p.x),
+              h: clamp(start.h + dRow, 1, 30),
+            };
+            showGhost(p.x, p.y, target.w, target.h);
+            updateAutoScroll(ev.clientY);
           },
           () => {
             widget.classList.remove('dragging');
+            p.w = target.w;
+            p.h = target.h;
+            applyPosition(cardId);
             persist();
           }
         );
@@ -447,6 +512,9 @@ export async function mount(root) {
       destroy: () => {
         if (activeMove) document.removeEventListener('mousemove', activeMove);
         if (activeUp) document.removeEventListener('mouseup', activeUp);
+        stopAutoScroll();
+        clearGhost();
+        document.body.style.userSelect = '';
       },
     };
   }
@@ -1011,8 +1079,43 @@ export async function mount(root) {
   };
   const offDataChanged = window.itda.onDataChanged(({ entity }) => scheduleDashboardRefresh(entity));
 
+  // ================= 대시보드 단축키 (Alt 누르면 안내 오버레이) =================
+  setScreenShortcuts('대시보드', [
+    { label: '새로 만들기', keys: 'N' },
+    { label: '레이아웃 편집', keys: 'E' },
+    { label: '사이드 패널', keys: 'S' },
+    { label: '이전 / 다음 날짜', keys: '← / →' },
+    { label: '오늘로', keys: 'T' },
+  ]);
+  function handleDashKeys(e) {
+    if (isUserTyping()) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (document.querySelector('.modal-overlay.open')) return;
+    switch (e.key) {
+      case 'n': case 'N': e.preventDefault(); $('d-newBtn').click(); break;
+      case 'e': case 'E': e.preventDefault(); $('d-layoutEditBtn').click(); break;
+      case 's': case 'S':
+        e.preventDefault();
+        if ($('d-sideToggle').style.display !== 'none') $('d-sideToggle').click();
+        break;
+      case 't': case 'T':
+        e.preventDefault();
+        viewDate = new Date();
+        viewDate.setHours(0, 0, 0, 0);
+        refreshDateLabel();
+        Promise.allSettled([loadTodos(), loadEvents()]);
+        break;
+      case 'ArrowLeft': e.preventDefault(); stepDate(-1); break;
+      case 'ArrowRight': e.preventDefault(); stepDate(1); break;
+      default: break;
+    }
+  }
+  document.addEventListener('keydown', handleDashKeys);
+
   return () => {
     clearInterval(clockTimer);
+    document.removeEventListener('keydown', handleDashKeys);
+    setScreenShortcuts(null, []);
     eventDetailModal.destroy();
     clearTimeout(flushTimer);
     offDataChanged?.();
