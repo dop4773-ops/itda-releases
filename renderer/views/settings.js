@@ -141,9 +141,12 @@ export async function mount(root) {
                 <div class="settings-row-title">화면 배율</div>
                 <div class="settings-row-desc">글씨/버튼 크기를 키우거나 줄여요. 저해상도 모니터에서 화면이 너무 작게 보일 때 조정해보세요.</div>
               </div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <input type="range" id="display-scaleRange" min="${DISPLAY_SCALE_MIN}" max="${DISPLAY_SCALE_MAX}" step="${DISPLAY_SCALE_STEP}" style="width:140px;" />
-                <span id="display-scaleValue" style="font-size:12px;color:var(--text-soft);width:36px;text-align:right;">100%</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-secondary" id="display-scaleMinus" title="1% 작게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
+                <input type="range" id="display-scaleRange" min="${DISPLAY_SCALE_MIN}" max="${DISPLAY_SCALE_MAX}" step="1" style="width:118px;" />
+                <button class="btn-secondary" id="display-scalePlus" title="1% 크게" style="padding:3px 9px;font-size:14px;line-height:1;">+</button>
+                <input type="number" id="display-scaleValue" min="${DISPLAY_SCALE_MIN}" max="${DISPLAY_SCALE_MAX}" step="1" class="input" style="width:52px;text-align:center;" />
+                <span style="font-size:12px;color:var(--text-faint);">%</span>
               </div>
             </div>
             <div class="update-row" style="margin-top:10px;">
@@ -545,30 +548,36 @@ export async function mount(root) {
       });
     });
 
+    // 화면 배율 — 슬라이더(1% 단위 드래그) + −/+ 버튼(1%씩) + 직접 입력.
+    // 드래그·입력 중엔 라이브 미리보기(zoom)만 하고, 저장(대시보드 좌표 재계산 포함)은
+    // 값이 확정될 때 한 번만 한다.
     const scaleRange = $('display-scaleRange');
-    const scaleValue = $('display-scaleValue');
-    const initialScale = await getDisplayScale();
-    scaleRange.value = String(initialScale);
-    scaleValue.textContent = `${initialScale}%`;
-    // 드래그하는 동안은 라이브 미리보기만(퍼센트 표시 + 화면 확대/축소) — 대시보드 좌표
-    // 재계산까지 매 픽셀마다 하면 낭비라 저장은 손을 뗀 시점(change)에 한 번만 한다.
-    scaleRange.addEventListener('input', () => {
-      scaleValue.textContent = `${scaleRange.value}%`;
-      document.documentElement.style.zoom = String(Number(scaleRange.value) / 100);
-    });
-    scaleRange.addEventListener('change', async () => {
-      const prev = scaleRange.dataset.prev || String(initialScale);
+    const scaleValue = $('display-scaleValue'); // <input type="number">
+    const clampScale = (n) => Math.max(DISPLAY_SCALE_MIN, Math.min(DISPLAY_SCALE_MAX, Math.round(Number(n) || 100)));
+    let scaleApplied = await getDisplayScale();
+    const previewScale = (n) => {
+      scaleRange.value = String(n);
+      scaleValue.value = String(n);
+      document.documentElement.style.zoom = String(n / 100);
+    };
+    previewScale(scaleApplied);
+    const commitScale = async (raw) => {
+      const n = clampScale(raw);
+      previewScale(n);
+      if (n === scaleApplied) return;
       try {
-        await setDisplayScale(Number(scaleRange.value));
-        scaleRange.dataset.prev = scaleRange.value;
+        await setDisplayScale(n);
+        scaleApplied = n;
       } catch (e) {
         errorToast(e, '화면 배율을 저장하지 못했어요');
-        scaleRange.value = prev;
-        scaleValue.textContent = `${prev}%`;
-        document.documentElement.style.zoom = String(Number(prev) / 100);
+        previewScale(scaleApplied);
       }
-    });
-    scaleRange.dataset.prev = String(initialScale);
+    };
+    scaleRange.addEventListener('input', () => previewScale(clampScale(scaleRange.value)));
+    scaleRange.addEventListener('change', () => commitScale(scaleRange.value));
+    scaleValue.addEventListener('change', () => commitScale(scaleValue.value));
+    $('display-scaleMinus').addEventListener('click', () => commitScale(scaleApplied - 1));
+    $('display-scalePlus').addEventListener('click', () => commitScale(scaleApplied + 1));
 
     const fontSelect = $('display-fontSelect');
     fontSelect.value = await getFontFamily();

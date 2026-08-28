@@ -1094,9 +1094,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ================= 대시보드 레이아웃 =================
    위젯 그리드(.dash-main)는 항상 화면 전체 폭을 쓰고, 우측 사이드 패널(.dash-side)은
    그 위에 겹쳐 뜨는 슬라이드 오버레이다 — 열고 닫아도 위젯 레이아웃 폭엔 영향이 없다. */
-.dash-layout{display:block;position:relative;}
+.dash-layout{display:block;position:relative;min-height:100%;}
 .dash-main{min-width:0;position:relative;z-index:1;}
-/* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음. */
+/* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음.
+   .dash-layout이 min-height:100%라 위젯이 적어도 배경이 스크롤 영역 전체를 항상 채운다. */
 .dash-bg{position:absolute;top:-26px;left:-28px;right:-28px;bottom:-60px;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;}
 /* 대시보드 전체 테마 = .dash-bg 캔버스 색만 바꾼다(카드는 각자 테마로) */
 .dash-layout[data-dashtheme="warm"] .dash-bg{background-color:#f2e8d8;}
@@ -1155,15 +1156,19 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 }
 .dash-block-body .sticker-block{background:color-mix(in srgb, var(--stk, #ffe08a) calc(var(--dash-op, 1) * 100%), transparent);}
 .dash-block-body .badge-block .bdg-text{background:color-mix(in srgb, var(--bdg, #ffd76a) calc(var(--dash-op, 1) * 100%), transparent);}
-.dash-block-body .countdown-block[data-theme="minimal"]{background:color-mix(in srgb, var(--surface) calc(var(--dash-op, 1) * 100%), transparent);}
+.dash-block-body .countdown-block[data-theme="minimal"],
+.dash-block-body .metric-block[data-theme="soft"]{background:color-mix(in srgb, var(--surface) calc(var(--dash-op, 1) * 100%), transparent);}
+.dash-block-body .countdown-block[data-theme="soft"]{background:color-mix(in srgb, var(--brand-soft) calc(var(--dash-op, 1) * 100%), transparent);}
+.dash-block-body .countdown-block[data-theme="dark"]{background:color-mix(in srgb, #23232a calc(var(--dash-op, 1) * 100%), transparent);}
+.dash-block-body .metric-block[data-theme="bold"]{background:color-mix(in srgb, var(--brand) calc(var(--dash-op, 1) * 100%), transparent);}
+/* 날짜 카드·넘김 달력은 배경만 옅어지고 날짜 숫자는 선명하게 — ::before 배경 레이어로 처리.
+   (실제 배경 정의/오버라이드는 각 블록 CSS 근처에 있음: "날짜 카드", "넘김 달력" 섹션) */
 .dash-block[style*="--dash-op"] .flip-frame,
 .dash-block[style*="--dash-op"] .analog-bezel,
 .dash-block[style*="--dash-op"] .clk-led,
 .dash-block[style*="--dash-op"] .clk-digital[data-theme="dark"],
-.dash-block[style*="--dash-op"] .datecard:not([data-theme="minimal"]),
-.dash-block[style*="--dash-op"] .flipcal,
 .dash-block[style*="--dash-op"] .quote-block,
-.dash-block[style*="--dash-op"] .countdown-block:not([data-theme="minimal"]),
+.dash-block[style*="--dash-op"] .countdown-block[data-theme="paper"],
 .dash-block[style*="--dash-op"] .tb-note,
 .dash-block[style*="--dash-op"] .image-block .ib-photo,
 .dash-block[style*="--dash-op"] .ib-polaroid{opacity:var(--dash-op, 1);}
@@ -1321,6 +1326,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dc-day{font-size:clamp(34px,13vw,78px);font-weight:800;line-height:1;}
 .dc-sub{font-size:12px;font-weight:600;color:var(--text-soft);}
 .datecard[data-theme="bold"] .dc-sub{color:rgba(255,255,255,.85);}
+/* 배경 투명도: 배경을 ::before 레이어로 옮겨 거기에만 opacity — 날짜 숫자는 항상 선명 */
+.dash-block[style*="--dash-op"] .datecard{background:transparent;isolation:isolate;}
+.dash-block[style*="--dash-op"] .datecard::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:var(--surface);opacity:var(--dash-op, 1);}
+.dash-block[style*="--dash-op"] .datecard[data-theme="paper"]::before{background:linear-gradient(#fff,#f7f3ea);}
+.dash-block[style*="--dash-op"] .datecard[data-theme="bold"]::before{background:var(--brand);}
 
 /* 넘김 달력 */
 .flipcal{width:100%;height:100%;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;position:relative;box-shadow:0 7px 18px rgba(16,24,40,.17);}
@@ -1330,8 +1340,13 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .flipcal[data-theme="classic"] .fcal-mon{background:#c0392b;}
 .flipcal[data-theme="ink"] .fcal-mon{background:#2c3e50;}
 .flipcal[data-theme="minimal"] .fcal-mon{background:var(--text-soft);}
-.fcal-day{flex:1;display:flex;align-items:center;justify-content:center;font-size:clamp(30px,12vw,70px);font-weight:800;background:linear-gradient(#fff,#f6f2e8);color:#2b2b2b;}
+.fcal-day{flex:1;display:flex;align-items:center;justify-content:center;font-size:clamp(30px,12vw,70px);font-weight:800;background:linear-gradient(#fff,#f6f2e8);color:#2b2b2b;position:relative;}
 .fcal-wd{text-align:center;font-size:11px;font-weight:600;color:#8a8172;padding:4px 0 7px;background:#f6f2e8;}
+/* 배경 투명도: 날짜 칸(.fcal-day)은 배경만 옅어지고 숫자는 선명 유지. 월/요일 띠는 함께 옅어짐. */
+.dash-block[style*="--dash-op"] .fcal-day{background:transparent;isolation:isolate;}
+.dash-block[style*="--dash-op"] .fcal-day::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(#fff,#f6f2e8);opacity:var(--dash-op, 1);}
+.dash-block[style*="--dash-op"] .fcal-mon,
+.dash-block[style*="--dash-op"] .fcal-wd{opacity:var(--dash-op, 1);}
 
 /* 텍스트 블록 */
 .text-block{width:100%;height:100%;padding:12px 16px;line-height:1.45;word-break:break-word;overflow:hidden;color:var(--tb-color,var(--text));display:flex;flex-direction:column;justify-content:center;}
@@ -1464,7 +1479,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 
 /* 진행 링 (원형 프로그레스) */
 .ring-block{width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative;padding:8px;}
-.ring-svg{width:100%;height:100%;max-width:120px;max-height:120px;transform:rotate(-90deg);}
+.ring-svg{width:100%;height:100%;max-width:120px;max-height:120px;transform:rotate(-90deg);transform-origin:center;}
 .ring-track{fill:none;stroke:var(--divider);stroke-width:9;}
 .ring-fill{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .4s ease;}
 .ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;}
