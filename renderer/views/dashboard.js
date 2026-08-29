@@ -164,26 +164,31 @@ export async function mount(root) {
           </div>
         </div>
 
-        <section class="panel dash-workcenter" id="d-card-workCenter">
-          <div class="panel-head"><h3>오늘의 업무센터</h3></div>
-          <div class="wc-stats">
-            <button class="wc-stat" data-nav="#/todo" title="Todo로 이동">
-              <span class="wc-stat-num" id="d-wcTodoCount">-</span>
-              <span class="wc-stat-label">오늘 할 일</span>
-            </button>
-            <button class="wc-stat" data-nav="#/calendar" title="일정으로 이동">
-              <span class="wc-stat-num" id="d-wcEventCount">-</span>
-              <span class="wc-stat-label">오늘 일정</span>
-            </button>
+        <section class="panel dash-widget dash-workcenter" id="d-card-workCenter" title="우클릭: 테마·투명도·테두리·글자색">
+          <div class="panel-head">
+            <h3>오늘의 업무센터</h3>
+            <button class="btn-icon wc-collapse-btn" id="d-wcCollapse" title="접기 / 펼치기">${CHEVRON_LEFT}</button>
           </div>
-          <div class="wc-cols">
-            <div class="wc-col">
-              <div class="wc-col-head">중요 할 일 <span class="wc-col-hint">즐겨찾기 · 미완료</span></div>
-              <div id="d-wcTodoList" class="wc-list"></div>
+          <div class="wc-body" id="d-wcBody">
+            <div class="wc-stats">
+              <button class="wc-stat" data-nav="#/todo" title="Todo로 이동">
+                <span class="wc-stat-num" id="d-wcTodoCount">-</span>
+                <span class="wc-stat-label">오늘 할 일</span>
+              </button>
+              <button class="wc-stat" data-nav="#/calendar" title="일정으로 이동">
+                <span class="wc-stat-num" id="d-wcEventCount">-</span>
+                <span class="wc-stat-label">오늘 일정</span>
+              </button>
             </div>
-            <div class="wc-col">
-              <div class="wc-col-head">오늘 일정</div>
-              <div id="d-wcEventList" class="wc-list"></div>
+            <div class="wc-cols">
+              <div class="wc-col">
+                <div class="wc-col-head">중요 할 일 <span class="wc-col-hint">★ 즐겨찾기 · ! 높음</span></div>
+                <div id="d-wcTodoList" class="wc-list"></div>
+              </div>
+              <div class="wc-col">
+                <div class="wc-col-head">오늘 일정</div>
+                <div id="d-wcEventList" class="wc-list"></div>
+              </div>
             </div>
           </div>
         </section>
@@ -1585,12 +1590,44 @@ export async function mount(root) {
       cardStyles = {};
     }
     const applyCardStyle = (id) => {
-      const el = grid.querySelector(`.dash-widget[data-card="${id}"]`);
+      // 자유배치 그리드 카드/블록 + 그리드 밖의 업무센터 카드까지 같은 스타일 시스템으로 다룬다.
+      const el = grid.querySelector(`.dash-widget[data-card="${id}"]`) || (id === 'workCenter' ? $('d-card-workCenter') : null);
       if (!el) return;
       const s = cardStyles[id] || {};
       el.dataset.cardtheme = s.theme || '';
       if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
+
+      // 테두리: 'none'(없음) / 'strong'(굵게) / #rrggbb(색) / 그 외=기본
+      if (s.border === 'none') {
+        el.style.borderWidth = '0';
+        el.style.borderColor = '';
+      } else if (s.border === 'strong') {
+        el.style.borderWidth = '2px';
+        el.style.borderStyle = 'solid';
+        el.style.borderColor = '';
+      } else if (/^#[0-9a-f]{6}$/i.test(s.border || '')) {
+        el.style.borderWidth = '1.5px';
+        el.style.borderStyle = 'solid';
+        el.style.borderColor = s.border;
+      } else {
+        el.style.borderWidth = '';
+        el.style.borderStyle = '';
+        el.style.borderColor = '';
+      }
+
+      // 글자색: #rrggbb면 카드 하위 트리의 --text 계열을 통째로 그 색으로.
+      if (/^#[0-9a-f]{6}$/i.test(s.textColor || '')) {
+        el.style.setProperty('--text', s.textColor);
+        el.style.setProperty('--text-soft', s.textColor);
+        el.style.setProperty('--text-faint', s.textColor);
+        el.style.color = s.textColor;
+      } else {
+        el.style.removeProperty('--text');
+        el.style.removeProperty('--text-soft');
+        el.style.removeProperty('--text-faint');
+        el.style.color = '';
+      }
       // 헤더 스타일: 카드별(s.header) > 전체(globalHeaderStyle). 'default'/'' = 기본형(속성 제거).
       const effHeader = s.header && s.header !== 'default' ? s.header : s.header === 'default' ? '' : globalHeaderStyle;
       if (HEADER_STYLES.includes(effHeader)) el.dataset.headerstyle = effHeader;
@@ -1656,6 +1693,16 @@ export async function mount(root) {
         </div>
         <div class="dcm-label">배경 투명도 <span class="dcm-opval">${s.opacity ?? 100}%</span></div>
         <input type="range" class="dcm-op" min="0" max="100" step="5" value="${s.opacity ?? 100}" />
+        <div class="dcm-label">테두리</div>
+        <div class="dcm-views">
+          ${[['', '기본'], ['none', '없음'], ['strong', '굵게']].map(([v, l]) => `<button class="dcm-border ${(s.border || '') === v ? 'active' : ''}" data-border="${v}">${l}</button>`).join('')}
+          <input type="color" class="dcm-border-pick" title="테두리 색" value="${/^#[0-9a-f]{6}$/i.test(s.border || '') ? s.border : '#c9ccd4'}" />
+        </div>
+        <div class="dcm-label">글자색</div>
+        <div class="dcm-accent">
+          <button class="dcm-text-reset ${/^#[0-9a-f]{6}$/i.test(s.textColor || '') ? '' : 'active'}" data-textcolor="">기본</button>
+          <input type="color" class="dcm-text-pick" value="${/^#[0-9a-f]{6}$/i.test(s.textColor || '') ? s.textColor : '#2b2e3a'}" />
+        </div>
         ${isBlock ? '' : `<div class="ctx-menu-divider"></div><button class="ctx-menu-item" data-act="hide">🙈 이 카드 숨기기</button>`}`;
       document.body.appendChild(menu);
       cardMenu = menu;
@@ -1707,6 +1754,38 @@ export async function mount(root) {
         patchStyle({ opacity: Number(opInput.value) });
       });
       opInput.addEventListener('change', persist);
+
+      // 테두리: 프리셋 버튼(기본/없음/굵게) + 색 선택
+      const borderPick = menu.querySelector('.dcm-border-pick');
+      const setBorderActive = (v) =>
+        menu.querySelectorAll('[data-border]').forEach((b) => b.classList.toggle('active', b.dataset.border === v));
+      menu.querySelectorAll('[data-border]').forEach((b) => {
+        b.addEventListener('click', () => {
+          setBorderActive(b.dataset.border);
+          patchStyle({ border: b.dataset.border || undefined });
+          persist();
+        });
+      });
+      borderPick?.addEventListener('input', () => {
+        setBorderActive(null);
+        patchStyle({ border: borderPick.value });
+      });
+      borderPick?.addEventListener('change', persist);
+
+      // 글자색: 기본 or 색 선택
+      const textPick = menu.querySelector('.dcm-text-pick');
+      const textReset = menu.querySelector('.dcm-text-reset');
+      textPick?.addEventListener('input', () => {
+        textReset.classList.remove('active');
+        patchStyle({ textColor: textPick.value });
+      });
+      textPick?.addEventListener('change', persist);
+      textReset?.addEventListener('click', () => {
+        textReset.classList.add('active');
+        patchStyle({ textColor: undefined });
+        persist();
+      });
+
       menu.querySelector('[data-act="hide"]')?.addEventListener('click', async () => {
         closeCardMenu();
         await toggleSummaryOrCard(cardId, false);
@@ -1720,6 +1799,12 @@ export async function mount(root) {
         e.preventDefault();
         openCardMenu(e.clientX, e.clientY, cardId, false);
       });
+    });
+    // 업무센터는 자유배치 그리드 밖이지만 같은 우클릭 스타일 메뉴를 쓴다.
+    $('d-card-workCenter')?.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('input,button,a,.todo-row')) return;
+      e.preventDefault();
+      openCardMenu(e.clientX, e.clientY, 'workCenter', false);
     });
     // 꾸미기 블록 우클릭 → 투명도만 (테마는 블록마다 ⚙ 설정에 따로 있음)
     const attachBlockMenu = (el) => {
@@ -2061,16 +2146,21 @@ export async function mount(root) {
   }
 
   // 오늘의 업무센터 — 기존 Todo/일정 데이터를 그대로 읽어 요약만 새로 그린다(신규 데이터 로직 없음).
-  // 카운트/일정은 상단 날짜(viewDate)를 따르고, "중요 할 일"은 날짜와 무관하게 즐겨찾기+미완료 전체.
+  // 카운트/일정은 상단 날짜(viewDate)를 따르고, "중요 할 일"은 날짜와 무관하게 (즐겨찾기 OR 우선순위 높음) + 미완료.
   async function loadWorkCenter() {
     const card = $('d-card-workCenter');
     if (!card || card.style.display === 'none') return;
     const dateStr = toDateKey(viewDate);
-    const [todayTodos, favTodos, events] = await Promise.all([
+    const [todayTodos, openTodos, events] = await Promise.all([
       window.itda.todos.list({ fromDate: dateStr, toDate: dateStr }).catch(() => []),
-      window.itda.todos.list({ isFavorite: true, isDone: false }).catch(() => []),
+      window.itda.todos.list({ isDone: false }).catch(() => []), // ponytail: 미완료 전체를 받아 클라에서 추림 — 즐겨찾기+높음만 거르는 repo 필터는 필요해지면 추가
       window.itda.events.range({ fromDate: dateStr, toDate: dateStr }).catch(() => []),
     ]);
+
+    // 중요 = 즐겨찾기 ★  또는  우선순위 '높음'(priority 1). 즐겨찾기 > 높음 > 마감일 순으로.
+    const important = openTodos
+      .filter((t) => t.is_favorite || t.priority === 1)
+      .sort((a, b) => (b.is_favorite - a.is_favorite) || (a.priority - b.priority) || String(a.due_date || '9').localeCompare(String(b.due_date || '9')));
 
     $('d-wcTodoCount').textContent = todayTodos.length;
     $('d-wcEventCount').textContent = events.length;
@@ -2085,10 +2175,10 @@ export async function mount(root) {
         errorToast(err, '상태를 변경하지 못했어요');
       }
     };
-    if (favTodos.length === 0) {
-      todoListEl.innerHTML = `<div class="wc-empty">즐겨찾기한 미완료 할 일이 없어요</div>`;
+    if (important.length === 0) {
+      todoListEl.innerHTML = `<div class="wc-empty">즐겨찾기 ★ 또는 우선순위 높음인 미완료 할 일이 없어요</div>`;
     } else {
-      todoListEl.innerHTML = favTodos
+      todoListEl.innerHTML = important
         .slice(0, 6)
         .map(
           (t) => `
@@ -2096,11 +2186,12 @@ export async function mount(root) {
           <input type="checkbox" data-id="${t.id}" />
           <span class="cat" style="background:${t.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
           <span class="txt">${escapeHtml(t.title)}</span>
+          <span class="wc-flag">${t.is_favorite ? '★' : t.priority === 1 ? '!' : ''}</span>
           <span class="due">${t.due_date ? t.due_date.slice(5) : ''}</span>
         </div>`
         )
         .join('') +
-        (favTodos.length > 6 ? `<a class="todo-more-link dash-row-link" data-nav="#/todo">+ ${favTodos.length - 6}개 더보기</a>` : '');
+        (important.length > 6 ? `<a class="todo-more-link dash-row-link" data-nav="#/todo">+ ${important.length - 6}개 더보기</a>` : '');
       bindDashRowNav(todoListEl);
       todoListEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
         cb.addEventListener('change', (e) => {
@@ -2519,6 +2610,19 @@ export async function mount(root) {
       location.hash = btn.dataset.nav;
     });
   });
+
+  // 업무센터 접기/펼치기 — 요약 카드 접기와 같은 방식(전용 설정 키 하나).
+  (async () => {
+    const wcCard = $('d-card-workCenter');
+    const applyWcCollapsed = (c) => wcCard.classList.toggle('wc-collapsed', c);
+    let wcCollapsed = (await window.itda.settings.get('dashboard_workcenter_collapsed')) === '1';
+    applyWcCollapsed(wcCollapsed);
+    $('d-wcCollapse').addEventListener('click', () => {
+      wcCollapsed = !wcCollapsed;
+      applyWcCollapsed(wcCollapsed);
+      window.itda.settings.set({ key: 'dashboard_workcenter_collapsed', value: wcCollapsed ? '1' : '0' }).catch(() => {});
+    });
+  })();
 
   await Promise.allSettled([
     loadWorkCenter(),

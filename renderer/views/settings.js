@@ -205,17 +205,14 @@ export async function mount(root) {
             <div class="panel-head"><h3>대시보드 스타일</h3></div>
             <p class="settings-panel-desc">전역 앱 테마와 별개로, 대시보드 카드·여백·라운드·그림자·강조색·배경을 한 번에 바꿔요. 레이아웃(위젯 배치)은 그대로 유지돼요.</p>
             <div id="dash-stylePresetGrid" class="theme-card-grid"></div>
-          </div>
-
-          <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>위젯 헤더 스타일</h3></div>
-            <p class="settings-panel-desc">대시보드 업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 하나만 바꿔도 대시보드 분위기가 크게 달라져요.</p>
+            <label class="panel-section-label" style="margin-top:14px;">위젯 헤더 스타일</label>
+            <p class="settings-panel-desc" style="margin-top:2px;">업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 카드마다 다르게 하려면 대시보드에서 카드를 우클릭하세요.</p>
             <div class="seg" id="dash-headerStyleSeg"></div>
           </div>
 
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>카드 구성</h3></div>
-            <p class="settings-panel-desc">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 직접 바꿀 수 있어요.</p>
+            <p class="settings-panel-desc">대시보드에 어떤 카드를 보여줄지 정해요. 카드 위치/크기는 대시보드에서 그립(⠿)을 드래그하거나 모서리를 끌어서 바꾸고, 테마·투명도·테두리·글자색은 카드를 우클릭해서 바꿔요.</p>
             <div id="dashboard-cardList"></div>
           </div>
 

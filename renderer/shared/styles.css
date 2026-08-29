@@ -384,8 +384,8 @@ body.topbar-hidden .global-topbar{display:none;}
 
 /* ================= 요약 카드 ================= */
 .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
-.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 17px;box-shadow:var(--shadow);cursor:pointer;transition:box-shadow .12s ease;}
-.summary-card:hover{box-shadow:0 6px 18px rgba(16,24,40,.14);}
+.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 17px;box-shadow:var(--shadow);cursor:pointer;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;}
+.summary-card:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(16,24,40,.13);border-color:color-mix(in srgb,var(--brand) 40%,var(--border));}
 .summary-card .top{display:flex;align-items:center;gap:8px;color:var(--text-soft);font-size:var(--fs-page-sub);margin-bottom:10px;}
 .summary-card .dot{width:8px;height:8px;border-radius:2px;}
 .summary-card .num{font-size:26px;font-weight:700;}
@@ -405,18 +405,25 @@ body.topbar-hidden .global-topbar{display:none;}
 /* ================= 오늘의 업무센터 (대시보드 상단 요약 위젯) ================= */
 .dash-workcenter{margin-bottom:20px;}
 .dash-workcenter .panel-head{margin-bottom:12px;}
+.wc-collapse-btn{margin-left:auto;transition:transform .18s ease;color:var(--text-faint);}
+.wc-collapse-btn:hover{color:var(--brand);}
+.dash-workcenter.wc-collapsed .wc-collapse-btn{transform:rotate(180deg);}
+.dash-workcenter.wc-collapsed .panel-head{margin-bottom:0;}
+.dash-workcenter.wc-collapsed .wc-body{display:none;}
 .wc-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
-.wc-stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 14px;border:1px solid var(--border);
-  border-radius:var(--radius-md);background:var(--bg);cursor:pointer;font-family:inherit;text-align:left;transition:box-shadow .12s ease;}
-.wc-stat:hover{box-shadow:0 4px 12px rgba(16,24,40,.12);}
-.wc-stat-num{font-size:22px;font-weight:700;color:var(--brand);}
+.wc-stat{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px 15px;border:1px solid var(--border);
+  border-radius:var(--radius-lg);background:var(--bg);cursor:pointer;font-family:inherit;text-align:left;
+  transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease;}
+.wc-stat:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(16,24,40,.10);border-color:var(--brand);}
+.wc-stat-num{font-size:23px;font-weight:800;color:var(--brand);letter-spacing:-.01em;}
 .wc-stat-label{font-size:12px;color:var(--text-soft);}
 .wc-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
 .wc-col-head{font-size:12px;font-weight:600;color:var(--text-soft);margin-bottom:6px;display:flex;align-items:baseline;gap:6px;}
 .wc-col-hint{font-size:10.5px;font-weight:400;color:var(--text-faint);}
 .wc-list{display:flex;flex-direction:column;}
+.wc-flag{font-size:11px;color:var(--tone-yellow-fg,#c99a13);flex-shrink:0;width:12px;text-align:center;}
 .wc-empty{font-size:11.5px;color:var(--text-faint);padding:6px 2px;}
-@media (max-width:720px){.wc-cols{grid-template-columns:1fr;}}
+@media (max-width:720px){.wc-cols{grid-template-columns:1fr;}.wc-stats{grid-template-columns:1fr;}}
 
 /* ================= 콘텐츠 그리드 / 패널 ================= */
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px;min-height:120px;}
@@ -1350,6 +1357,14 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dcm-accent-reset{font-size:11px;padding:3px 9px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
 .dcm-accent-reset.active{background:var(--brand);color:#fff;border-color:var(--brand);}
 .dcm-accent-pick{width:30px;height:24px;padding:0;border:1px solid var(--border);border-radius:var(--radius-xs);cursor:pointer;background:none;}
+.dcm-border{font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
+.dcm-border.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+.dcm-border-pick,.dcm-text-pick{width:30px;height:24px;padding:0;border:1px solid var(--border);border-radius:var(--radius-xs);cursor:pointer;background:none;}
+.dcm-text-reset{font-size:11px;padding:3px 9px;border:1px solid var(--border);border-radius:var(--radius-xs);background:var(--surface);color:var(--text-soft);cursor:pointer;font-family:inherit;}
+.dcm-text-reset.active{background:var(--brand);color:#fff;border-color:var(--brand);}
+/* 카드별 글자색: 스타일 메뉴에서 지정하면 카드 안 제목·항목·링크까지 그 색으로 */
+.dash-widget[style*="--text:"] h3,.dash-widget[style*="--text:"] h4,.dash-widget[style*="--text:"] b,
+.dash-widget[style*="--text:"] a,.dash-widget[style*="--text:"] .txt,.dash-widget[style*="--text:"] .btn-icon{color:var(--text);}
 
 /* ---- Todo 위젯 표현 방식: 컴팩트 / 포커스 / 진행률 ---- */
 .todo-view-compact .todo-row{padding:4px 0;font-size:12.5px;gap:7px;}
@@ -1790,8 +1805,10 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .week-stat-bar{display:block;height:4px;border-radius:2px;}
 
 .quick-add-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-.quick-add-btn{display:flex;align-items:center;justify-content:center;padding:10px;border-radius:var(--radius-md);background:var(--bg);color:var(--text-soft);font-size:12.5px;font-weight:600;text-decoration:none;border:1px solid var(--border);}
-.quick-add-btn:hover{border-color:var(--brand);color:var(--brand);}
+.quick-add-btn{display:flex;align-items:center;justify-content:center;padding:11px;border-radius:var(--radius-lg);background:var(--bg);color:var(--text-soft);font-size:12.5px;font-weight:600;text-decoration:none;border:1px solid var(--border);
+  transition:transform .14s ease,border-color .14s ease,color .14s ease,background .14s ease;}
+.quick-add-btn:hover{border-color:var(--brand);color:var(--brand);background:var(--brand-soft);transform:translateY(-1px);}
+.dash-row-link{transition:background .12s ease;}
 
 @media (max-width: 1100px){
   .summary-grid-5{grid-template-columns:repeat(3,1fr);}
