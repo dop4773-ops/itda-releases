@@ -642,10 +642,13 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .time-day-header.is-today{background:var(--brand-soft);}
 .time-day-container.is-today-col{background-color:rgba(108,140,245,.04);}
 
-/* ---- 일정 화면 높이 고정 ----
-   #c-gridArea가 창 높이에 맞춰 딱 한 번 높이를 잡고, 월/주/일 뷰가 모두 그 높이를 그대로 채운다.
-   → 뷰를 바꿔도, 일정 개수가 달라도, OS(맥/윈도우)가 달라도 세 뷰의 크기가 항상 같다. */
-#c-gridArea{height:calc(100vh - 230px);min-height:520px;}
+/* ---- 일정 화면 높이 ----
+   메모 화면과 똑같이 .main을 세로 flex로 만들고 #c-gridArea가 남은 높이를 전부 차지하게 한다.
+   (calc(100vh - Npx)는 화면 배율/OS 크롬 높이와 안 맞아 아래에 빈 공간이 생겼다 — flex로 해결.)
+   → 월/주/일이 모두 이 높이를 그대로 채우므로 뷰·일정개수·OS와 무관하게 크기가 같고, 창 밑까지 꽉 찬다. */
+.main[data-view="calendar"]{padding-bottom:12px;display:flex;flex-direction:column;min-height:0;}
+#c-gridArea{flex:1 1 auto;min-height:420px;}
+.main[data-view="calendar"] .cal-legend{flex-shrink:0;}
 #c-gridArea .month-grid{height:100%;grid-template-rows:auto repeat(6,1fr);}
 #c-gridArea .month-cell{height:auto;min-height:0;overflow:hidden;}
 #c-gridArea .time-grid{height:100%;}
