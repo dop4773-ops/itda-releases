@@ -1460,14 +1460,17 @@ export async function mount(root) {
   function onGridMenuOutside(e) {
     if (gridMenu && !gridMenu.contains(e.target)) closeGridMenu();
   }
-  $('d-widgetGrid').addEventListener('contextmenu', (e) => {
-    if (!widgetGrid.isEditing()) return; // 편집 모드에서만
-    if (e.target.closest('.dash-widget')) return; // 위젯 위 우클릭은 카드별 메뉴가 처리
+  // 대시보드 빈 공간(위젯 그리드의 빈 칸 + 그 아래 여백) 우클릭 — 편집 모드가 아니어도 뜬다.
+  $('d-layout').addEventListener('contextmenu', (e) => {
+    // 위젯/카드/헤더/요약/편집바/사이드패널/입력요소 위에서는 각자의 메뉴(또는 OS 기본)를 쓴다.
+    if (e.target.closest('.dash-widget, .panel, .dash-header, .summary-grid, .summary-collapsed-bar, .dash-edit-bar, .dash-side, .dash-add-panel, .ctx-menu, input, button, a, select, textarea, [contenteditable="true"]')) return;
     e.preventDefault();
     closeGridMenu();
+    const editing = widgetGrid.isEditing();
     const menu = document.createElement('div');
     menu.className = 'ctx-menu';
-    menu.innerHTML = `
+    menu.innerHTML = editing
+      ? `
       <button class="ctx-menu-item" data-g="add">＋ 위젯 추가</button>
       <button class="ctx-menu-item" data-g="bg">🎨 배경 바꾸기</button>
       <div class="ctx-menu-divider"></div>
@@ -1475,7 +1478,12 @@ export async function mount(root) {
       <button class="ctx-menu-item" data-g="layout">💾 레이아웃 저장/불러오기 ▸</button>
       <button class="ctx-menu-item" data-g="reset">↺ 기본 배치로 복원</button>
       <div class="ctx-menu-divider"></div>
-      <button class="ctx-menu-item" data-g="done">✓ 편집 완료</button>`;
+      <button class="ctx-menu-item" data-g="done">✓ 편집 완료</button>`
+      : `
+      <button class="ctx-menu-item" data-g="edit">✏️ 레이아웃 편집</button>
+      <button class="ctx-menu-item" data-g="add">＋ 위젯 추가</button>
+      <button class="ctx-menu-item" data-g="bg">🎨 배경 바꾸기</button>
+      <button class="ctx-menu-item" data-g="layout">💾 레이아웃 저장/불러오기 ▸</button>`;
     document.body.appendChild(menu);
     gridMenu = menu;
     menu.style.left = `${Math.max(8, Math.min(e.clientX, window.innerWidth - menu.offsetWidth - 8))}px`;
@@ -1492,7 +1500,8 @@ export async function mount(root) {
           return;
         }
         closeGridMenu();
-        if (act === 'add') $('d-addWidgetBtn').click();
+        if (act === 'edit') $('d-layoutEditBtn').click();
+        else if (act === 'add') $('d-addWidgetBtn').click();
         else if (act === 'bg') $('d-bgBtn').click();
         else if (act === 'reset') $('d-layoutResetBtn').click();
         else if (act === 'done') $('d-editDoneBtn').click();

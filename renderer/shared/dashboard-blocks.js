@@ -80,7 +80,7 @@ export const BLOCK_TYPES = {
     label: '날씨',
     icon: '⛅',
     defaultSize: { w: 3, h: 2 },
-    defaultConfig: { city: '서울' },
+    defaultConfig: { city: '서울', view: 'current' },
   },
   miniTool: {
     label: '미니 도구',
@@ -371,6 +371,15 @@ const PAINTERS = {
     </div>`;
   },
   weather(c) {
+    if (c.view === 'week') {
+      return `<div class="weather-block wx-week">
+        <div class="wx-loading">주간 날씨 불러오는 중…</div>
+        <div class="wx-week-wrap" style="display:none">
+          <div class="wx-week-city">${escapeHtml(c.city || '')}</div>
+          <div class="wx-week-days"></div>
+        </div>
+      </div>`;
+    }
     return `<div class="weather-block">
       <div class="wx-loading">날씨 불러오는 중…</div>
       <div class="wx-main" style="display:none">
@@ -616,6 +625,35 @@ async function refreshWeather(el, block, force) {
       place = geo?.results?.[0];
     }
     if (!place) throw new Error('city not found');
+
+    if (block.config?.view === 'week') {
+      const wx = await fetchJson(
+        `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=7`
+      );
+      const d = wx?.daily;
+      if (!d || !Array.isArray(d.time)) throw new Error('no data');
+      const rows = d.time
+        .map((t, i) => {
+          const dt = new Date(t + 'T00:00');
+          const [ic] = WMO[d.weather_code[i]] || ['🌡️'];
+          const today = i === 0;
+          return `<div class="wx-day${today ? ' is-today' : ''}">
+            <span class="wx-day-name">${today ? '오늘' : WD[dt.getDay()]}</span>
+            <span class="wx-day-icon">${ic}</span>
+            <span class="wx-day-temp"><b>${Math.round(d.temperature_2m_max[i])}°</b><i>${Math.round(d.temperature_2m_min[i])}°</i></span>
+          </div>`;
+        })
+        .join('');
+      const daysEl = el.querySelector('.wx-week-days');
+      if (daysEl) daysEl.innerHTML = rows;
+      const cityEl = el.querySelector('.wx-week-city');
+      if (cityEl) cityEl.textContent = place.name || city;
+      if (loading) loading.style.display = 'none';
+      const wrap = el.querySelector('.wx-week-wrap');
+      if (wrap) wrap.style.display = '';
+      return;
+    }
+
     const wx = await fetchJson(
       `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current=temperature_2m,weather_code`
     );
@@ -917,11 +955,12 @@ const FIELDS = {
     <label class="cfg-row">출처<input class="input" data-cfg="author" value="${escapeHtml(c.author || '')}" placeholder="예: 잇다 팀 (선택)" /></label>
     ${sel('테마', 'theme', [['soft', '소프트'], ['paper', '페이퍼'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'paper')}`,
   weather: (c) => `
+    ${sel('보기', 'view', [['current', '현재 날씨'], ['week', '주간 예보 (7일)']], c.view || 'current')}
     <label class="cfg-row">도시
       <input class="input" data-cfg="city" data-cfg-ev="change" list="wx-city-list" value="${escapeHtml(c.city || '서울')}" placeholder="목록에서 고르거나 직접 입력" autocomplete="off" />
       <datalist id="wx-city-list">${Object.keys(KR_CITIES).map((n) => `<option value="${n}">`).join('')}<option value="Tokyo"><option value="Osaka"><option value="New York"><option value="London"></datalist>
     </label>
-    <p class="cfg-note">국내 도시는 목록에서 고르고, 해외는 영어 도시명을 직접 입력하세요. 30분마다 자동 갱신되며 인터넷이 필요합니다.</p>`,
+    <p class="cfg-note">국내 도시는 목록에서 고르고, 해외는 영어 도시명을 직접 입력하세요. 주간 예보는 가로로 길게 넣으면 잘 보여요. 30분마다 자동 갱신되며 인터넷이 필요합니다.</p>`,
   miniTool: (c) => sel('도구', 'tool', [['calc', '계산기'], ['notepad', '메모지'], ['timer', '스톱워치']], c.tool || 'calc'),
   countdown: (c) => `
     <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="목표일" /></label>
