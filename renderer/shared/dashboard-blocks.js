@@ -808,7 +808,7 @@ export function openBlockConfig(anchorEl, block, onChange) {
       const f = fileInput.files?.[0];
       if (!f) return;
       try {
-        const dataUrl = await readImageDownscaled(f, 1400);
+        const dataUrl = await readImageDownscaled(f, 1800);
         const oldFile = cfg.imageFile;
         if (window.itda?.dashboardImages?.save) {
           // 축소본을 userData/dashboard-images/ 파일로 저장하고 설정엔 파일명만 둔다(설정 JSON 비대화 방지).
@@ -942,14 +942,23 @@ const FIELDS = {
 
 // 파일 → maxPx 이하 JPEG dataURL. config/설정에 통째로 저장.
 // ponytail: 설정 행에 base64(수십~수백 KB). 사진을 많이/크게 붙이면 dashboard-images/ 폴더 저장으로 옮길 것.
-export function readImageDownscaled(file, maxPx, quality = 0.85) {
+// 이미지 파일 → 저장용 dataURL.
+// - 이미 maxPx 이하이고 웹 표준 포맷(jpeg/png/webp)이면 원본을 그대로 반환(재인코딩 X = 화질 손실 0).
+// - 그보다 크면 축소하되 PNG는 PNG로(그래픽/스크린샷 아티팩트 방지), 그 외엔 고품질 JPEG.
+export function readImageDownscaled(file, maxPx, quality = 0.92) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
     reader.onload = () => {
+      const original = String(reader.result || '');
+      const webSafe = /^data:image\/(jpeg|png|webp);base64,/.test(original);
       const img = new Image();
       img.onerror = () => reject(new Error('이미지를 읽지 못했어요'));
       img.onload = () => {
+        if (webSafe && img.width <= maxPx && img.height <= maxPx) {
+          resolve(original); // 원본 그대로
+          return;
+        }
         const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
         const w = Math.round(img.width * scale);
         const h = Math.round(img.height * scale);
@@ -959,9 +968,10 @@ export function readImageDownscaled(file, maxPx, quality = 0.85) {
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const isPng = original.startsWith('data:image/png');
+        resolve(canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', quality));
       };
-      img.src = reader.result;
+      img.src = original;
     };
     reader.readAsDataURL(file);
   });

@@ -1144,8 +1144,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .dash-layout{display:block;position:relative;min-height:100%;}
 .dash-main{min-width:0;position:relative;z-index:1;}
 /* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음.
-   .dash-layout이 min-height:100%라 위젯이 적어도 배경이 스크롤 영역 전체를 항상 채운다. */
-.dash-bg{position:absolute;top:-26px;left:-28px;right:-28px;bottom:-60px;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;pointer-events:none;}
+   .dash-layout이 min-height:100%라 위젯이 적어도 배경이 스크롤 영역 전체를 항상 채운다.
+   background-attachment:fixed — 배경 크기를 (긴 스크롤 영역이 아니라) 화면 크기 기준으로 계산해
+   과하게 확대되는 걸 막고, 스크롤해도 배경은 고정된다. */
+.dash-bg{position:absolute;top:-26px;left:-28px;right:-28px;bottom:-60px;z-index:0;background-size:cover;background-position:center;background-repeat:no-repeat;background-attachment:fixed;pointer-events:none;}
 /* 캔버스 패턴 — 아주 옅게. 콘텐츠 가독성 우선이라 alpha를 낮게 유지한다. */
 .dash-bg.pat-dot,.dash-bg.pat-grid,.dash-bg.pat-paper{background-repeat:repeat;background-position:0 0;}
 .dash-bg.pat-dot{background-image:radial-gradient(rgba(110,110,135,.11) 1px, transparent 1.4px);background-size:22px 22px;}

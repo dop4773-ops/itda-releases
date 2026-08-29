@@ -489,8 +489,9 @@ export async function mount(root) {
         const f = e.target.files?.[0];
         if (!f) return;
         try {
-          // 화질 향상: 2560px + 품질 0.9. 설정 JSON 비대화 방지를 위해 파일 저장소(dashboard-images/)에 저장.
-          const dataUrl = await readImageDownscaled(f, 2560, 0.9);
+          // 배경은 화면 전체에 깔리므로 4K까지 원본 유지(3840px). 작은 사진은 재인코딩 없이 원본 그대로.
+          // 설정 JSON 비대화 방지를 위해 파일 저장소(dashboard-images/)에 저장.
+          const dataUrl = await readImageDownscaled(f, 3840);
           const oldFile = bg.imageFile;
           if (window.itda.dashboardImages?.save) {
             const res = await window.itda.dashboardImages.save({ dataUrl });
