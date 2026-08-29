@@ -17,6 +17,7 @@ import {
 } from '../../shared/rich-text.js';
 import { STICKY_COLORS } from '../../shared/theme.js';
 import { wrapAutosave } from '../../shared/pending-saves.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 const BOLD_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
 const UNDERLINE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 4v7a6 6 0 0012 0V4"/><path d="M4 20h16"/></svg>`;
@@ -164,6 +165,9 @@ async function mount() {
   const shell = root.querySelector('.widget-card');
   const contentEl = document.getElementById('w-content');
   linkifyUrls(contentEl); // 불러올 때 한 번만 — 입력 중엔 호출 금지(커서 깨짐)
+
+  // 메인 앱과 동일한 우클릭 메뉴 — 본문 위에서도 열리게 openAnywhere.
+  attachContextMenu(shell, () => ({ type: 'memo', id }), { openAnywhere: true, onDeleted: () => window.close() });
   fitToContent(root); // 일단 지금 있는 내용 기준으로 한 번 맞추고, 사진 로드되면 아래서 다시 한 번 더
 
   attachments

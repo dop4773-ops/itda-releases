@@ -1,5 +1,6 @@
 import { renderBoardWidgetShell, fitWidgetToContent } from '../../shared/widget-ui.js';
 import { escapeHtml, errorToast } from '../../shared/ui-utils.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 function getIdFromQuery() {
   return Number(new URLSearchParams(location.search).get('id'));
@@ -42,6 +43,8 @@ async function mount() {
       footerRoute: '#/todo',
     });
     fitWidgetToContent(root);
+
+    attachContextMenu(root.querySelector('.board-widget-body'), () => ({ type: 'todo', id, dueDate: todo.due_date || null, isDone: todo.status === 'done' }), { onDeleted: () => window.close() });
 
     document.getElementById('ti-check').addEventListener('change', async (e) => {
       try {

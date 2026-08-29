@@ -1,5 +1,6 @@
 import { renderBoardWidgetShell, fitWidgetToContent } from '../../shared/widget-ui.js';
 import { escapeHtml } from '../../shared/ui-utils.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 function getIdFromQuery() {
   return Number(new URLSearchParams(location.search).get('id'));
@@ -47,6 +48,8 @@ async function mount() {
     footerRoute: '#/calendar',
   });
   fitWidgetToContent(root);
+
+  attachContextMenu(root.querySelector('.board-widget-body'), () => ({ type: 'event', id }), { onDeleted: () => window.close() });
 }
 
 mount();

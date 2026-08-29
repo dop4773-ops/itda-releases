@@ -296,3 +296,12 @@ body {
 .mi-attach-chip:hover { background: rgba(0, 0, 0, .12); }
 .mi-attach-thumb { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0, 0, 0, .5); }
 .mi-attach-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* ================= 위젯 창에 뜨는 메인 앱 UI (우클릭 메뉴 / 연결 팝오버 / 전환 모달) =================
+   widget.html이 styles.css를 함께 로드해서 메인 앱과 "동일한" 우클릭 메뉴를 쓴다.
+   창이 작으니 모달·팝오버 여백만 줄여서 좁은 창에도 들어맞게 한다. */
+.modal-overlay { padding: 6vh 8px 8px; align-items: flex-start; }
+.modal-card { width: 100%; max-width: 100%; padding: 14px; max-height: 88vh; }
+.modal-card h3 { font-size: 13.5px; margin-bottom: 10px; }
+.ctx-link-popover { max-width: calc(100vw - 12px); }
+.ctx-menu { max-width: calc(100vw - 12px); }

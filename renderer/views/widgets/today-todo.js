@@ -1,5 +1,6 @@
 import { renderBoardWidgetShell } from '../../shared/widget-ui.js';
 import { escapeHtml, errorToast } from '../../shared/ui-utils.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -22,7 +23,7 @@ async function mount() {
           ${todos
             .map(
               (t) => `
-            <label class="bw-check-row">
+            <label class="bw-check-row" data-id="${t.id}">
               <input type="checkbox" data-id="${t.id}" />
               <span>${escapeHtml(t.title)}</span>
               <em>${t.due_date ? '오늘' : '마감없음'}</em>
@@ -46,6 +47,17 @@ async function mount() {
       adding = true;
       render();
       setTimeout(() => document.getElementById('bw-newTodoInput')?.focus(), 30);
+    });
+
+    root.querySelectorAll('.bw-check-row[data-id]').forEach((row) => {
+      const tid = Number(row.dataset.id);
+      const t = todos.find((x) => x.id === tid);
+      attachContextMenu(row, () => ({ type: 'todo', id: tid, dueDate: t?.due_date || null, isDone: !!t?.is_done }), {
+        onDeleted: async () => {
+          todos = await window.itda.todos.today().catch(() => todos);
+          render();
+        },
+      });
     });
 
     const newInput = document.getElementById('bw-newTodoInput');

@@ -2,6 +2,7 @@ import { renderBoardWidgetShell } from '../../shared/widget-ui.js';
 import { escapeHtml, errorToast } from '../../shared/ui-utils.js';
 import { STICKY_COLORS } from '../../shared/theme.js';
 import { stripHtmlToPlainText } from '../../shared/rich-text.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -39,6 +40,7 @@ async function mount() {
     tile.addEventListener('click', () => {
       window.itda.postitWidget.open(Number(tile.dataset.id));
     });
+    attachContextMenu(tile, () => ({ type: 'postit', id: Number(tile.dataset.id) }), { onDeleted: () => mount() });
   });
 
   const addBtn = document.getElementById('bw-addPostit');

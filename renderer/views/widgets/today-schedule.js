@@ -1,5 +1,6 @@
 import { renderBoardWidgetShell } from '../../shared/widget-ui.js';
 import { escapeHtml } from '../../shared/ui-utils.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -18,7 +19,7 @@ async function mount() {
         ${events
           .map(
             (e) => `
-          <div class="bw-timeline-row">
+          <div class="bw-timeline-row" data-id="${e.id}">
             <span class="bw-timeline-dot" style="background:${e.color_hex || 'var(--bw-faint)'}"></span>
             <span class="bw-timeline-time">${e.all_day ? '종일' : (e.start_at || '').slice(11, 16)}</span>
             <span class="bw-timeline-main">
@@ -37,6 +38,10 @@ async function mount() {
     bodyHtml,
     footerLabel: '전체 일정 보기',
     footerRoute: '#/calendar',
+  });
+
+  root.querySelectorAll('.bw-timeline-row[data-id]').forEach((row) => {
+    attachContextMenu(row, () => ({ type: 'event', id: Number(row.dataset.id) }), { onDeleted: () => mount() });
   });
 }
 

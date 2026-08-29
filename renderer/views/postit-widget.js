@@ -1,6 +1,7 @@
 import { errorToast } from '../shared/ui-utils.js';
 import { sanitizeRichHtml, toggleBold, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
+import { attachContextMenu } from '../shared/context-menu.js';
 
 const PIN_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
 const PIN_OUTLINE_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
@@ -61,6 +62,9 @@ async function mount() {
   contentEl.addEventListener('input', scheduleSave);
   bindChecklistToggle(contentEl, scheduleSave);
   bindChecklistEnterKey(contentEl);
+
+  // 메인 앱과 동일한 우클릭 메뉴(연결·전환·삭제) — 본문 위에서도 열리게 openAnywhere.
+  attachContextMenu(document.querySelector('.widget-card'), () => ({ type: 'postit', id }), { openAnywhere: true, onDeleted: () => window.close() });
 
   document.getElementById('w-bold').addEventListener('click', () => {
     toggleBold(contentEl);

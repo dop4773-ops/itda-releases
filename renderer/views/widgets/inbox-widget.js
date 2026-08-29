@@ -1,5 +1,6 @@
 import { renderBoardWidgetShell } from '../../shared/widget-ui.js';
 import { escapeHtml, errorToast, formatRelative } from '../../shared/ui-utils.js';
+import { attachContextMenu } from '../../shared/context-menu.js';
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -21,7 +22,7 @@ async function mount() {
           ${top
             .map(
               (i) => `
-          <div class="bw-inbox-row">
+          <div class="bw-inbox-row" data-id="${i.id}">
             <span class="bw-dot"></span>
             <span class="bw-inbox-text">${escapeHtml(i.content)}</span>
             <em>${formatRelative(i.created_at)}</em>
@@ -45,6 +46,10 @@ async function mount() {
       adding = true;
       render();
       setTimeout(() => document.getElementById('bw-newInboxInput')?.focus(), 30);
+    });
+
+    root.querySelectorAll('.bw-inbox-row[data-id]').forEach((row) => {
+      attachContextMenu(row, () => ({ type: 'inbox', id: Number(row.dataset.id) }), { linkOnly: true });
     });
 
     const newInput = document.getElementById('bw-newInboxInput');
