@@ -402,6 +402,22 @@ body.topbar-hidden .global-topbar{display:none;}
 .summary-card.tone-blue{background:var(--tone-blue-bg);}
 .summary-card.tone-blue .num{color:var(--tone-blue-fg);}
 
+/* ================= 오늘의 업무센터 (대시보드 상단 요약 위젯) ================= */
+.dash-workcenter{margin-bottom:20px;}
+.dash-workcenter .panel-head{margin-bottom:12px;}
+.wc-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.wc-stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 14px;border:1px solid var(--border);
+  border-radius:var(--radius-md);background:var(--bg);cursor:pointer;font-family:inherit;text-align:left;transition:box-shadow .12s ease;}
+.wc-stat:hover{box-shadow:0 4px 12px rgba(16,24,40,.12);}
+.wc-stat-num{font-size:22px;font-weight:700;color:var(--brand);}
+.wc-stat-label{font-size:12px;color:var(--text-soft);}
+.wc-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.wc-col-head{font-size:12px;font-weight:600;color:var(--text-soft);margin-bottom:6px;display:flex;align-items:baseline;gap:6px;}
+.wc-col-hint{font-size:10.5px;font-weight:400;color:var(--text-faint);}
+.wc-list{display:flex;flex-direction:column;}
+.wc-empty{font-size:11.5px;color:var(--text-faint);padding:6px 2px;}
+@media (max-width:720px){.wc-cols{grid-template-columns:1fr;}}
+
 /* ================= 콘텐츠 그리드 / 패널 ================= */
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:16px;min-height:120px;}
 

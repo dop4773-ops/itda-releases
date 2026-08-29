@@ -55,6 +55,7 @@ export const DASHBOARD_STYLE_PRESETS = [
 // 대시보드 카드 표시 여부 (설정 > 화면 > 대시보드 구성) — id는 각 패널의 #d-card-<id> 엘리먼트와 대응.
 // 설정 화면이 같은 목록을 그대로 써서 카드가 추가/변경돼도 한 곳만 고치면 됨.
 export const DASHBOARD_CARDS = [
+  { id: 'workCenter', label: '오늘의 업무센터', default: true },
   { id: 'todo', label: '오늘 할 일', default: true },
   { id: 'event', label: '오늘 일정', default: true },
   { id: 'memo', label: '최근 메모', default: true },
@@ -162,6 +163,30 @@ export async function mount(root) {
             <div class="num" id="d-notifCount">-</div>
           </div>
         </div>
+
+        <section class="panel dash-workcenter" id="d-card-workCenter">
+          <div class="panel-head"><h3>오늘의 업무센터</h3></div>
+          <div class="wc-stats">
+            <button class="wc-stat" data-nav="#/todo" title="Todo로 이동">
+              <span class="wc-stat-num" id="d-wcTodoCount">-</span>
+              <span class="wc-stat-label">오늘 할 일</span>
+            </button>
+            <button class="wc-stat" data-nav="#/calendar" title="일정으로 이동">
+              <span class="wc-stat-num" id="d-wcEventCount">-</span>
+              <span class="wc-stat-label">오늘 일정</span>
+            </button>
+          </div>
+          <div class="wc-cols">
+            <div class="wc-col">
+              <div class="wc-col-head">중요 할 일 <span class="wc-col-hint">즐겨찾기 · 미완료</span></div>
+              <div id="d-wcTodoList" class="wc-list"></div>
+            </div>
+            <div class="wc-col">
+              <div class="wc-col-head">오늘 일정</div>
+              <div id="d-wcEventList" class="wc-list"></div>
+            </div>
+          </div>
+        </section>
 
         <div class="dash-edit-bar" id="d-editBar" style="display:none;">
           <span class="dash-edit-presets">
@@ -1240,6 +1265,8 @@ export async function mount(root) {
           if (el) el.style.display = cb.checked ? '' : 'none';
           if (id === 'sideCalendar' || id === 'sidePostit') {
             $('d-sideToggle').style.display = cfg.sideCalendar || cfg.sidePostit ? '' : 'none';
+          } else if (id === 'workCenter') {
+            if (cb.checked) loadWorkCenter(); // 자유배치 그리드 밖 카드 — 위치 계산 없이 내용만 채운다
           } else if (cb.checked && el) {
             widgetGrid.ensurePosition(el, { w: 4, h: 2 });
           }
@@ -1848,7 +1875,7 @@ export async function mount(root) {
     viewDate.setDate(viewDate.getDate() + dir);
     viewDate = new Date(viewDate);
     refreshDateLabel();
-    await Promise.allSettled([loadTodos(), loadEvents()]);
+    await Promise.allSettled([loadTodos(), loadEvents(), loadWorkCenter()]);
   }
   $('d-datePrev').addEventListener('click', () => stepDate(-1));
   $('d-dateNext').addEventListener('click', () => stepDate(1));
@@ -2031,6 +2058,84 @@ export async function mount(root) {
       row.addEventListener('click', () => openEvt(row.dataset.id));
       attachContextMenu(row, () => ({ type: 'event', id: Number(row.dataset.id) }), { onDeleted: () => loadEvents() });
     });
+  }
+
+  // 오늘의 업무센터 — 기존 Todo/일정 데이터를 그대로 읽어 요약만 새로 그린다(신규 데이터 로직 없음).
+  // 카운트/일정은 상단 날짜(viewDate)를 따르고, "중요 할 일"은 날짜와 무관하게 즐겨찾기+미완료 전체.
+  async function loadWorkCenter() {
+    const card = $('d-card-workCenter');
+    if (!card || card.style.display === 'none') return;
+    const dateStr = toDateKey(viewDate);
+    const [todayTodos, favTodos, events] = await Promise.all([
+      window.itda.todos.list({ fromDate: dateStr, toDate: dateStr }).catch(() => []),
+      window.itda.todos.list({ isFavorite: true, isDone: false }).catch(() => []),
+      window.itda.events.range({ fromDate: dateStr, toDate: dateStr }).catch(() => []),
+    ]);
+
+    $('d-wcTodoCount').textContent = todayTodos.length;
+    $('d-wcEventCount').textContent = events.length;
+
+    const todoListEl = $('d-wcTodoList');
+    const toggleTodo = async (id, cb) => {
+      try {
+        await window.itda.todos.toggle(id);
+        loadWorkCenter();
+      } catch (err) {
+        if (cb) cb.checked = !cb.checked;
+        errorToast(err, '상태를 변경하지 못했어요');
+      }
+    };
+    if (favTodos.length === 0) {
+      todoListEl.innerHTML = `<div class="wc-empty">즐겨찾기한 미완료 할 일이 없어요</div>`;
+    } else {
+      todoListEl.innerHTML = favTodos
+        .slice(0, 6)
+        .map(
+          (t) => `
+        <div class="todo-row dash-row-link" data-nav="#/todo" data-id="${t.id}">
+          <input type="checkbox" data-id="${t.id}" />
+          <span class="cat" style="background:${t.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
+          <span class="txt">${escapeHtml(t.title)}</span>
+          <span class="due">${t.due_date ? t.due_date.slice(5) : ''}</span>
+        </div>`
+        )
+        .join('') +
+        (favTodos.length > 6 ? `<a class="todo-more-link dash-row-link" data-nav="#/todo">+ ${favTodos.length - 6}개 더보기</a>` : '');
+      bindDashRowNav(todoListEl);
+      todoListEl.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          e.stopPropagation();
+          toggleTodo(Number(e.target.dataset.id), e.target);
+        });
+      });
+    }
+
+    const evtListEl = $('d-wcEventList');
+    if (events.length === 0) {
+      evtListEl.innerHTML = `<div class="wc-empty">일정이 없어요</div>`;
+    } else {
+      evtListEl.innerHTML = events
+        .slice(0, 6)
+        .map(
+          (e) => `
+        <div class="todo-row event-row" data-id="${e.id}">
+          <span class="cat" style="background:${e.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
+          <span class="txt">${escapeHtml(e.title)}</span>
+          <span class="due">${e.all_day ? '종일' : (e.start_at || '').slice(11, 16)}</span>
+        </div>`
+        )
+        .join('') +
+        (events.length > 6 ? `<a class="todo-more-link" data-nav="#/calendar">+ ${events.length - 6}개 더보기</a>` : '');
+      evtListEl.querySelectorAll('.event-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          const evt = events.find((x) => x.id === Number(row.dataset.id));
+          if (evt) eventDetailModal.openDetail({ ...evt, source: 'local' });
+        });
+      });
+      evtListEl.querySelector('.todo-more-link')?.addEventListener('click', () => {
+        location.hash = '#/calendar';
+      });
+    }
   }
 
   async function loadMemos() {
@@ -2409,7 +2514,14 @@ export async function mount(root) {
     }
   }
 
+  root.querySelectorAll('.wc-stat[data-nav]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      location.hash = btn.dataset.nav;
+    });
+  });
+
   await Promise.allSettled([
+    loadWorkCenter(),
     loadTodos(),
     loadEvents(),
     loadMemos(),
@@ -2439,6 +2551,7 @@ export async function mount(root) {
       pendingEntities = new Set();
       if (entities.has('todo')) loadTodos();
       if (entities.has('event')) loadEvents();
+      if (entities.has('todo') || entities.has('event')) loadWorkCenter();
       if (entities.has('memo')) loadMemos();
       if (entities.has('postit')) {
         loadPinnedPostits();
@@ -2479,7 +2592,7 @@ export async function mount(root) {
         viewDate = new Date();
         viewDate.setHours(0, 0, 0, 0);
         refreshDateLabel();
-        Promise.allSettled([loadTodos(), loadEvents()]);
+        Promise.allSettled([loadTodos(), loadEvents(), loadWorkCenter()]);
         break;
       case 'ArrowLeft': e.preventDefault(); stepDate(-1); break;
       case 'ArrowRight': e.preventDefault(); stepDate(1); break;
