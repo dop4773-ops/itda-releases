@@ -174,13 +174,10 @@ export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 
   return `<div class="compact-agenda ${dayCount === 7 ? 'is-week' : ''}">${dayBlocks}</div>`;
 }
 
-// 하루종일 일정이 이보다 많은 날에 "펼침" 상태여도 접을 수 있는 칩을 보여준다(기본은 항상 펼침 —
-// 접었을 때만 이 개수로 잘라서 보여준다). 기존엔 주/일 뷰 모두 개수 제한 없이 전부 쌓기만 해서,
-// 하루종일 일정이 아주 많은 날은 시간대 그리드가 화면 아래로 한참 밀려 "잘린 것처럼" 보인다는
-// 피드백이 있었다 — 그래서 접기 기능을 추가했다(기본값은 여전히 전부 보이는 펼침 상태).
-const ALLDAY_COLLAPSE_LIMIT = 3;
-
-export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, alldayExpanded = true, alldayOrder = [] } = {}) {
+// 종일 행은 항상 모든 일정을 쌓아서 보여주고, 화면에서 차지하는 높이는 CSS(#c-gridArea .allday-row)의
+// 사용자 조절 높이 + 내부 스크롤로 제어한다 — 그래서 종일 일정이 아무리 많아도 시간대 그리드가
+// 아래로 밀리지 않는다("종일" 라벨을 눌러 접기/펼치기, 아래 모서리를 드래그해 높이 조절).
+export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, alldayOrder = [], alldayCollapsed = false, alldayHeight = 0 } = {}) {
   // 종일 일정은 사용자가 드래그로 정한 순서(alldayOrder)를 우선하고, 순서가 없는 건 시작일시로.
   const alldayIdx = (e) => {
     const i = alldayOrder.indexOf(e.id);
@@ -200,15 +197,12 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   const hourLabels = Array.from({ length: hourCount }, (_, i) => `<div class="time-hour-label" style="height:${ROW_HEIGHT}px;">${pad(HOUR_START + i)}:00</div>`).join('');
 
   // 하루종일 일정은 시간 그리드 안에 채워 넣지 않고, 상단에 고정된 "종일" 행에 따로 쌓는다.
-  // 여러 개면 그 행이 세로로 늘어나고, 시간이 정해진 일정만 아래 시간대 그리드에 표시된다.
-  const maxAllDayCount = Math.max(0, ...days.map((d) => (byDate.get(toKey(d)) || []).filter((e) => e.all_day).length));
+  // 기본은 전부 보이도록 행이 세로로 늘어나고(CSS max-height 60vh에서 스크롤), 시간이 정해진 일정만 아래 시간대 그리드에.
   const alldayRowCells = days
     .map((d) => {
       const key = toKey(d);
       const allDayEvents = sortAllDay((byDate.get(key) || []).filter((e) => e.all_day));
-      const visibleEvents = alldayExpanded ? allDayEvents : allDayEvents.slice(0, ALLDAY_COLLAPSE_LIMIT);
-      const hiddenCount = allDayEvents.length - visibleEvents.length;
-      const bars = visibleEvents
+      const bars = allDayEvents
         .map((e) => {
           const isGoogle = e.source === 'google';
           return `
@@ -218,14 +212,7 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
           </div>`;
         })
         .join('');
-      // 접혀서 안 보이는 게 있으면 "+N개 더보기"(펼치기), 이 칸이 접을 만큼 길면 마지막에 "접기" —
-      // 월 뷰의 "+N개 더보기" 칩과 같은 스타일(.month-more)을 그대로 재사용한다.
-      const moreChip = hiddenCount > 0 ? `<button class="month-more allday-toggle-btn" data-action="toggle-allday">+${hiddenCount}개 더보기</button>` : '';
-      const collapseChip =
-        alldayExpanded && allDayEvents.length > ALLDAY_COLLAPSE_LIMIT
-          ? `<button class="month-more allday-toggle-btn" data-action="toggle-allday">접기</button>`
-          : '';
-      return `<div class="allday-cell ${isSameDay(d, today) ? 'is-today-col' : ''}">${bars}${moreChip}${collapseChip}</div>`;
+      return `<div class="allday-cell ${isSameDay(d, today) ? 'is-today-col' : ''}">${bars}</div>`;
     })
     .join('');
 
@@ -313,14 +300,10 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
         <div class="time-corner"></div>
         ${dayHeaders}
       </div>
-      ${
-        maxAllDayCount > 0
-          ? `<div class="allday-row" style="grid-template-columns:48px repeat(${dayCount},1fr);">
-               <div class="time-corner allday-corner">종일</div>
-               ${alldayRowCells}
-             </div>`
-          : ''
-      }
+      <div class="allday-row ${alldayCollapsed ? 'is-collapsed' : ''}" style="grid-template-columns:48px repeat(${dayCount},1fr);${!alldayCollapsed && alldayHeight ? `height:${alldayHeight}px;` : ''}">
+        <div class="time-corner allday-corner" data-action="toggle-allday-collapse" title="종일 일정 접기/펼치기">종일 ${alldayCollapsed ? '▸' : '▾'}</div>
+        ${alldayRowCells}
+      </div>
       <div class="time-body-scroll">
         <div class="time-body-grid" style="grid-template-columns:48px repeat(${dayCount},1fr);">
           <div style="grid-column:1;">${hourLabels}</div>
@@ -442,7 +425,8 @@ export async function mount(root) {
   let currentEvents = []; // 상세 모달을 열 때 id로 다시 조회하지 않고 이미 불러온 목록에서 찾기 위함
   let detailIsRecurring = false; // 지금 열려있는 상세가 반복 시리즈의 일부인지 — 삭제 시 범위 선택 팝업을 띄울지 결정
   let showGoogle = true; // 구글 캘린더 위젯을 없애는 대신, 이 화면 안에서 바로 켜고 끌 수 있게
-  let alldayExpanded = true; // 종일 일정 접기/펼치기(주/일 뷰) — 기본은 펼침(전부 보임)
+  let alldayCollapsed = false; // 종일 행 접힘 여부(주/일 뷰) — 기본 펼침. app_settings: calendar_allday_collapsed
+  let alldayHeight = 0; // 종일 행 사용자 조절 높이(px, 0=자동). app_settings: calendar_allday_height
   let alldayOrder = []; // 종일 일정 사용자 지정 순서(드래그) — app_settings: calendar_allday_order
   let eventTemplates = []; // 즐겨찾는 일정 템플릿 — app_settings: calendar_event_templates
 
@@ -533,7 +517,7 @@ export async function mount(root) {
   }
 
   function renderTimeGrid(container, byDate, dayCount) {
-    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true, alldayExpanded, alldayOrder });
+    container.innerHTML = buildTimeGridHtml(anchor, byDate, dayCount, { deletable: true, alldayOrder, alldayCollapsed, alldayHeight });
 
     container.querySelectorAll('.allday-bar-drag').forEach((bar) => {
       bar.addEventListener('dragstart', (e) => {
@@ -554,13 +538,26 @@ export async function mount(root) {
       });
     });
 
-    container.querySelectorAll('[data-action="toggle-allday"]').forEach((btn) => {
+    // "종일 ▾" 라벨 클릭 → 종일 행 접기/펼치기
+    container.querySelectorAll('[data-action="toggle-allday-collapse"]').forEach((btn) => {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        alldayExpanded = !alldayExpanded;
+        alldayCollapsed = !alldayCollapsed;
+        window.itda.settings.set({ key: 'calendar_allday_collapsed', value: alldayCollapsed ? '1' : '0' }).catch(() => {});
         renderTimeGrid(container, byDate, dayCount);
       });
     });
+
+    // 종일 행 아래 모서리 드래그(CSS resize)로 높이 조절 → 드래그를 놓는 순간(mouseup) 저장
+    const alldayRow = container.querySelector('.allday-row');
+    if (alldayRow && !alldayCollapsed) {
+      alldayRow.addEventListener('mouseup', () => {
+        const h = Math.round(alldayRow.getBoundingClientRect().height);
+        if (!h || h === alldayHeight) return;
+        alldayHeight = h;
+        window.itda.settings.set({ key: 'calendar_allday_height', value: String(h) }).catch(() => {});
+      });
+    }
 
     container.querySelectorAll('[data-action="delete"]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
@@ -1016,12 +1013,14 @@ export async function mount(root) {
   };
   document.addEventListener('click', handleDocClickForSearch);
 
-  // 저장된 종일 순서 / 즐겨찾는 템플릿 불러오기
+  // 저장된 종일 순서 / 즐겨찾는 템플릿 / 종일 행 접힘·높이 불러오기
   try {
     const rawOrder = await window.itda.settings.get('calendar_allday_order');
     if (rawOrder) alldayOrder = JSON.parse(rawOrder) || [];
     const rawTpl = await window.itda.settings.get('calendar_event_templates');
     if (rawTpl) eventTemplates = JSON.parse(rawTpl) || [];
+    alldayCollapsed = (await window.itda.settings.get('calendar_allday_collapsed')) === '1';
+    alldayHeight = Number(await window.itda.settings.get('calendar_allday_height')) || 0;
   } catch (e) {
     // 깨졌으면 빈 값으로 시작
   }

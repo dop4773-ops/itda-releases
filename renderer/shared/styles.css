@@ -640,11 +640,16 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .time-day-header.is-today{background:var(--brand-soft);}
 .time-day-container.is-today-col{background-color:rgba(108,140,245,.04);}
 
-/* ---- 일정 화면 비율 고정 ----
-   월/주/일 뷰가 화면(창 높이)과 무관하게 항상 같은 크기를 차지하도록 고정한다.
-   월간: 6주 × 96px + 요일헤더 ≈ 시간대 그리드(560px + 헤더/종일행)와 비슷하게 맞춤. */
-#c-gridArea .month-cell{height:96px;min-height:0;overflow:hidden;}
-#c-gridArea .allday-row{max-height:56px;overflow-y:auto;}
+/* ---- 일정 화면 비율 ----
+   월간 셀 높이를 키워 하단 빈 공간을 줄인다(6주 × 104px + 요일헤더).
+   주/일은 시간대 그리드(560px) + 헤더 + 종일행. 종일 일정이 없을 때 월과 비슷해지도록 맞췄다. */
+#c-gridArea .month-cell{height:104px;min-height:0;overflow:hidden;}
+/* 종일 행 — 기본은 모든 종일 일정이 다 보이도록 내용 높이 그대로(아주 많으면 60vh에서 스크롤).
+   "종일 ▾" 라벨을 누르면 접혀서 2개 정도만, 아래 모서리를 드래그(resize)하면 원하는 높이로 고정. */
+#c-gridArea .allday-row{overflow-x:hidden;overflow-y:auto;resize:vertical;min-height:34px;max-height:60vh;}
+#c-gridArea .allday-row.is-collapsed{max-height:64px;overflow:hidden;resize:none;}
+#c-gridArea .allday-corner{cursor:pointer;user-select:none;writing-mode:horizontal-tb;flex-direction:row;gap:2px;font-size:9.5px;}
+#c-gridArea .allday-corner:hover{color:var(--text-soft);}
 
 /* ---- 종일 일정 드래그로 순서 바꾸기 ---- */
 .allday-bar-drag{cursor:grab;}
