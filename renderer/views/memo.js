@@ -662,9 +662,13 @@ export async function mount(root) {
     `;
 
     const bodyEl = $('m-bodyInput');
+    // 윈도우/리눅스 크로미움은 contenteditable 안 이미지에 "네이티브 리사이즈 핸들"을 기본으로 띄운다
+    // (맥은 기본 꺼짐). 그 핸들이 우리 커스텀 리사이즈(모서리 드래그)와 충돌해서 크기 조절이 안 되거나
+    // width/height 속성으로 바뀌어 저장 시 사라진다 — 꺼서 커스텀 로직만 동작하게 통일한다.
+    try { document.execCommand('enableObjectResizing', false, 'false'); } catch (_) {}
     linkifyUrls(bodyEl); // 불러올 때 한 번만 URL을 링크로 표시(입력 중엔 절대 호출하지 않음 — 커서 깨짐 방지)
     loadInlineImages(bodyEl); // 저장된 인라인 사진들의 src를 첨부파일에서 다시 채워 넣음(마찬가지로 불러올 때 한 번만)
-    const scheduleSave = wrapAutosave(async () => {
+    const saveNow = async () => {
       try {
         const cleanContent = sanitizeRichHtml(bodyEl.innerHTML); // 저장 직전에도 한 번 더 정화(붙여넣기 등 대비, a 태그는 여기서 자동으로 벗겨짐)
         await window.itda.memos.update({ id: memo.id, content: cleanContent });
@@ -675,7 +679,8 @@ export async function mount(root) {
       } catch (e) {
         errorToast(e, '저장하지 못했어요');
       }
-    });
+    };
+    const scheduleSave = wrapAutosave(saveNow);
     bodyEl.addEventListener('input', scheduleSave);
     bindChecklistToggle(bodyEl, scheduleSave);
     bindChecklistEnterKey(bodyEl);
@@ -701,7 +706,9 @@ export async function mount(root) {
             fileName: `pasted-${Date.now()}.png`,
           });
           insertInlineImage(bodyEl, record.id, reader.result);
-          scheduleSave();
+          // 디바운스(scheduleSave) 기다리지 말고 바로 저장 + 목록 새로고침 — 썸네일/첨부배지가 즉시 뜨게
+          await saveNow();
+          await refreshListData();
         } catch (err) {
           errorToast(err, '사진을 붙여넣지 못했어요');
         }
@@ -716,7 +723,7 @@ export async function mount(root) {
       const img = e.target.closest('img.memo-inline-img');
       if (!img) return;
       const rect = img.getBoundingClientRect();
-      const nearCorner = e.clientX > rect.right - 16 && e.clientY > rect.bottom - 16;
+      const nearCorner = e.clientX > rect.right - 24 && e.clientY > rect.bottom - 24;
       if (!nearCorner) return;
       e.preventDefault();
       const startX = e.clientX;
@@ -1116,6 +1123,17 @@ export async function mount(root) {
     setTimeout(() => document.addEventListener('mousedown', onOutside), 0);
   }
 
+  // 목록 데이터만 다시 불러와 리스트를 갱신한다(상세/본문은 안 건드림 — 사진 첨부 직후처럼
+  // 커서를 유지해야 하지만 목록의 썸네일·첨부배지는 바로 떠야 할 때 사용).
+  async function refreshListData() {
+    try {
+      memos = await window.itda.memos.list({});
+      renderList();
+    } catch (_) {
+      /* 조용히 실패 — 다음 load()에서 따라잡는다 */
+    }
+  }
+
   async function load() {
     try {
       memos = await window.itda.memos.list({});
@@ -1142,7 +1160,7 @@ export async function mount(root) {
       errorToast(e, '메모를 추가하지 못했어요');
     }
   }
-  $('m-newBtn').addEventListener('click', createNewMemo);
+  $('m-newBtn').addEventListener('click', () => createNewMemo()); // 클릭 이벤트가 folderIdArg로 새면 안 됨
   // 화면 전용 고정 단축키(⌘/Ctrl+N) — 이 화면이 떠 있는 동안만 반응, 언마운트 시 해제.
   const handleNewMemoShortcut = (e) => {
     if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
@@ -1261,9 +1279,10 @@ export async function mount(root) {
         await window.itda.memos.update({ id: memo.id, content: cleanContent });
         memo.content = cleanContent;
         memo.updated_at = new Date().toISOString();
-        renderList();
+        await refreshListData(); // 썸네일/첨부배지가 바로 뜨도록 목록 데이터 새로고침
       } else {
         renderDetail(); // 문서 파일만 있었으면 스트립 갱신을 위해 다시 그리기만 하면 충분
+        await refreshListData();
       }
     } catch (err) {
       errorToast(err, '파일을 첨부하지 못했어요');
