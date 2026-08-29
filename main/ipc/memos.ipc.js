@@ -37,6 +37,10 @@ module.exports = function registerMemosIpc(ipcMain, repos) {
       colorHex: colorHex ?? memo.color_hex,
       folderId: folderId !== undefined ? folderId : memo.folder_id,
     });
+    // 폴더 이동만 한 경우(제목·본문·태그·색 변경 없음)엔 "수정일"을 건드리지 않는다.
+    const folderMoveOnly =
+      folderId !== undefined && title === undefined && content === undefined && categoryId === undefined && colorHex === undefined;
+    if (folderMoveOnly) memos.restoreUpdatedAt(id, memo.updated_at);
     broadcastDataChanged('memo', id);
     return { id };
   });

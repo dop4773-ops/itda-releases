@@ -51,6 +51,12 @@ module.exports = function createMemosRepository(db) {
       );
     },
 
+    // 폴더 이동처럼 "내용을 안 고친" 변경 뒤에 호출 — trg_memos_updated_at 트리거가
+    // 방금 올려버린 updated_at을 원래 값으로 되돌린다(old≠new이라 트리거가 다시 안 탄다).
+    restoreUpdatedAt(id, value) {
+      db.prepare('UPDATE memos SET updated_at = ? WHERE id = ?').run(value, id);
+    },
+
     setPinned(id, isPinned) {
       db.prepare('UPDATE memos SET is_pinned = ? WHERE id = ?').run(isPinned ? 1 : 0, id);
     },

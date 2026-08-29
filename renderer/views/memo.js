@@ -58,6 +58,8 @@ const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
 const MEMO_SCREEN_SHORTCUTS = [
   { label: '새 메모', keys: `${NEW_MEMO_SHORTCUT_LABEL} / +` },
   { label: '폴더 접기/펼치기', keys: 'F' },
+  { label: '전체 메모 ↔ 미분류', keys: 'A' },
+  { label: '검색', keys: `${MOD_LABEL}F / /` },
   { label: '굵게', keys: `${MOD_LABEL}B` },
   { label: '밑줄', keys: `${MOD_LABEL}U` },
   { label: '왼쪽 정렬', keys: `${MOD_SHIFT_LABEL}L` },
@@ -187,7 +189,8 @@ export async function mount(root) {
   let selected = new Set(); // 선택삭제용 — 메모 id 집합 (체크박스 또는 Cmd/Ctrl·Shift+클릭으로 채워짐)
   let lastClickedId = null; // Shift+클릭 범위선택의 기준점
   // undefined="전체 메모"(폴더 무관), null="미분류"(folder_id 없음), 숫자="그 폴더만"
-  let currentFolderId;
+  // 기본은 "미분류"로 시작(요청) — 전체 메모는 단축키 A 또는 폴더 레일에서.
+  let currentFolderId = null;
   let lockListMode = 'hidden'; // 설정 > 보안의 "잠긴 메모 표시 방식" — 'hidden'(잠긴 메모로만 표시) | 'title'(제목만 표시)
   const unlockedIds = new Set(); // 이번 화면 세션 동안 비밀번호로 이미 연 잠긴 메모 id — 다시 클릭할 때마다 또 묻지 않으려고
 
@@ -1166,6 +1169,30 @@ export async function mount(root) {
   };
   document.addEventListener('keydown', handleFolderToggle);
 
+  // ⌘F(Ctrl+F) 또는 입력 중이 아닐 때 '/' 로 검색창에 포커스
+  const handleSearchFocus = (e) => {
+    const isModF = (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f';
+    const isSlash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && !isUserTyping();
+    if (!isModF && !isSlash) return;
+    const input = $('m-search');
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+    input.select();
+  };
+  document.addEventListener('keydown', handleSearchFocus);
+
+  // A: "전체 메모" ↔ "미분류" 전환 (입력 중이 아닐 때만)
+  const handleAllMemosToggle = (e) => {
+    if (e.key.toLowerCase() !== 'a' || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (isUserTyping()) return;
+    e.preventDefault();
+    currentFolderId = currentFolderId === undefined ? null : undefined;
+    renderFolderRail();
+    renderList();
+  };
+  document.addEventListener('keydown', handleAllMemosToggle);
+
   // 목록에서 Cmd/Ctrl·Shift+클릭으로 여러 개 선택해뒀을 때 Delete/Backspace로 한 번에 지우기
   // (제목/본문 입력 중 글자를 지우는 backspace와 겹치지 않도록 isUserTyping()으로 가드).
   const handleDeleteKey = (e) => {
@@ -1301,6 +1328,8 @@ export async function mount(root) {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
     document.removeEventListener('keydown', handleFolderToggle);
+    document.removeEventListener('keydown', handleSearchFocus);
+    document.removeEventListener('keydown', handleAllMemosToggle);
     document.removeEventListener('keydown', handleDeleteKey);
     closeFolderMenu();
     unsubscribeEsc();
