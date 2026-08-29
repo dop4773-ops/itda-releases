@@ -402,9 +402,10 @@ body.topbar-hidden .global-topbar{display:none;}
 .summary-card.tone-blue{background:var(--tone-blue-bg);}
 .summary-card.tone-blue .num{color:var(--tone-blue-fg);}
 
-/* ================= 오늘의 업무센터 (대시보드 상단 요약 위젯) ================= */
-.dash-workcenter{margin-bottom:20px;}
-.dash-workcenter .panel-head{margin-bottom:12px;}
+/* ================= 오늘의 업무센터 (대시보드 위젯 — 크기·위치는 편집 모드에서 조절) ================= */
+.dash-workcenter{display:flex;flex-direction:column;}
+.dash-workcenter .panel-head{margin-bottom:12px;flex-shrink:0;}
+.dash-workcenter .wc-body{flex:1;min-height:0;overflow:auto;}
 .wc-collapse-btn{margin-left:auto;transition:transform .18s ease;color:var(--text-faint);}
 .wc-collapse-btn:hover{color:var(--brand);}
 .dash-workcenter.wc-collapsed .wc-collapse-btn{transform:rotate(180deg);}
@@ -934,9 +935,6 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 }
 .new-sticky-card:hover{border-color:var(--brand);color:var(--brand);}
 
-.card-links-section{display:none;margin-top:2px;padding-top:8px;border-top:1px dashed var(--divider);}
-.card-links-section.open{display:block;}
-
 /* ================= 메모 (Apple Notes 오마주) — 좌: 목록, 우: 상세 편집 ================= */
 /* 메모 화면은 .main을 세로 flex로 만들고 .notes-app이 남은 높이를 전부 차지하게 한다.
    (calc(100vh - Npx)는 화면 배율 zoom과 안 맞아 아래에 빈 공간이 생겼었다 — flex로 해결.) */
@@ -1418,9 +1416,10 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-widget-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:108px;gap:14px;margin-bottom:16px;}
 /* 편집 모드에선 위젯 아래에도 우클릭할 여백을 확보(빈 공간 우클릭 메뉴용) */
 .dash-widget-grid.editing{min-height:62vh;}
-.dash-widget{min-width:0;overflow:hidden;position:relative;transition:transform .12s ease;}
+.dash-widget{min-width:0;overflow:hidden;position:relative;transition:transform .16s cubic-bezier(.4,0,.2,1),box-shadow .16s ease;}
 .dash-widget-grid.editing .dash-widget{outline:1px dashed var(--border);outline-offset:2px;}
-.dash-widget.dragging{opacity:.9;z-index:20;box-shadow:0 12px 28px rgba(16,24,40,.26);transition:none;cursor:grabbing;}
+/* 리사이즈 중엔 카드를 옅게 — 아래 깔린 점선 고스트(놓일 크기)가 잘 보이도록 */
+.dash-widget.dragging{opacity:.65;z-index:20;box-shadow:0 12px 28px rgba(16,24,40,.26);transition:none;cursor:grabbing;}
 /* 그립/핸들은 편집 모드에서만 보이고 반응한다 */
 .dash-widget-grip{display:none;cursor:grab;color:var(--text-faint);margin-right:6px;flex-shrink:0;}
 .dash-widget-grip:active{cursor:grabbing;}
@@ -1428,8 +1427,10 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-widget-resize{display:none;position:absolute;right:1px;bottom:1px;width:16px;height:16px;cursor:nwse-resize;z-index:5;}
 .dash-widget-resize::after{content:'';position:absolute;right:3px;bottom:3px;width:8px;height:8px;border-right:2px solid var(--brand);border-bottom:2px solid var(--brand);opacity:.6;}
 .dash-widget-grid.editing .dash-widget-resize{display:block;}
-/* 드래그 중 놓일 자리를 보여주는 점선 고스트 */
-.dash-drop-ghost{border:2px dashed var(--brand);border-radius:var(--radius-lg);background:var(--brand-soft);opacity:.55;pointer-events:none;z-index:1;}
+/* 드래그·리사이즈 중 놓일 자리/크기를 보여주는 점선 고스트.
+   z-index를 dragging 카드(20)보다 위(21)로 둬서 크기를 줄일 때도 미리보기가 가려지지 않게 한다. */
+.dash-drop-ghost{border:2px dashed var(--brand);border-radius:var(--radius-lg);background:var(--brand-soft);opacity:.7;pointer-events:none;z-index:21;
+  transition:opacity .12s ease;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 25%,transparent);}
 .dash-widget .panel-head{justify-content:flex-start;}
 .dash-widget .panel-head > a{margin-left:auto;}
 

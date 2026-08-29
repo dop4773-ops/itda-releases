@@ -164,35 +164,6 @@ export async function mount(root) {
           </div>
         </div>
 
-        <section class="panel dash-widget dash-workcenter" id="d-card-workCenter" title="우클릭: 테마·투명도·테두리·글자색">
-          <div class="panel-head">
-            <h3>오늘의 업무센터</h3>
-            <button class="btn-icon wc-collapse-btn" id="d-wcCollapse" title="접기 / 펼치기">${CHEVRON_LEFT}</button>
-          </div>
-          <div class="wc-body" id="d-wcBody">
-            <div class="wc-stats">
-              <button class="wc-stat" data-nav="#/todo" title="Todo로 이동">
-                <span class="wc-stat-num" id="d-wcTodoCount">-</span>
-                <span class="wc-stat-label">오늘 할 일</span>
-              </button>
-              <button class="wc-stat" data-nav="#/calendar" title="일정으로 이동">
-                <span class="wc-stat-num" id="d-wcEventCount">-</span>
-                <span class="wc-stat-label">오늘 일정</span>
-              </button>
-            </div>
-            <div class="wc-cols">
-              <div class="wc-col">
-                <div class="wc-col-head">중요 할 일 <span class="wc-col-hint">★ 즐겨찾기 · ! 높음</span></div>
-                <div id="d-wcTodoList" class="wc-list"></div>
-              </div>
-              <div class="wc-col">
-                <div class="wc-col-head">오늘 일정</div>
-                <div id="d-wcEventList" class="wc-list"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <div class="dash-edit-bar" id="d-editBar" style="display:none;">
           <span class="dash-edit-presets">
             <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
@@ -209,6 +180,35 @@ export async function mount(root) {
         </div>
 
         <div class="dash-widget-grid" id="d-widgetGrid">
+          <div class="panel dash-widget dash-workcenter" id="d-card-workCenter" data-card="workCenter">
+            <div class="panel-head">
+              <span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span>
+              <h3>오늘의 업무센터</h3>
+              <button class="btn-icon wc-collapse-btn" id="d-wcCollapse" title="접기 / 펼치기">${CHEVRON_LEFT}</button>
+            </div>
+            <div class="wc-body" id="d-wcBody">
+              <div class="wc-stats">
+                <button class="wc-stat" data-nav="#/todo" title="Todo로 이동">
+                  <span class="wc-stat-num" id="d-wcTodoCount">-</span>
+                  <span class="wc-stat-label">오늘 할 일</span>
+                </button>
+                <button class="wc-stat" data-nav="#/calendar" title="일정으로 이동">
+                  <span class="wc-stat-num" id="d-wcEventCount">-</span>
+                  <span class="wc-stat-label">오늘 일정</span>
+                </button>
+              </div>
+              <div class="wc-cols">
+                <div class="wc-col">
+                  <div class="wc-col-head">중요 할 일 <span class="wc-col-hint">★ 즐겨찾기 · ! 높음</span></div>
+                  <div id="d-wcTodoList" class="wc-list"></div>
+                </div>
+                <div class="wc-col">
+                  <div class="wc-col-head">오늘 일정</div>
+                  <div id="d-wcEventList" class="wc-list"></div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="panel dash-widget" id="d-card-todo" data-card="todo">
             <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 할 일</h3><a class="btn-icon" href="#/todo">더보기 ›</a></div>
             <div id="d-todoList"></div>
@@ -577,13 +577,14 @@ export async function mount(root) {
 
     function fillMissing() {
       const missing = visibleIds().filter((id) => !positions[id]);
-      if (!missing.length) return;
+      if (!missing.length) return [];
       const computed = getPreset(presetId).compute(visibleIds());
       missing.forEach((id) => {
         positions[id] = computed[id] || { x: 0, y: 0, w: 4, h: 2 };
       });
+      return missing;
     }
-    fillMissing();
+    const filledIds = fillMissing();
 
     function applyPosition(cardId) {
       const el = widgetById.get(cardId);
@@ -627,6 +628,9 @@ export async function mount(root) {
         }
       }
     }
+    // 저장된 배치에 없던(새로 추가된 기본 카드 등) 카드가 기존 카드와 겹치면 아래로 밀어낸다 —
+    // 안 그러면 첫 로드에서 상단 카드와 포개진다. (여기서 실행 — rectsOverlap 초기화 이후)
+    filledIds.forEach((id) => resolveCollisions(id));
     applyAll();
 
     function persist() {
@@ -1270,10 +1274,9 @@ export async function mount(root) {
           if (el) el.style.display = cb.checked ? '' : 'none';
           if (id === 'sideCalendar' || id === 'sidePostit') {
             $('d-sideToggle').style.display = cfg.sideCalendar || cfg.sidePostit ? '' : 'none';
-          } else if (id === 'workCenter') {
-            if (cb.checked) loadWorkCenter(); // 자유배치 그리드 밖 카드 — 위치 계산 없이 내용만 채운다
           } else if (cb.checked && el) {
-            widgetGrid.ensurePosition(el, { w: 4, h: 2 });
+            widgetGrid.ensurePosition(el, id === 'workCenter' ? { w: 12, h: 3 } : { w: 4, h: 2 });
+            if (id === 'workCenter') loadWorkCenter();
           }
         });
       });
@@ -1590,8 +1593,7 @@ export async function mount(root) {
       cardStyles = {};
     }
     const applyCardStyle = (id) => {
-      // 자유배치 그리드 카드/블록 + 그리드 밖의 업무센터 카드까지 같은 스타일 시스템으로 다룬다.
-      const el = grid.querySelector(`.dash-widget[data-card="${id}"]`) || (id === 'workCenter' ? $('d-card-workCenter') : null);
+      const el = grid.querySelector(`.dash-widget[data-card="${id}"]`);
       if (!el) return;
       const s = cardStyles[id] || {};
       el.dataset.cardtheme = s.theme || '';
@@ -1799,12 +1801,6 @@ export async function mount(root) {
         e.preventDefault();
         openCardMenu(e.clientX, e.clientY, cardId, false);
       });
-    });
-    // 업무센터는 자유배치 그리드 밖이지만 같은 우클릭 스타일 메뉴를 쓴다.
-    $('d-card-workCenter')?.addEventListener('contextmenu', (e) => {
-      if (e.target.closest('input,button,a,.todo-row')) return;
-      e.preventDefault();
-      openCardMenu(e.clientX, e.clientY, 'workCenter', false);
     });
     // 꾸미기 블록 우클릭 → 투명도만 (테마는 블록마다 ⚙ 설정에 따로 있음)
     const attachBlockMenu = (el) => {
@@ -2611,7 +2607,7 @@ export async function mount(root) {
     });
   });
 
-  // 업무센터 접기/펼치기 — 요약 카드 접기와 같은 방식(전용 설정 키 하나).
+  // 업무센터 접기/펼치기 — 크기·위치는 다른 위젯과 똑같이 편집 모드에서 그립·핸들로 조절한다.
   (async () => {
     const wcCard = $('d-card-workCenter');
     const applyWcCollapsed = (c) => wcCard.classList.toggle('wc-collapsed', c);

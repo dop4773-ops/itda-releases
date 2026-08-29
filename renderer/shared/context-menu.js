@@ -362,12 +362,15 @@ function openMenu(x, y, item, opts) {
  *
  * @param {HTMLElement} el - 우클릭을 감지할 엘리먼트(카드/행 전체)
  * @param {() => ({type:'todo'|'event'|'memo'|'postit', id:number}|null)} getItem - 클릭 시점의 최신 항목 정보
- * @param {{onDeleted?: (item: {type:string,id:number}) => void}} [opts] - 삭제 성공 후 호출(목록 갱신 등)
+ * @param {{onDeleted?: (item: {type:string,id:number}) => void, openAnywhere?: boolean}} [opts]
+ *   openAnywhere: contenteditable(본문) 위에서도 커스텀 메뉴를 연다(포스트잇 — "어느 부분이든 우클릭").
+ *   input/textarea(체크박스 등)는 openAnywhere여도 항상 예외로 둔다.
  * @returns {() => void} 리스너 해제 함수
  */
 export function attachContextMenu(el, getItem, opts = {}) {
   function handler(e) {
-    if (e.target.closest('input,textarea,[contenteditable="true"]')) return; // 텍스트 편집 중엔 OS 기본 메뉴 유지
+    if (e.target.closest('input,textarea')) return; // 체크박스/텍스트필드는 항상 OS 기본
+    if (!opts.openAnywhere && e.target.closest('[contenteditable="true"]')) return; // 기본: 편집 중엔 OS 메뉴 유지
     const item = getItem();
     if (!item) return;
     e.preventDefault();

@@ -4,8 +4,9 @@
 
 export const GRID_COLS = 12;
 
-// 카드별 기본 크기(그리드 칸 단위). '연결된 업무'만 가로로 넓다.
+// 카드별 기본 크기(그리드 칸 단위). '오늘의 업무센터'는 상단 배너처럼 가로 전체, '연결된 업무'도 넓다.
 const CARD_SIZE = {
+  workCenter: { w: 12, h: 3 },
   todo: { w: 4, h: 2 },
   event: { w: 4, h: 2 },
   memo: { w: 4, h: 2 },
@@ -57,19 +58,19 @@ export const LAYOUT_PRESETS = [
   {
     id: 'default',
     label: '기본형 — 골고루',
-    order: ['todo', 'event', 'memo', 'postit', 'linked', 'quickAdd', 'activity', 'weekSummary'],
+    order: ['workCenter', 'todo', 'event', 'memo', 'postit', 'linked', 'quickAdd', 'activity', 'weekSummary'],
     sizes: {},
   },
   {
     id: 'work',
     label: '업무형 — 할 일 중심',
-    order: ['todo', 'quickAdd', 'memo', 'postit', 'event', 'linked', 'activity', 'weekSummary'],
+    order: ['workCenter', 'todo', 'quickAdd', 'memo', 'postit', 'event', 'linked', 'activity', 'weekSummary'],
     sizes: { todo: { w: 8, h: 3 }, quickAdd: { w: 4, h: 3 } },
   },
   {
     id: 'calendar',
     label: '일정형 — 일정 중심',
-    order: ['event', 'linked', 'todo', 'memo', 'postit', 'quickAdd', 'activity', 'weekSummary'],
+    order: ['workCenter', 'event', 'linked', 'todo', 'memo', 'postit', 'quickAdd', 'activity', 'weekSummary'],
     sizes: { event: { w: 8, h: 3 }, linked: { w: 4, h: 3 } },
   },
 ];

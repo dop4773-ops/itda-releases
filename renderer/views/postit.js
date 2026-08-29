@@ -1,19 +1,17 @@
 import { toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
 import { STICKY_COLORS, stickyRotation } from '../shared/theme.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
-import { mountLinksWidget } from '../shared/links-ui.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { bindHashtagAutoTag } from '../shared/hashtag.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
 import { sanitizeRichHtml, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
-import { attachContextMenu, convertItem, TODO_TARGET, EVENT_TARGET } from '../shared/context-menu.js';
+import { attachContextMenu } from '../shared/context-menu.js';
 
 const POSTIT_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>`;
 const PIN_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
-const LINK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07l1.5-1.5"/></svg>`;
 const WIDGET_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><path d="M15 3h6v6M10 14L21 3"/></svg>`;
 const BOLD_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
 const CHECKLIST_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="3" width="7" height="7" rx="1.5"/><path d="M4.5 6.5l1.3 1.3L8.5 5"/><path d="M13 5h8M13 12h8M13 19h8"/><rect x="3" y="13" width="7" height="7" rx="1.5"/></svg>`;
@@ -132,14 +130,10 @@ export async function mount(root) {
               ).join('')}
             </div>
             <div class="card-bottom-actions">
-              <button class="btn-icon" data-action="to-todo" title="Todo로 변환">☑️</button>
-              <button class="btn-icon" data-action="to-event" title="일정으로 변환">📅</button>
-              <button class="btn-icon" data-action="toggle-links" title="연결된 항목">${LINK_ICON}</button>
               <button class="btn-icon" data-action="open-widget" title="위젯으로 열기 (독립된 작은 창)">${WIDGET_ICON}</button>
               <button class="btn-icon" data-action="delete" title="삭제">${TRASH_ICON}</button>
             </div>
           </div>
-          <div class="card-links-section" data-links-section></div>
         </div>`
         )
         .join('') + `<div class="new-sticky-card" id="p-newCard">+ 새 포스트잇</div>`;
@@ -234,16 +228,8 @@ export async function mount(root) {
         attachDragOut(dragHandle, () => ({ type: 'postit', id: Number(dragHandle.dataset.dragId) }));
       }
 
-      attachContextMenu(card, () => ({ type: 'postit', id }), { onDeleted: () => load() });
-
-      card.querySelector('[data-action="to-todo"]').addEventListener('click', async () => {
-        await convertItem({ type: 'postit', id }, TODO_TARGET);
-        load(); // 변환 배지 갱신
-      });
-      card.querySelector('[data-action="to-event"]').addEventListener('click', async () => {
-        await convertItem({ type: 'postit', id }, EVENT_TARGET);
-        load();
-      });
+      // 연결·전환은 전부 우클릭 메뉴로 — 포스트잇은 본문(contenteditable) 위에서도 메뉴가 열리게 openAnywhere.
+      attachContextMenu(card, () => ({ type: 'postit', id }), { onDeleted: () => load(), openAnywhere: true });
 
       // 변환 배지 — 연결된 Todo/일정이 있으면 표시하고, 누르면 해당 목록으로 이동.
       // ponytail: 카드마다 listFor 한 번(N+1). 포스트잇 수가 크게 늘면 bulk 조회 API 추가.
@@ -263,16 +249,6 @@ export async function mount(root) {
           });
         })
         .catch(() => {});
-
-      let linksMounted = false;
-      card.querySelector('[data-action="toggle-links"]').addEventListener('click', () => {
-        const section = card.querySelector('[data-links-section]');
-        section.classList.toggle('open');
-        if (section.classList.contains('open') && !linksMounted) {
-          linksMounted = true;
-          mountLinksWidget(section, { type: 'postit', id });
-        }
-      });
 
       const selectCb = card.querySelector('[data-action="select"]');
       selectCb.checked = selected.has(id);
