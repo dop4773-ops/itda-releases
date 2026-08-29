@@ -90,6 +90,10 @@ export async function mount(root) {
             <div class="panel-head"><h3>세부 디자인</h3></div>
             <p class="settings-panel-desc">고른 테마를 기준으로 형태만 미세 조정해요.</p>
             <div class="update-row">
+              <div><div class="settings-row-title">테두리</div><div class="settings-row-desc">카드·사이드바·입력창 테두리를 진하게 하거나 검정으로.</div></div>
+              <div class="seg" id="theme-borderSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
               <div><div class="settings-row-title">모서리 둥글기</div></div>
               <div class="seg" id="theme-radiusSeg"></div>
             </div>
@@ -699,6 +703,8 @@ export async function mount(root) {
       });
     });
 
+    segRow('theme-borderSeg', await getUiAdjust('border'),
+      [['default', '기본'], ['strong', '진하게'], ['black', '검정']], (v) => setUiAdjust('border', v));
     segRow('theme-radiusSeg', await getUiAdjust('radius'),
       [['sharp', '각지게'], ['default', '기본'], ['round', '둥글게']], (v) => setUiAdjust('radius', v));
     segRow('theme-shadowSeg', await getUiAdjust('shadow'),

@@ -327,6 +327,7 @@ export const UI_THEMES = [
 ];
 
 const UI_ADJUSTS = {
+  border: { key: 'ui_border', values: ['default', 'strong', 'black'], def: 'default' },
   radius: { key: 'ui_radius', values: ['sharp', 'default', 'round'], def: 'default' },
   shadow: { key: 'ui_shadow', values: ['none', 'soft', 'default', 'strong'], def: 'default' },
   density: { key: 'ui_density', values: ['compact', 'default', 'comfortable'], def: 'default' },

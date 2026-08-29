@@ -235,6 +235,14 @@ function hydrateBlock(el, block) {
 
 const digitCard = () => `<span class="flip-card"><span class="fc-top"><b>0</b></span><span class="fc-bot"><b>0</b></span></span>`;
 
+// 시계 색상 커스텀(레트로 플립·미니멀 등) — #rrggbb만 허용해 인라인 style로 노출.
+const clkVars = (c) => {
+  const v = [];
+  if (/^#[0-9a-f]{6}$/i.test(c.digitColor || '')) v.push(`--clk-digit:${c.digitColor}`);
+  if (/^#[0-9a-f]{6}$/i.test(c.cardBg || '')) v.push(`--clk-card-bg:${c.cardBg}`);
+  return v.length ? ` style="${v.join(';')}"` : '';
+};
+
 const PAINTERS = {
   clock(c) {
     const theme = c.theme || 'wood';
@@ -272,10 +280,10 @@ const PAINTERS = {
       return `<div class="clk clk-word" data-theme="${theme}"><p class="clk-word-text">—</p></div>`;
     }
     if (c.style === 'minimal') {
-      return `<div class="clk clk-min" data-theme="${theme}"><span class="clk-min-time">00:00</span><span class="clk-min-sub"></span></div>`;
+      return `<div class="clk clk-min" data-theme="${theme}"${clkVars(c)}><span class="clk-min-time">00:00</span><span class="clk-min-sub"></span></div>`;
     }
     // flip (split-flap)
-    return `<div class="clk clk-flip" data-theme="${theme}"><div class="flip-frame">
+    return `<div class="clk clk-flip" data-theme="${theme}"${clkVars(c)}><div class="flip-frame">
       <span class="flip-ampm">AM</span>
       <div class="flip-row">
         ${digitCard()}${digitCard()}<span class="flip-sep">:</span>${digitCard()}${digitCard()}
@@ -866,7 +874,10 @@ const FIELDS = {
   clock: (c) => `
     ${sel('스타일', 'style', [['flip', '레트로 플립'], ['analog', '아날로그'], ['digital', '디지털'], ['led', 'LED'], ['minimal', '미니멀'], ['word', '텍스트(한글)']], c.style || 'flip')}
     ${sel('테마', 'theme', [['wood', '우드'], ['classic', '클래식'], ['brass', '브라스'], ['dark', '다크'], ['minimal', '미니멀']], c.theme || 'wood')}
-    <label class="cfg-row"><input type="checkbox" data-cfg="showSeconds" ${c.showSeconds ? 'checked' : ''}/> 초 표시</label>`,
+    <label class="cfg-row"><input type="checkbox" data-cfg="showSeconds" ${c.showSeconds ? 'checked' : ''}/> 초 표시</label>
+    <label class="cfg-row">숫자 색<input type="color" data-cfg="digitColor" value="${/^#[0-9a-f]{6}$/i.test(c.digitColor || '') ? c.digitColor : '#f5f5f7'}" /></label>
+    <label class="cfg-row">숫자판 배경<input type="color" data-cfg="cardBg" value="${/^#[0-9a-f]{6}$/i.test(c.cardBg || '') ? c.cardBg : '#26262c'}" /></label>
+    <p class="cfg-note">색상은 레트로 플립·미니멀 스타일에 적용돼요.</p>`,
   dateCard: (c) => sel('테마', 'theme', [['soft', '소프트'], ['paper', '페이퍼'], ['bold', '볼드'], ['minimal', '미니멀']], c.theme || 'paper'),
   progressRing: (c) => `
     <label class="cfg-row">이름<input class="input" data-cfg="label" value="${escapeHtml(c.label || '')}" placeholder="(선택)" /></label>

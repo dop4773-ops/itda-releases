@@ -10,6 +10,7 @@ import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { getPreset, GRID_COLS, DEFAULT_PRESET_ID, LAYOUT_PRESETS } from '../shared/dashboard-layouts.js';
 import { attachContextMenu } from '../shared/context-menu.js';
 import { promptText } from '../shared/text-prompt.js';
+import { registerEscClose } from '../shared/esc-close.js';
 import {
   BLOCK_TYPES,
   BLOCK_CATEGORIES,
@@ -337,6 +338,8 @@ export async function mount(root) {
     return { close: () => setOpen(false) };
   }
   initSidePanel();
+
+  let addPanelEscUnsub = null; // 위젯 추가 패널 ESC 핸들러 해제용
 
   // ================= 대시보드 배경 + 테마 =================
   let bgPop = null;
@@ -1064,6 +1067,14 @@ export async function mount(root) {
     });
     $('d-addClose').addEventListener('click', () => setOpen(false));
     backdrop.addEventListener('click', () => setOpen(false));
+    // ESC: 상세(미리보기)면 목록으로, 목록이면 패널 닫기
+    addPanelEscUnsub = registerEscClose(
+      () => panel.classList.contains('open'),
+      () => {
+        if (decoBody.querySelector('#d-decoBack')) renderDecoList();
+        else setOpen(false);
+      }
+    );
     panel.querySelectorAll('[data-addtab]').forEach((t) => {
       t.addEventListener('click', () => {
         panel.querySelectorAll('[data-addtab]').forEach((x) => x.classList.toggle('active', x === t));
@@ -2423,6 +2434,19 @@ export async function mount(root) {
         break;
       case 'ArrowLeft': e.preventDefault(); stepDate(-1); break;
       case 'ArrowRight': e.preventDefault(); stepDate(1); break;
+      case 'Escape':
+        if ($('d-addPanel')?.classList.contains('open')) break; // 위젯 추가 패널은 자체 ESC 처리
+        // 열려있는 메뉴/팝오버가 있으면 그것부터 닫는다(각자의 바깥클릭 핸들러 재사용)
+        if (document.querySelector('.ctx-menu, .dash-block-config')) {
+          document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          e.preventDefault();
+          break;
+        }
+        if (widgetGrid.isEditing()) {
+          e.preventDefault();
+          widgetGrid.setEditing(false);
+        }
+        break;
       default: break;
     }
   }
@@ -2440,6 +2464,7 @@ export async function mount(root) {
     customization?.closeCardMenu();
     summaryRow?.closeSumMenu();
     document.removeEventListener('keydown', handleDashKeys);
+    addPanelEscUnsub?.();
     setScreenShortcuts(null, []);
     eventDetailModal.destroy();
     clearTimeout(flushTimer);
