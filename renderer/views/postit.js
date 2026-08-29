@@ -8,7 +8,7 @@ import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget
 import { sanitizeRichHtml, toggleBold, applyFontSize, applyTextColor, insertChecklistItem, bindChecklistToggle, bindChecklistEnterKey, linkifyUrls } from '../shared/rich-text.js';
 import { openColorPicker } from '../shared/color-picker.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
-import { attachContextMenu } from '../shared/context-menu.js';
+import { attachContextMenu, convertItem, TODO_TARGET, EVENT_TARGET } from '../shared/context-menu.js';
 
 const POSTIT_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>`;
 const PIN_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
@@ -120,6 +120,7 @@ export async function mount(root) {
                 <span>가</span><span class="rich-color-bar" style="background:#2B2E3A;"></span>
               </button>
             </div>
+            <span class="postit-convert-badges" data-badge-host></span>
             <span class="card-meta" title="${formatRelative(item.updated_at)}">${formatRelative(item.updated_at)}</span>
             <button class="pin-btn ${item.is_pinned ? 'pinned' : ''}" data-action="pin" title="${item.is_pinned ? '고정 해제' : '고정'}">${PIN_ICON}</button>
           </div>
@@ -131,6 +132,8 @@ export async function mount(root) {
               ).join('')}
             </div>
             <div class="card-bottom-actions">
+              <button class="btn-icon" data-action="to-todo" title="Todo로 변환">☑️</button>
+              <button class="btn-icon" data-action="to-event" title="일정으로 변환">📅</button>
               <button class="btn-icon" data-action="toggle-links" title="연결된 항목">${LINK_ICON}</button>
               <button class="btn-icon" data-action="open-widget" title="위젯으로 열기 (독립된 작은 창)">${WIDGET_ICON}</button>
               <button class="btn-icon" data-action="delete" title="삭제">${TRASH_ICON}</button>
@@ -233,6 +236,34 @@ export async function mount(root) {
 
       attachContextMenu(card, () => ({ type: 'postit', id }), { onDeleted: () => load() });
 
+      card.querySelector('[data-action="to-todo"]').addEventListener('click', async () => {
+        await convertItem({ type: 'postit', id }, TODO_TARGET);
+        load(); // 변환 배지 갱신
+      });
+      card.querySelector('[data-action="to-event"]').addEventListener('click', async () => {
+        await convertItem({ type: 'postit', id }, EVENT_TARGET);
+        load();
+      });
+
+      // 변환 배지 — 연결된 Todo/일정이 있으면 표시하고, 누르면 해당 목록으로 이동.
+      // ponytail: 카드마다 listFor 한 번(N+1). 포스트잇 수가 크게 늘면 bulk 조회 API 추가.
+      const badgeHost = card.querySelector('[data-badge-host]');
+      window.itda.links
+        .listFor({ type: 'postit', id })
+        .then((linked) => {
+          const kinds = new Set(linked.map((l) => l.type));
+          const pill = (label, route) =>
+            `<button class="postit-convert-badge" data-goto="${route}" title="연결된 ${label}(으)로 이동">${label} 연결됨</button>`;
+          badgeHost.innerHTML =
+            (kinds.has('todo') ? pill('Todo', '#/todo') : '') + (kinds.has('event') ? pill('일정', '#/calendar') : '');
+          badgeHost.querySelectorAll('[data-goto]').forEach((b) => {
+            b.addEventListener('click', () => {
+              location.hash = b.dataset.goto;
+            });
+          });
+        })
+        .catch(() => {});
+
       let linksMounted = false;
       card.querySelector('[data-action="toggle-links"]').addEventListener('click', () => {
         const section = card.querySelector('[data-links-section]');
@@ -297,7 +328,7 @@ export async function mount(root) {
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
-    if (entity !== 'postit') return;
+    if (entity !== 'postit' && entity !== 'link') return; // link: 변환 배지 갱신용
     if (isUserTyping()) return; // 지금 어떤 포스트잇 본문을 타이핑 중이면 커서가 끊기지 않게 미룸
     debouncedLoad();
   });

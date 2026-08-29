@@ -1,6 +1,7 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { generateOccurrenceDates } = require('../shared/recurrence');
+const { scheduleContentSync } = require('../link-sync');
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -89,6 +90,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
         memo: memo ?? ev.memo,
       });
       broadcastDataChanged('event', id);
+      scheduleContentSync(repos, 'event', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)
       return { id };
     }
   );

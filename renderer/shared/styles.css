@@ -895,6 +895,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
    자연스럽게 다음 줄로 넘어가게 한다(overflow 대신 flex-wrap). */
 .sticky-card .card-bottom-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;row-gap:6px;min-width:0;}
 .sticky-card .card-bottom-actions{display:flex;align-items:center;gap:1px;margin-left:auto;flex-shrink:0;}
+/* 포스트잇 → Todo/일정 변환 배지 — 연결된 항목이 있을 때만 채워진다 */
+.postit-convert-badges{display:flex;gap:4px;flex-wrap:wrap;}
+.postit-convert-badge{font-size:9.5px;line-height:1;padding:3px 6px;border-radius:999px;border:none;cursor:pointer;
+  background:rgba(0,0,0,.10);color:rgba(0,0,0,.62);font-family:inherit;white-space:nowrap;}
+.postit-convert-badge:hover{background:rgba(0,0,0,.18);}
 .sticky-card .card-bottom-actions .btn-icon{padding:3px 5px;}
 .sticky-card .color-swatch-row{display:flex;flex-wrap:wrap;gap:5px;min-width:0;}
 .sticky-card .color-swatch{width:14px;height:14px;border-radius:5px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}

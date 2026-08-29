@@ -342,6 +342,24 @@ export async function mount(root) {
                 <span class="switch-track"><span class="switch-thumb"></span></span>
               </label>
             </div>
+            <div class="update-row" style="margin-top:12px;display:block;">
+              <div class="settings-row-title">연결된 항목 내용 동기화</div>
+              <div class="settings-row-desc">연결된 두 항목(예: 포스트잇 ↔ Todo) 중 하나의 제목·본문을 고치면 다른 쪽도 같이 맞춰줘요. 날짜·완료 여부처럼 타입마다 다른 값은 건드리지 않아요.</div>
+              <div style="margin-top:8px;">
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>고칠 때 물어보기 <span class="badge badge-neutral">기본값</span></b><span>저장하면 "연결된 항목도 함께 바꿀까요?"라고 확인해요</span></div>
+                  <input type="radio" name="link-sync-mode" value="ask" />
+                </label>
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>자동으로 맞추기</b><span>확인 없이 항상 양쪽 제목·본문을 같게 유지해요</span></div>
+                  <input type="radio" name="link-sync-mode" value="auto" />
+                </label>
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>동기화 안 함</b><span>연결돼 있어도 제목·본문은 각자 따로 관리해요</span></div>
+                  <input type="radio" name="link-sync-mode" value="off" />
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="panel" style="margin-top:16px;">
@@ -1006,6 +1024,20 @@ export async function mount(root) {
         errorToast(e, '저장하지 못했어요');
         autoSuggestToggle.checked = !autoSuggestToggle.checked;
       }
+    });
+
+    // 연결된 항목 내용 동기화 (ask=기본 / auto / off). "다시 묻지 않기"로 고른 답은 main이 auto/off로 승격한다.
+    const syncMode = (await window.itda.settings.get('link_content_sync')) || 'ask';
+    root.querySelectorAll('input[name="link-sync-mode"]').forEach((radio) => {
+      radio.checked = radio.value === syncMode;
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        try {
+          await window.itda.settings.set({ key: 'link_content_sync', value: radio.value });
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+        }
+      });
     });
 
     const eventEnabledToggle = $('notif-eventEnabledToggle');

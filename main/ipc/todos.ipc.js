@@ -1,6 +1,7 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { generateOccurrenceDates } = require('../shared/recurrence');
+const { scheduleContentSync } = require('../link-sync');
 
 // todos는 soft delete(deleted_at) 대상 → 삭제는 실제로는 UPDATE
 module.exports = function registerTodosIpc(ipcMain, repos) {
@@ -62,6 +63,7 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
       priority: pick(priority, todo.priority),
     });
     broadcastDataChanged('todo', id);
+    scheduleContentSync(repos, 'todo', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)
     return { id };
   });
 

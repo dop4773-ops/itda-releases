@@ -1,5 +1,6 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
+const { scheduleContentSync } = require('../link-sync');
 
 module.exports = function registerPostitsIpc(ipcMain, repos, { closeWidgetIfOpen } = {}) {
   const { postits } = repos;
@@ -37,6 +38,7 @@ module.exports = function registerPostitsIpc(ipcMain, repos, { closeWidgetIfOpen
         opacity: opacity ?? p.opacity,
       });
       broadcastDataChanged('postit', id);
+      scheduleContentSync(repos, 'postit', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)
       return { id };
     }
   );

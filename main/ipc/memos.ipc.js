@@ -1,5 +1,6 @@
 const { assertNonEmpty } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
+const { scheduleContentSync } = require('../link-sync');
 
 module.exports = function registerMemosIpc(ipcMain, repos) {
   const { memos } = repos;
@@ -42,6 +43,7 @@ module.exports = function registerMemosIpc(ipcMain, repos) {
       folderId !== undefined && title === undefined && content === undefined && categoryId === undefined && colorHex === undefined;
     if (folderMoveOnly) memos.restoreUpdatedAt(id, memo.updated_at);
     broadcastDataChanged('memo', id);
+    if (!folderMoveOnly) scheduleContentSync(repos, 'memo', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)
     return { id };
   });
 

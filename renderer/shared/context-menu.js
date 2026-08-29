@@ -21,8 +21,8 @@ const DELETE_API = {
 // todo/event/memo/postit는 서로 완전히 양방향(자기 자신 제외 전부)이고, inbox는 나머지 4개로만
 // 갈 수 있다(반대 방향은 없음 — Inbox는 "정리 전 임시 수집함"이라 다른 항목을 다시 Inbox로
 // 되돌리는 흐름은 제품 개념상 의미가 없어서 뺐다).
-const EVENT_TARGET = { type: 'event', label: '📅 일정 만들기', open: openCreateEventModal };
-const TODO_TARGET = { type: 'todo', label: '☑️ Todo로 만들기', open: openCreateTodoModal };
+export const EVENT_TARGET = { type: 'event', label: '📅 일정 만들기', open: openCreateEventModal };
+export const TODO_TARGET = { type: 'todo', label: '☑️ Todo로 만들기', open: openCreateTodoModal };
 const MEMO_TARGET = { type: 'memo', label: '📝 메모로 만들기', open: openCreateMemoModal };
 const POSTIT_TARGET = { type: 'postit', label: '📌 포스트잇으로 만들기', open: openCreatePostitModal };
 
@@ -60,7 +60,8 @@ async function fetchConvertSource(item) {
   return { title: '', memo: '', dueDate: null };
 }
 
-async function convertItem(item, target) {
+// 우클릭 메뉴뿐 아니라 카드의 "Todo/일정으로 변환" 버튼(postit.js 등)에서도 직접 부른다.
+export async function convertItem(item, target) {
   closeMenu();
   let source;
   try {
@@ -78,6 +79,7 @@ async function convertItem(item, target) {
   } catch (e) {
     errorToast(e, '전환한 항목과 연결하지 못했어요');
   }
+  return created;
 }
 
 let activeEl = null;
