@@ -343,6 +343,7 @@ export async function mount(root) {
 
   // ================= 대시보드 배경 + 테마 =================
   let bgPop = null;
+  let dashOpenBgPop = null; // 빈 공간 우클릭 메뉴에서 커서 위치에 배경 팝업을 열기 위한 핸들
   const closeBgPop = () => {
     bgPop?.remove();
     bgPop = null;
@@ -420,9 +421,9 @@ export async function mount(root) {
     };
     applyBg();
 
-    $('d-bgBtn').addEventListener('click', () => {
+    const openBgPop = (anchorRect) => {
       closeBgPop();
-      const anchor = $('d-bgBtn');
+      const r = anchorRect || $('d-bgBtn').getBoundingClientRect();
       const pop = document.createElement('div');
       pop.className = 'dash-block-config';
       pop.innerHTML = `
@@ -447,7 +448,6 @@ export async function mount(root) {
         <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요. 패턴은 아주 옅게 들어가요.</p>`;
       document.body.appendChild(pop);
       bgPop = pop;
-      const r = anchor.getBoundingClientRect();
       pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8))}px`;
       pop.style.top = `${Math.min(r.bottom + 6, window.innerHeight - pop.offsetHeight - 8)}px`;
       setTimeout(() => document.addEventListener('mousedown', onBgOutside, true), 0);
@@ -509,7 +509,9 @@ export async function mount(root) {
           errorToast(err, '이미지를 불러오지 못했어요');
         }
       });
-    });
+    };
+    $('d-bgBtn').addEventListener('click', () => openBgPop());
+    dashOpenBgPop = openBgPop;
   }
   await initBackgroundAndTheme();
 
@@ -1502,7 +1504,10 @@ export async function mount(root) {
         closeGridMenu();
         if (act === 'edit') $('d-layoutEditBtn').click();
         else if (act === 'add') $('d-addWidgetBtn').click();
-        else if (act === 'bg') $('d-bgBtn').click();
+        else if (act === 'bg') {
+          if (dashOpenBgPop) dashOpenBgPop({ left: e.clientX, bottom: e.clientY });
+          else $('d-bgBtn').click();
+        }
         else if (act === 'reset') $('d-layoutResetBtn').click();
         else if (act === 'done') $('d-editDoneBtn').click();
       });

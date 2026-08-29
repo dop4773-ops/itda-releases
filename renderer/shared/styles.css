@@ -271,6 +271,8 @@ html, body{height:100%;}
 
 /* ================= 전역 상단바 (검색/알림/프로필 — 모든 화면 공통) ================= */
 .global-topbar{height:44px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border);-webkit-app-region:drag;}
+/* 상단바 숨김(단축키 ⌘⇧H / 설정) — 그만큼 본문이 위로 넓어진다 */
+body.topbar-hidden .global-topbar{display:none;}
 .global-topbar-right{display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag;}
 .global-icon-btn{width:32px;height:32px;border-radius:var(--radius-sm);background:none;border:none;color:var(--text-soft);display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .global-icon-btn:hover{background:var(--bg);}
@@ -618,7 +620,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .allday-bar.is-google{border:1px dashed rgba(255,255,255,.7);cursor:default;}
 .allday-bar .event-del{position:absolute;top:50%;right:4px;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .15s;cursor:pointer;background:rgba(0,0,0,.28);border-radius:4px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:#fff;}
 .allday-bar:hover .event-del{opacity:1;pointer-events:auto;}
-.time-body-scroll{overflow-y:auto;max-height:calc(100vh - 300px);min-height:460px;}
+.time-body-scroll{overflow-y:auto;max-height:560px;min-height:560px;}
 .time-body-grid{display:grid;}
 .time-hour-label{font-size:10px;color:var(--text-faint);text-align:right;padding:0 6px;border-right:1px solid var(--border);transform:translateY(-6px);}
 .time-day-container{position:relative;border-right:1px solid var(--divider);background-image:repeating-linear-gradient(to bottom, var(--divider) 0, var(--divider) 1px, transparent 1px, transparent 44px);}
@@ -639,10 +641,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .time-day-container.is-today-col{background-color:rgba(108,140,245,.04);}
 
 /* ---- 일정 화면 비율 고정 ----
-   월간뷰 셀은 일정 개수와 무관하게 높이가 항상 같고(넘치면 "+N개 더보기"로 접힘),
-   주/일 뷰의 종일 행은 최대 높이를 제한해 그 아래 시간대 그리드가 항상 같은 자리에 온다. */
-#c-gridArea .month-cell{height:104px;min-height:0;overflow:hidden;}
-#c-gridArea .allday-row{max-height:33vh;overflow-y:auto;}
+   월/주/일 뷰가 화면(창 높이)과 무관하게 항상 같은 크기를 차지하도록 고정한다.
+   월간: 6주 × 96px + 요일헤더 ≈ 시간대 그리드(560px + 헤더/종일행)와 비슷하게 맞춤. */
+#c-gridArea .month-cell{height:96px;min-height:0;overflow:hidden;}
+#c-gridArea .allday-row{max-height:56px;overflow-y:auto;}
 
 /* ---- 종일 일정 드래그로 순서 바꾸기 ---- */
 .allday-bar-drag{cursor:grab;}

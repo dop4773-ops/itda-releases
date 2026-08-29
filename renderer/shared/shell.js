@@ -187,6 +187,11 @@ function initGlobalTopbar() {
       toggleBell();
       return;
     }
+    if (matchesAccelerator(e, getCachedBinding('toggleTopbar'))) {
+      e.preventDefault();
+      toggleTopbar().then((hidden) => toast(hidden ? '상단바를 숨겼어요 (다시 누르면 표시)' : '상단바를 표시했어요'));
+      return;
+    }
     if (e.key === 'Escape' && bellWrap.classList.contains('open')) bellWrap.classList.remove('open');
   });
 
@@ -402,6 +407,22 @@ export async function setSidebarSetting(key, value) {
 export async function applyFabVisibility() {
   const hidden = (await window.itda.settings.get('fab_hidden')) === '1';
   document.body.classList.toggle('fab-hidden', hidden);
+}
+
+// 상단바(다크모드/검색/알림/빠른설정) 표시/숨김 — 숨기면 그 44px만큼 본문이 넓어진다.
+// 기본값은 "숨김"(요청): 필요할 때만 단축키 ⌘⇧H로 잠깐 연다.
+// 검색은 사이드바 "검색", 알림은 단축키(기본 ⌘⇧N), 다크모드/빠른설정은 설정 화면에서 계속 접근 가능.
+export async function isTopbarHidden() {
+  return (await window.itda.settings.get('topbar_hidden')) !== '0'; // 미설정 = 숨김
+}
+export async function applyTopbarVisibility() {
+  document.body.classList.toggle('topbar-hidden', await isTopbarHidden());
+}
+export async function toggleTopbar() {
+  const next = (await isTopbarHidden()) ? '0' : '1';
+  await window.itda.settings.set({ key: 'topbar_hidden', value: next });
+  await applyTopbarVisibility();
+  return next === '1';
 }
 
 // 라이트/다크 모드별 기본 글자색(--text) 직접 지정 — 설정 → 화면에서 색상피커로 고른다.
@@ -652,6 +673,7 @@ export async function initShell() {
   await applyUiAdjusts();
   await applySidebarPersonalization();
   await applyFabVisibility();
+  await applyTopbarVisibility();
   await applyDisplayScale();
   await applyFontFamily();
   await initSidebarCollapse();

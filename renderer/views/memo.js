@@ -57,6 +57,7 @@ const MOD_SHIFT_LABEL = isMac ? '⇧⌘' : 'Ctrl+Shift+';
 // Alt를 누르고 있으면 뜨는 전역 단축키 오버레이(shell.js)에 이 화면 전용 단축키를 얹어서 보여준다.
 const MEMO_SCREEN_SHORTCUTS = [
   { label: '새 메모', keys: `${NEW_MEMO_SHORTCUT_LABEL} / +` },
+  { label: '폴더 접기/펼치기', keys: 'F' },
   { label: '굵게', keys: `${MOD_LABEL}B` },
   { label: '밑줄', keys: `${MOD_LABEL}U` },
   { label: '왼쪽 정렬', keys: `${MOD_SHIFT_LABEL}L` },
@@ -1154,6 +1155,17 @@ export async function mount(root) {
   };
   document.addEventListener('keydown', handleNewMemoShortcut);
 
+  // F: 폴더 레일 접기/펼치기 (입력 중이 아닐 때만)
+  const handleFolderToggle = (e) => {
+    if (e.key.toLowerCase() !== 'f' || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    if (isUserTyping()) return;
+    const rail = $('m-folderRail');
+    if (!rail) return;
+    e.preventDefault();
+    rail.open = !rail.open;
+  };
+  document.addEventListener('keydown', handleFolderToggle);
+
   // 목록에서 Cmd/Ctrl·Shift+클릭으로 여러 개 선택해뒀을 때 Delete/Backspace로 한 번에 지우기
   // (제목/본문 입력 중 글자를 지우는 backspace와 겹치지 않도록 isUserTyping()으로 가드).
   const handleDeleteKey = (e) => {
@@ -1288,6 +1300,7 @@ export async function mount(root) {
   return () => {
     document.removeEventListener('click', closeOnOutsideClick);
     document.removeEventListener('keydown', handleNewMemoShortcut);
+    document.removeEventListener('keydown', handleFolderToggle);
     document.removeEventListener('keydown', handleDeleteKey);
     closeFolderMenu();
     unsubscribeEsc();

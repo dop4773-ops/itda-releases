@@ -1,7 +1,7 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
-import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride, UI_THEMES, getUiTheme, setUiTheme, getUiAdjust, setUiAdjust, SIDEBAR_STYLES, getSidebarStyle, getSidebarWidth, setSidebarSetting, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, applyFabVisibility } from '../shared/shell.js';
+import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCALE_MIN, DISPLAY_SCALE_MAX, DISPLAY_SCALE_STEP, getDisplayScale, setDisplayScale, FONT_FAMILY_OPTIONS, getFontFamily, setFontFamily, getTextColorOverride, setTextColorOverride, resetTextColorOverride, UI_THEMES, getUiTheme, setUiTheme, getUiAdjust, setUiAdjust, SIDEBAR_STYLES, getSidebarStyle, getSidebarWidth, setSidebarSetting, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, applyFabVisibility, applyTopbarVisibility, isTopbarHidden } from '../shared/shell.js';
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
@@ -184,6 +184,16 @@ export async function mount(root) {
               </div>
               <label class="switch">
                 <input type="checkbox" id="display-fabToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row">
+              <div>
+                <div class="settings-row-title">상단바 숨기기</div>
+                <div class="settings-row-desc">다크모드·검색·알림·빠른설정이 있는 상단 띠를 숨겨 본문을 넓게 써요. ⌘⇧H(Ctrl+Shift+H)로 잠깐 열 수 있어요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="display-topbarToggle" />
                 <span class="switch-track"><span class="switch-thumb"></span></span>
               </label>
             </div>
@@ -644,6 +654,18 @@ export async function mount(root) {
       } catch (e) {
         errorToast(e, '저장하지 못했어요');
         fabToggle.checked = !fabToggle.checked;
+      }
+    });
+
+    const topbarToggle = $('display-topbarToggle');
+    topbarToggle.checked = await isTopbarHidden();
+    topbarToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'topbar_hidden', value: topbarToggle.checked ? '1' : '0' });
+        await applyTopbarVisibility();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        topbarToggle.checked = !topbarToggle.checked;
       }
     });
   }
