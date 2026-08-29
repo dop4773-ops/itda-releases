@@ -149,10 +149,26 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
   });
 
   // 자동 백업이 저장되는 폴더 경로 조회/열기 (설정 화면의 "저장 위치" 표시용)
-  ipcMain.handle('data:getBackupsDir', () => backupsDir());
+  ipcMain.handle('data:getBackupsDir', () => backupsDir(repos.settings));
   ipcMain.handle('data:openBackupsFolder', () => {
-    shell.openPath(backupsDir());
+    shell.openPath(backupsDir(repos.settings));
     return { opened: true };
+  });
+
+  // 자동 백업 저장 폴더 변경 / 기본값으로 되돌리기
+  ipcMain.handle('data:chooseBackupsDir', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getWin(), {
+      title: '자동 백업을 저장할 폴더 선택',
+      defaultPath: backupsDir(repos.settings),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (canceled || !filePaths || !filePaths[0]) return { cancelled: true };
+    repos.settings.set('backup_auto_dir', filePaths[0]);
+    return { cancelled: false, dir: backupsDir(repos.settings) };
+  });
+  ipcMain.handle('data:resetBackupsDir', () => {
+    repos.settings.set('backup_auto_dir', '');
+    return { dir: backupsDir(repos.settings) };
   });
 
   // 데이터 복원: 선택한 백업 파일로 현재 DB를 완전히 덮어쓴다.

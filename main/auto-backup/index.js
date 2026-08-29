@@ -11,6 +11,7 @@
  *   backup_auto_weekday:  0(일)~6(토) — period가 weekly일 때만 사용, 기본 0
  *   backup_auto_monthday: 1~31 — period가 monthly일 때만 사용, 기본 1 (그 달에 없는 날짜면 말일로 보정)
  *   backup_last_at:       마지막 자동 백업 시각 (ISO 문자열) — 설정 화면 표시용
+ *   backup_auto_dir:      자동 백업 저장 폴더 — 비어있으면 userData/backups (설정 화면에서 변경)
  *
  * CHECK_INTERVAL_MS 주기로 재점검해서, 예정 시각(+요일/날짜)이 지났고 아직 이번 주기에
  * 백업한 적 없으면 userData/backups 폴더에 타임스탬프 파일로 백업하고 최근 KEEP개만 남긴다
@@ -24,10 +25,22 @@ const PERIOD_MS = { daily: 24 * 60 * 60 * 1000, weekly: 7 * 24 * 60 * 60 * 1000,
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // ponytail: 10분 단위 정밀도가 상한선. 더 정확한 시각이 필요하면 이 값을 줄이면 됨
 const KEEP = 5; // ponytail: 최근 5개만 보관하는 고정 정책. 세대별 보관(일간 7개+주간 4개 등)이 필요해지면 그때 추가
 
-function backupsDir() {
-  const dir = path.join(app.getPath('userData'), 'backups');
-  fs.mkdirSync(dir, { recursive: true });
-  return dir;
+function defaultBackupsDir() {
+  return path.join(app.getPath('userData'), 'backups');
+}
+
+// settings를 넘기면 사용자가 지정한 폴더(backup_auto_dir)를 쓰고, 없거나 만들 수 없으면 기본 위치로 폴백.
+function backupsDir(settings) {
+  const custom = settings?.get?.('backup_auto_dir');
+  const dir = custom && custom.trim() ? custom.trim() : defaultBackupsDir();
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch (err) {
+    const fallback = defaultBackupsDir();
+    fs.mkdirSync(fallback, { recursive: true });
+    return fallback;
+  }
 }
 
 // 오늘 예정 시각(+주간이면 요일, 월간이면 날짜)이 이미 지났는지 판단.
@@ -55,7 +68,7 @@ function pruneOldBackups(dir) {
 }
 
 async function runBackup(db, settings) {
-  const dir = backupsDir();
+  const dir = backupsDir(settings);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   await db.backup(path.join(dir, `itda-auto-${stamp}.db`));
   settings.set('backup_last_at', new Date().toISOString());

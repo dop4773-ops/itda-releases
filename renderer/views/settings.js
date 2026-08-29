@@ -435,7 +435,11 @@ export async function mount(root) {
                 <div class="settings-row-title">저장 위치</div>
                 <div id="backup-dirPath" style="font-size:11.5px;color:var(--text-faint);margin-top:2px;word-break:break-all;">불러오는 중…</div>
               </div>
-              <button class="btn-secondary" id="backup-openDirBtn">폴더 열기</button>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button class="btn-secondary" id="backup-chooseDirBtn">위치 변경</button>
+                <button class="btn-secondary" id="backup-resetDirBtn">기본값</button>
+                <button class="btn-secondary" id="backup-openDirBtn">폴더 열기</button>
+              </div>
             </div>
           </div>
           <div class="panel">
@@ -1545,16 +1549,39 @@ export async function mount(root) {
     const lastAt = await window.itda.settings.get('backup_last_at');
     $('backup-lastAt').textContent = `마지막 자동 백업: ${lastAt ? new Date(lastAt).toLocaleString('ko-KR') : '아직 없음'}`;
 
-    try {
-      $('backup-dirPath').textContent = await window.itda.data.getBackupsDir();
-    } catch (e) {
-      $('backup-dirPath').textContent = '위치를 불러오지 못했어요';
-    }
+    const showDir = async () => {
+      try {
+        $('backup-dirPath').textContent = await window.itda.data.getBackupsDir();
+      } catch (e) {
+        $('backup-dirPath').textContent = '위치를 불러오지 못했어요';
+      }
+    };
+    await showDir();
     $('backup-openDirBtn').addEventListener('click', async () => {
       try {
         await window.itda.data.openBackupsFolder();
       } catch (e) {
         errorToast(e, '폴더를 열지 못했어요');
+      }
+    });
+    $('backup-chooseDirBtn').addEventListener('click', async () => {
+      try {
+        const res = await window.itda.data.chooseBackupsDir();
+        if (!res?.cancelled) {
+          await showDir();
+          toast('자동 백업 저장 위치를 바꿨어요');
+        }
+      } catch (e) {
+        errorToast(e, '위치를 바꾸지 못했어요');
+      }
+    });
+    $('backup-resetDirBtn').addEventListener('click', async () => {
+      try {
+        await window.itda.data.resetBackupsDir();
+        await showDir();
+        toast('기본 위치로 되돌렸어요');
+      } catch (e) {
+        errorToast(e, '되돌리지 못했어요');
       }
     });
   }
