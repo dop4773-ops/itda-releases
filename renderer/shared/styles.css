@@ -894,10 +894,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .card-links-section.open{display:block;}
 
 /* ================= 메모 (Apple Notes 오마주) — 좌: 목록, 우: 상세 편집 ================= */
-/* 메모 화면은 아래 여백을 줄여(.main[data-view="memo"]) 화면 끝까지 꽉 채운다.
-   86px = 상단바(44) + .main 위 패딩(26) + 아래 패딩(16). */
-.main[data-view="memo"]{padding-bottom:16px;}
-.notes-app{display:grid;grid-template-columns:280px 1fr;gap:0;height:calc(100vh - 86px);min-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
+/* 메모 화면은 .main을 세로 flex로 만들고 .notes-app이 남은 높이를 전부 차지하게 한다.
+   (calc(100vh - Npx)는 화면 배율 zoom과 안 맞아 아래에 빈 공간이 생겼었다 — flex로 해결.) */
+.main[data-view="memo"]{padding-bottom:8px;display:flex;flex-direction:column;min-height:0;}
+.notes-app{display:grid;grid-template-columns:280px 1fr;gap:0;flex:1 1 auto;min-height:480px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;}
 
 .notes-sidebar{display:flex;flex-direction:column;border-right:1px solid var(--divider);background:var(--bg);min-width:0;min-height:0;}
 .notes-folder-rail{flex-shrink:0;border-bottom:1px solid var(--divider);max-height:220px;overflow-y:auto;}

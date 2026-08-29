@@ -7,7 +7,7 @@ import * as postitView from '../views/postit.js';
 import * as searchView from '../views/search.js';
 import * as trashView from '../views/trash.js';
 import * as settingsView from '../views/settings.js';
-import { initShell } from './shell.js';
+import { initShell, applyTheme, applyUiAdjusts, applyFontFamily, applyDisplayScale } from './shell.js';
 import { ensureUnlocked, lockNow } from './lock-screen.js';
 
 // 라우트 테이블: 새 화면 추가 시 여기 한 줄만 추가하면 사이드바/URL 해시로 바로 연결됨
@@ -61,6 +61,9 @@ async function navigate() {
 
 window.addEventListener('hashchange', navigate);
 window.addEventListener('DOMContentLoaded', async () => {
+  // 잠금화면에도 테마/글꼴/배율이 적용되도록, 잠금 해제 전에 스타일부터 맞춘다.
+  // (설정 읽기 IPC는 잠금과 무관하게 동작한다. initShell이 잠금 해제 후 멱등하게 다시 적용한다.)
+  await Promise.allSettled([applyTheme(), applyUiAdjusts(), applyFontFamily(), applyDisplayScale()]);
   // 비밀번호 잠금이 켜져 있으면 여기서 대기 — 풀리기 전까지 사이드바/대시보드 등
   // 어떤 실제 데이터도 그려지지 않는다. 잠금이 꺼져 있으면 즉시 통과.
   await ensureUnlocked();

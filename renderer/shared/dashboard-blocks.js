@@ -942,7 +942,7 @@ const FIELDS = {
 
 // 파일 → maxPx 이하 JPEG dataURL. config/설정에 통째로 저장.
 // ponytail: 설정 행에 base64(수십~수백 KB). 사진을 많이/크게 붙이면 dashboard-images/ 폴더 저장으로 옮길 것.
-export function readImageDownscaled(file, maxPx) {
+export function readImageDownscaled(file, maxPx, quality = 0.85) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
@@ -956,8 +956,10 @@ export function readImageDownscaled(file, maxPx) {
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.src = reader.result;
     };

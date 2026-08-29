@@ -395,13 +395,25 @@ export async function mount(root) {
       /* none */
     }
     const BG_PATTERNS = ['dot', 'grid', 'paper'];
+    const setBgImageSrc = (src) => {
+      bgEl.style.backgroundImage = src ? `url("${src}")` : '';
+      // 채우기: cover(꽉 채움, 잘림) / contain(전체 보이게, 여백). 확대가 과하다는 요청으로 contain 선택지 추가.
+      bgEl.style.backgroundSize = bg.fit === 'contain' ? 'contain' : 'cover';
+    };
     const applyBg = () => {
       bgEl.style.backgroundImage = '';
       bgEl.style.backgroundColor = '';
+      bgEl.style.backgroundSize = '';
       bgEl.classList.remove('pat-dot', 'pat-grid', 'pat-paper');
       if (bg.type === 'color' && bg.color) bgEl.style.backgroundColor = bg.color;
-      else if (bg.type === 'image' && bg.dataUrl) bgEl.style.backgroundImage = `url("${bg.dataUrl}")`;
-      else if (BG_PATTERNS.includes(bg.type)) {
+      else if (bg.type === 'image') {
+        if (bg.dataUrl) setBgImageSrc(bg.dataUrl); // 구버전 저장(설정에 base64)
+        else if (bg.imageFile) {
+          window.itda.dashboardImages?.get(bg.imageFile).then((url) => {
+            if (url && bg.type === 'image' && bg.imageFile) setBgImageSrc(url);
+          }).catch(() => {});
+        }
+      } else if (BG_PATTERNS.includes(bg.type)) {
         bgEl.classList.add('pat-' + bg.type);
         if (bg.color) bgEl.style.backgroundColor = bg.color; // 패턴 아래 기본색(선택)
       }
@@ -426,6 +438,12 @@ export async function mount(root) {
         </label>
         <label class="cfg-row" id="bg-colorRow">색상<input type="color" id="bg-color" value="${bg.color || '#f0e6d6'}" /></label>
         <label class="cfg-row" id="bg-imageRow">이미지 파일<input type="file" accept="image/*" id="bg-file" /></label>
+        <label class="cfg-row" id="bg-fitRow">채우기
+          <select class="select" id="bg-fit">
+            <option value="cover">꽉 채움 (잘릴 수 있음)</option>
+            <option value="contain">전체 보이게 (여백)</option>
+          </select>
+        </label>
         <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요. 패턴은 아주 옅게 들어가요.</p>`;
       document.body.appendChild(pop);
       bgPop = pop;
@@ -440,7 +458,9 @@ export async function mount(root) {
         const v = typeSel.value;
         pop.querySelector('#bg-colorRow').style.display = v === 'color' || BG_PATTERNS.includes(v) ? '' : 'none';
         pop.querySelector('#bg-imageRow').style.display = v === 'image' ? '' : 'none';
+        pop.querySelector('#bg-fitRow').style.display = v === 'image' ? '' : 'none';
       };
+      pop.querySelector('#bg-fit').value = bg.fit || 'cover';
       sync();
       const commit = () => {
         applyBg();
@@ -461,11 +481,25 @@ export async function mount(root) {
         sync();
         commit();
       });
+      pop.querySelector('#bg-fit').addEventListener('change', (e) => {
+        bg.fit = e.target.value;
+        commit();
+      });
       pop.querySelector('#bg-file').addEventListener('change', async (e) => {
         const f = e.target.files?.[0];
         if (!f) return;
         try {
-          bg.dataUrl = await readImageDownscaled(f, 1800);
+          // 화질 향상: 2560px + 품질 0.9. 설정 JSON 비대화 방지를 위해 파일 저장소(dashboard-images/)에 저장.
+          const dataUrl = await readImageDownscaled(f, 2560, 0.9);
+          const oldFile = bg.imageFile;
+          if (window.itda.dashboardImages?.save) {
+            const res = await window.itda.dashboardImages.save({ dataUrl });
+            bg.imageFile = res?.name || '';
+            bg.dataUrl = '';
+            if (oldFile && oldFile !== bg.imageFile) window.itda.dashboardImages.delete(oldFile).catch(() => {});
+          } else {
+            bg.dataUrl = dataUrl; // 구버전 폴백
+          }
           bg.type = 'image';
           typeSel.value = 'image';
           sync();
