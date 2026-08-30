@@ -1275,6 +1275,15 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
   content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;
   background:var(--card-bg);opacity:var(--dash-op, 1);
 }
+/* 자기 배경색을 가진 내부 채움 요소(업무센터 통계 박스, 빠른 추가 버튼, 연결된 업무 카드칩)는
+   ::before 레이어를 안 타므로 카드 배경만 투명해지고 자기들은 불투명하게 남는다 — 투명도가 지정된
+   카드에서는 이들 배경/테두리도 같은 비율로 옅어지게 한다(꾸미기 블록의 color-mix 방식과 동일). */
+.dash-widget[style*="--dash-op"] .wc-stat,
+.dash-widget[style*="--dash-op"] .quick-add-btn,
+.dash-widget[style*="--dash-op"] .linked-card{
+  background:color-mix(in srgb, var(--bg) calc(var(--dash-op, 1) * 100%), transparent);
+  border-color:color-mix(in srgb, var(--border) calc(var(--dash-op, 1) * 100%), transparent);
+}
 .dash-widget.panel.dragging{opacity:.95;}
 /* 꾸미기 블록: 배경 투명도(--dash-op)는 "프레임 배경"에만 — 글자·숫자·아이콘은 항상 선명.
    프레임이 단색인 블록은 color-mix로 배경 알파만 낮추고, 그라데이션·질감 프레임(우드 시계,
