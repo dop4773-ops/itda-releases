@@ -71,6 +71,18 @@ function needsUpdate(src, cur, targetType) {
   return titleDiff || cur.body !== src.body;
 }
 
+// memo/postit 본문에 "평문으로 덮어쓰면 사라질" 서식이 들어있나 — 체크박스/사진/볼드·기울임·밑줄/
+// 글자색·크기 span(style·class 속성)/문단 정렬. 이게 있으면 auto 모드라도 덮어쓰기 전에 한 번 확인한다.
+const RICH_MARKERS = /<input\b|<img\b|<\/?(?:b|strong|i|em|u)\b|<span[^>]*\b(?:style|class)\s*=|text-align\s*:/i;
+
+function wouldLoseFormatting(repos, partner, src) {
+  if (partner.type !== 'memo' && partner.type !== 'postit') return false; // todo/event memo는 원래 평문칸
+  const r = (partner.type === 'memo' ? repos.memos : repos.postits).getById(partner.id);
+  if (!r || !RICH_MARKERS.test(String(r.content || ''))) return false;
+  // 본문 텍스트가 실제로 바뀔 때만 content를 다시 쓴다(제목만 바뀌면 안 건드림) — 그때만 서식이 날아감
+  return htmlToPlain(r.content) !== src.body;
+}
+
 // 소스 내용(src)을 target 행에 반영. 다른 필드는 현재 값 그대로 통과시킨다(repo.update는 전체 컬럼을 받음).
 function applyContent(repos, type, id, src) {
   const srcTitle = (src.title || '').trim();
@@ -155,23 +167,29 @@ async function runContentSync(repos, type, id) {
   });
   if (!partners.length) return;
 
-  if (mode === 'ask') {
+  // ask 모드는 항상 확인. auto 모드는 평소엔 조용히 반영하되, 서식(체크박스/사진/볼드/색 등)이
+  // 평문으로 덮어써져 사라지는 경우엔 auto라도 한 번 확인한다(조용한 데이터 손실 방지).
+  const formatLoss = mode === 'auto' && partners.some((p) => wouldLoseFormatting(repos, p, src));
+
+  if (mode === 'ask' || formatLoss) {
     const kinds = [...new Set(partners.map((p) => TYPE_LABEL[p.type]))].join(', ');
     const opts = {
       type: 'question',
       buttons: ['예', '아니오, 이번만'],
-      defaultId: 0,
+      defaultId: formatLoss ? 1 : 0, // 서식 손실 경고는 실수 방지를 위해 기본 선택을 "아니오"로
       cancelId: 1,
       noLink: true,
-      message: `연결된 ${kinds}의 내용도 함께 변경할까요?`,
+      message: formatLoss
+        ? `연결된 ${kinds}에 체크박스·서식이 있어요. 내용을 맞추면 그 서식이 사라집니다. 그래도 바꿀까요?`
+        : `연결된 ${kinds}의 내용도 함께 변경할까요?`,
       detail: '제목과 본문 텍스트만 맞춰지고, 날짜·완료 여부 등 타입마다 다른 값은 그대로예요.',
-      checkboxLabel: '다시 묻지 않기',
-      checkboxChecked: false,
+      // "다시 묻지 않기"는 ask 모드 전용 — auto의 서식 손실 경고는 매번 뜬다(영구 무시 불가).
+      ...(formatLoss ? {} : { checkboxLabel: '다시 묻지 않기', checkboxChecked: false }),
     };
     const win = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
     const { response, checkboxChecked } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
     const yes = response === 0;
-    if (checkboxChecked) repos.settings.set('link_content_sync', yes ? 'auto' : 'off');
+    if (!formatLoss && checkboxChecked) repos.settings.set('link_content_sync', yes ? 'auto' : 'off');
     if (!yes) return;
 
     // 다이얼로그를 띄운 사이 사용자가 더 고쳤을 수 있으니 최신값으로 다시 읽고 대상도 다시 추린다.
@@ -212,5 +230,13 @@ if (require.main === module) {
   assert.strictEqual(needsUpdate({ title: 'T', body: 'x' }, { title: '', body: 'x' }, 'todo'), true);
   assert.strictEqual(needsUpdate({ title: '', body: 'x' }, { title: 'Z', body: 'x' }, 'todo'), false);
   assert.strictEqual(needsUpdate({ title: 'T', body: 'x' }, { title: 'T', body: 'y' }, 'todo'), true);
+  // RICH_MARKERS: 서식/체크박스/사진은 잡고, 평문+<div>/<br> 구조는 안 잡는다
+  assert.ok(RICH_MARKERS.test('<input type="checkbox">할 일'));
+  assert.ok(RICH_MARKERS.test('<b>굵게</b>'));
+  assert.ok(RICH_MARKERS.test('<span style="color:#ff0000">빨강</span>'));
+  assert.ok(RICH_MARKERS.test('<img data-attachment-id="3">'));
+  assert.ok(RICH_MARKERS.test('<span class="item-mention" data-type="todo">칩</span>'));
+  assert.ok(!RICH_MARKERS.test('그냥 평문<div>다음 줄</div>'));
+  assert.ok(!RICH_MARKERS.test('한 줄<br>두 줄'));
   console.log('link-sync self-check OK');
 }

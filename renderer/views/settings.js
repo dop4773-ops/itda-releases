@@ -348,7 +348,7 @@ export async function mount(root) {
                   <input type="radio" name="link-sync-mode" value="ask" />
                 </label>
                 <label class="data-action-row" style="cursor:pointer;">
-                  <div><b>자동으로 맞추기</b><span>확인 없이 항상 양쪽 제목·본문을 같게 유지해요</span></div>
+                  <div><b>자동으로 맞추기</b><span>확인 없이 양쪽 제목·본문을 같게 유지해요. 단, 체크박스·서식이 있는 항목을 덮어쓸 땐 한 번 물어봐요.</span></div>
                   <input type="radio" name="link-sync-mode" value="auto" />
                 </label>
                 <label class="data-action-row" style="cursor:pointer;">
