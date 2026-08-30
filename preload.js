@@ -108,6 +108,7 @@ contextBridge.exposeInMainWorld('itda', {
     backup: () => ipcRenderer.invoke('data:backup'),
     getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),
     openBackupsFolder: () => ipcRenderer.invoke('data:openBackupsFolder'),
+    openLogsFolder: () => ipcRenderer.invoke('data:openLogsFolder'),
     chooseBackupsDir: () => ipcRenderer.invoke('data:chooseBackupsDir'),
     resetBackupsDir: () => ipcRenderer.invoke('data:resetBackupsDir'),
     restore: () => ipcRenderer.invoke('data:restore'),
@@ -203,4 +204,15 @@ contextBridge.exposeInMainWorld('itda', {
       return () => ipcRenderer.removeListener('updater:status', listener);
     },
   },
+});
+
+// 예상 못한 렌더러 에러를 main의 로그 파일(userData/logs/error.log)로 보낸다.
+// contextIsolation 때문에 preload(격리 월드)에서는 메인 월드의 window error 이벤트를 못 잡는다 —
+// 그래서 전송 함수만 노출하고, 실제 window.onerror 등록은 메인 월드의 shared/error-report.js가 한다.
+contextBridge.exposeInMainWorld('__itdaReportError', (payload) => {
+  try {
+    ipcRenderer.send('itda:log-error', payload);
+  } catch (e) {
+    /* 채널이 닫혔거나 main이 없으면 무시 */
+  }
 });

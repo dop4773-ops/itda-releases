@@ -1,3 +1,5 @@
+import '../shared/error-report.js'; // window.onerror/unhandledrejection → main 로그 파일 (side-effect only)
+
 // widget.html은 하나뿐이고, ?type=으로 어떤 위젯을 띄울지 결정한다.
 // 새 위젯 종류를 추가할 땐 이 레지스트리에 한 줄만 추가하면 된다.
 const REGISTRY = {

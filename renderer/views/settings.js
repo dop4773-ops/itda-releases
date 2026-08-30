@@ -475,6 +475,10 @@ export async function mount(root) {
               <div><b>JSON 데이터 가져오기</b><span>내보낸 JSON 파일을 지금 잇다에 추가로 불러옵니다(기존 데이터 유지).</span></div>
               <button class="btn-secondary" id="data-importBtn">가져오기</button>
             </div>
+            <div class="data-action-row">
+              <div><b>오류 로그 폴더 열기</b><span>문제가 생겼을 때 원인 파악용 로그(error.log)가 저장되는 폴더를 엽니다.</span></div>
+              <button class="btn-secondary" id="data-openLogsBtn">폴더 열기</button>
+            </div>
             <div class="data-action-row danger-row">
               <div><b>모든 데이터 삭제</b><span>Todo·일정·메모·포스트잇·Inbox·연결·휴지통이 영구적으로 삭제됩니다.</span></div>
               <button class="btn-danger" id="data-deleteBtn">삭제하기</button>
@@ -1617,6 +1621,14 @@ export async function mount(root) {
 
   // ================= 데이터 & 백업 =================
   function initDataPanel() {
+    $('data-openLogsBtn').addEventListener('click', async () => {
+      try {
+        await window.itda.data.openLogsFolder();
+      } catch (e) {
+        errorToast(e, '로그 폴더를 열지 못했어요');
+      }
+    });
+
     $('data-backupBtn').addEventListener('click', async () => {
       $('data-backupBtn').disabled = true;
       try {

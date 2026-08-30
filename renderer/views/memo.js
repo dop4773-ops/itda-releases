@@ -23,6 +23,7 @@ import { registerEscClose } from '../shared/esc-close.js';
 import { setScreenShortcuts } from '../shared/shell.js';
 import { attachDragOut, DRAG_HANDLE_ICON } from '../shared/drag-out.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { confirmDialog } from '../shared/confirm-dialog.js';
 import { promptText } from '../shared/text-prompt.js';
 
 const MEMO_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`;
@@ -1117,7 +1118,7 @@ export async function mount(root) {
     }
     menu.querySelector('[data-action="bulk-delete"]').addEventListener('click', async () => {
       close();
-      if (!confirm(`선택한 메모 ${ids.length}개를 삭제하시겠습니까?`)) return;
+      if (!(await confirmDialog(`선택한 메모 ${ids.length}개를 삭제하시겠습니까?`, { title: '메모 삭제', confirmLabel: '삭제', danger: true }))) return;
       await bulkDeleteSelected();
     });
     setTimeout(() => document.addEventListener('mousedown', onOutside), 0);
@@ -1213,12 +1214,13 @@ export async function mount(root) {
 
   // 목록에서 Cmd/Ctrl·Shift+클릭으로 여러 개 선택해뒀을 때 Delete/Backspace로 한 번에 지우기
   // (제목/본문 입력 중 글자를 지우는 backspace와 겹치지 않도록 isUserTyping()으로 가드).
-  const handleDeleteKey = (e) => {
+  const handleDeleteKey = async (e) => {
     if (e.key !== 'Delete' && e.key !== 'Backspace') return;
     if (isUserTyping()) return;
     if (selected.size === 0) return;
     e.preventDefault();
-    if (!confirm(`선택한 메모 ${selected.size}개를 삭제하시겠습니까?`)) return;
+    const count = selected.size;
+    if (!(await confirmDialog(`선택한 메모 ${count}개를 삭제하시겠습니까?`, { title: '메모 삭제', confirmLabel: '삭제', danger: true }))) return;
     bulkDeleteSelected();
   };
   document.addEventListener('keydown', handleDeleteKey);

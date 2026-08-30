@@ -111,7 +111,7 @@ async function fetchJson(url) {
 function parseReleasesAtom(xml) {
   const entries = xml.split('<entry>').slice(1);
   return entries.map((e) => {
-    const pick = (re) => (e.match(re) || [, ''])[1];
+    const pick = (re) => (e.match(re) || ['', ''])[1];
     const title = pick(/<title>([\s\S]*?)<\/title>/);
     const updated = pick(/<updated>([\s\S]*?)<\/updated>/);
     let content = pick(/<content[^>]*>([\s\S]*?)<\/content>/);

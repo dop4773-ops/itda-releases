@@ -2,6 +2,7 @@ const { app, dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { backupsDir } = require('../auto-backup');
+const { openLogsFolder } = require('../logger');
 
 // exportJson이 만든 데이터를 실제로 DB에 밀어넣는 로직. IPC 핸들러 밖에 둬서
 // db.transaction으로 통째로 감쌀 수 있게(하나라도 실패하면 전부 롤백) 분리했다.
@@ -152,6 +153,12 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
   ipcMain.handle('data:getBackupsDir', () => backupsDir(repos.settings));
   ipcMain.handle('data:openBackupsFolder', () => {
     shell.openPath(backupsDir(repos.settings));
+    return { opened: true };
+  });
+
+  // 오류 로그(userData/logs/error.log) 폴더 열기 — 문제 발생 시 원인 파악용
+  ipcMain.handle('data:openLogsFolder', () => {
+    openLogsFolder();
     return { opened: true };
   });
 

@@ -13,6 +13,8 @@ on:
       - 'schema/**'
       - 'package.json'
       - 'package-lock.json'
+      - 'eslint.config.js'
+      - '.github/workflows/**'
 
 permissions:
   contents: write
@@ -26,6 +28,9 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
+      # 문법/참조 오류(no-undef, no-dupe-keys 등)로 "앱이 아예 안 뜨는" 빌드가 배포되는 걸 막는 게이트.
+      # 에러가 하나라도 있으면 여기서 워크플로가 실패하고 릴리스가 안 올라간다.
+      - run: npm run lint
       - run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

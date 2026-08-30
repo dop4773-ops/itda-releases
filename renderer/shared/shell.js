@@ -1,3 +1,4 @@
+import './error-report.js'; // window.onerror/unhandledrejection → main 로그 파일 (side-effect only)
 import { toast, errorToast, emptyStateBlock, escapeHtml } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
 import { initCommandPalette } from './command-palette.js';

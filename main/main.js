@@ -9,6 +9,11 @@ const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
+const { initErrorLogging } = require('./logger');
+
+// 예상 못한 예외/거부를 콘솔 + userData/logs/error.log 에 남긴다(크래시보다 로그+복구 우선).
+// renderer 쪽 에러도 preload가 'itda:log-error'로 보내면 여기서 같은 파일에 기록.
+initErrorLogging();
 
 let mainWindow;
 let db;
@@ -122,12 +127,3 @@ if (!gotLock) {
     if (process.platform !== 'darwin') app.quit();
   });
 }
-
-// 예상 못한 예외로 앱 전체가 아무 설명 없이 죽는 상황을 방지 —
-// 최소한 로그를 남기고, 가능하면 계속 실행되도록 한다.
-process.on('uncaughtException', (err) => {
-  console.error('[itda] uncaughtException:', err);
-});
-process.on('unhandledRejection', (reason) => {
-  console.error('[itda] unhandledRejection:', reason);
-});

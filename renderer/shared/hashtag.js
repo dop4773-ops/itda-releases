@@ -32,7 +32,7 @@ function detectFinishedHashtag(editableEl, requireTrailingSpace) {
   if (!node || node.nodeType !== 3 || !editableEl.contains(node)) return null;
   let textBefore = node.textContent.slice(0, sel.anchorOffset);
   if (requireTrailingSpace) {
-    if (!/[\s ]$/.test(textBefore)) return null;
+    if (!/\s$/.test(textBefore)) return null; // \s는 일반 공백·탭에 더해 NBSP(U+00A0)까지 포함 — contenteditable이 넣는 &nbsp;도 잡힌다
     textBefore = textBefore.slice(0, -1);
   }
   const m = textBefore.match(HASHTAG_PATTERN);

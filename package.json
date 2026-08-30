@@ -1,12 +1,13 @@
 {
   "name": "itda",
-  "version": "2.58.0",
+  "version": "2.58.1",
   "description": "잇다 - 병원 업무자를 위한 개인 업무 관리 데스크톱 Workspace",
   "main": "main/main.js",
   "author": "",
   "license": "UNLICENSED",
   "scripts": {
     "start": "node node_modules/electron/cli.js .",
+    "lint": "eslint .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/postinstall-electron-fix.js",
     "build:win": "electron-builder --win nsis",
@@ -18,8 +19,11 @@
   },
   "devDependencies": {
     "@electron/rebuild": "^3.6.0",
+    "@eslint/js": "^9.39.5",
     "electron": "^31.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.39.5",
+    "globals": "^17.11.0"
   },
   "build": {
     "appId": "com.itda.app",
