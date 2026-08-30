@@ -141,6 +141,7 @@ contextBridge.exposeInMainWorld('itda', {
     getMainWindowBounds: () => ipcRenderer.invoke('app:getMainWindowBounds'),
     getAutoLaunch: () => ipcRenderer.invoke('app:getAutoLaunch'),
     setAutoLaunch: (enabled) => ipcRenderer.invoke('app:setAutoLaunch', enabled),
+    openPath: (path) => ipcRenderer.invoke('app:openPath', path), // 메모/포스트잇 본문의 로컬 경로 링크 클릭 시
   },
   widgetWindow: {
     fitToContent: (payload) => ipcRenderer.invoke('widgetWindow:fitToContent', payload),

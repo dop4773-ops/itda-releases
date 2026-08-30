@@ -79,6 +79,7 @@ export async function mount(root) {
 
   async function load() {
     const grid = $('p-grid');
+    if (!grid) return; // 데이터 변경 디바운스 타이머가 화면 언마운트 후에 발동하는 경우 방어
     try {
       items = await window.itda.postits.list();
     } catch (e) {

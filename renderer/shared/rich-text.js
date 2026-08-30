@@ -494,8 +494,12 @@ export function bindChecklistBackspaceKey(editableEl, onChange) {
 // 문장 끝 구두점(.,)이나 닫는 괄호가 URL/경로에 딸려 들어가 링크가 깨지는 걸 막기 위해
 // 끝에서 흔한 구두점은 링크에서 제외한다.
 const URL_PATTERN =
-  /(https?:\/\/[^\s<]+|www\.[^\s<]+|[A-Za-z]:\\[^\s<]*?\.[A-Za-z0-9]{1,6}\b|[A-Za-z]:\\[^\s<]+|\\\\[^\s<]*?\.[A-Za-z0-9]{1,6}\b|\\\\[^\s<]+)/gi;
+  /(https?:\/\/[^\s<]+|www\.[^\s<]+|file:\/\/[^\s<]+|[A-Za-z]:[\\/][^\s<]*?\.[A-Za-z0-9]{1,6}\b|[A-Za-z]:[\\/][^\s<]+|\\\\[^\s<]*?\.[A-Za-z0-9]{1,6}\b|\\\\[^\s<]+)/gi;
 const TRAILING_PUNCTUATION = /[.,!?;:)\]]+$/;
+// 로컬 경로(윈도우 드라이브 C:\ · C:/, 네트워크 공유 \\서버\..., file:// URL)인지.
+// 이런 건 브라우저가 a.href에 넣으면 스킴 소문자화·퍼센트인코딩(한글 폴더명!)·punycode로 망가뜨려서
+// shell.openPath가 실패한다 — href 대신 data-local-path에 원문 그대로 담고 클릭 시 IPC로 연다.
+const LOCAL_PATH_PATTERN = /^([A-Za-z]:[\\/]|\\\\|file:\/\/)/i;
 
 /**
  * 저장된 텍스트 안의 URL을 클릭 가능한 링크로 "화면에만" 바꿔준다 — 저장 데이터 자체는 항상
@@ -529,11 +533,18 @@ export function linkifyUrls(container) {
 
       if (match.index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
       const a = document.createElement('a');
-      a.href = url.startsWith('www.') ? `https://${url}` : url;
       a.textContent = url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
       a.setAttribute('contenteditable', 'false');
+      if (LOCAL_PATH_PATTERN.test(url)) {
+        // href를 안 넣어야 브라우저가 경로를 안 건드린다. 원문은 data-local-path에.
+        a.className = 'local-path-link';
+        a.setAttribute('role', 'link');
+        a.setAttribute('data-local-path', url);
+      } else {
+        a.href = url.startsWith('www.') ? `https://${url}` : url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      }
       frag.appendChild(a);
       if (trailing) frag.appendChild(document.createTextNode(trailing));
 
@@ -542,4 +553,16 @@ export function linkifyUrls(container) {
     if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
     node.parentNode.replaceChild(frag, node);
   });
+
+  // 로컬 경로 링크 클릭 → OS 탐색기/기본 앱으로 열기(IPC). 컨테이너당 한 번만 바인딩.
+  if (!container.__localPathBound) {
+    container.__localPathBound = true;
+    container.addEventListener('click', (e) => {
+      const link = e.target.closest?.('a.local-path-link[data-local-path]');
+      if (!link || !container.contains(link)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      window.itda?.app?.openPath?.(link.getAttribute('data-local-path'));
+    });
+  }
 }

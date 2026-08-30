@@ -1,4 +1,5 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, shell } = require('electron');
+const { fileURLToPath } = require('url');
 
 // 아이템을 바탕화면으로 드래그해서 위젯으로 열 때, "메인 윈도우 밖으로 나갔는지"를
 // renderer가 판단할 수 있도록 메인 윈도우의 현재 화면 좌표/크기를 제공한다.
@@ -19,6 +20,24 @@ module.exports = function registerAppIpc(ipcMain, getMainWindow) {
     if (!app.isPackaged) throw new Error('개발 모드에서는 자동 실행을 설정할 수 없어요.');
     app.setLoginItemSettings({ openAtLogin: !!enabled });
     return { enabled: !!enabled };
+  });
+
+  // 메모/포스트잇 본문에 자동 링크된 로컬 경로(C:\... , C:/... , \\서버\..., file://...) 클릭 시
+  // OS 탐색기/기본 앱으로 연다. 경로 문자열은 사용자가 자기 본문에 직접 쓴 것(external-links.js의
+  // 파일 경로 처리와 동일한 신뢰 수준). shell.openPath는 폴더면 탐색기, 파일이면 연결 프로그램.
+  ipcMain.handle('app:openPath', async (event, rawPath) => {
+    if (typeof rawPath !== 'string' || !rawPath.trim()) return { ok: false };
+    let target = rawPath.trim();
+    if (/^file:\/\//i.test(target)) {
+      try {
+        target = fileURLToPath(target); // 퍼센트인코딩·UNC 등을 실제 경로로 되돌린다
+      } catch (e) {
+        /* 변환 실패하면 원문 그대로 시도 */
+      }
+    }
+    const err = await shell.openPath(target);
+    if (err) console.error('[itda] 경로를 열지 못했어요:', target, err);
+    return { ok: !err, err: err || null };
   });
 
   // 위젯 창(포스트잇/일정·할일·메모 낱개 위젯) 전용 — 내용이 다 렌더링된 직후 렌더러가

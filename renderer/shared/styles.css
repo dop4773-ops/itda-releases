@@ -1012,6 +1012,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card .card-content .mc-item.mc-item-done{color:rgba(0,0,0,.4);text-decoration:line-through;}
 .notes-body-input a{color:var(--brand);text-decoration:underline;cursor:pointer;}
 .sticky-card .card-content a{color:#2255cc;text-decoration:underline;cursor:pointer;}
+/* 로컬 경로 링크(폴더/파일) — 웹 링크와 구분되게 폴더 아이콘을 앞에 붙인다 */
+a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-block;}
 
 /* 메모 본문 인라인 사진 — 우측 하단 모서리를 끌면 크기 조절(memo.js 참고). max-width:100%로
    본문 폭을 절대 넘지 않게 막고, 실제 크기는 인라인 width 스타일(리사이즈 결과)이 정한다. */
