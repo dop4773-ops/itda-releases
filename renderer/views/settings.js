@@ -341,14 +341,14 @@ export async function mount(root) {
             </div>
             <div class="update-row" style="margin-top:12px;display:block;">
               <div class="settings-row-title">연결된 항목 내용 동기화</div>
-              <div class="settings-row-desc">연결된 두 항목(예: 포스트잇 ↔ Todo) 중 하나의 제목·본문을 고치면 다른 쪽도 같이 맞춰줘요. 날짜·완료 여부처럼 타입마다 다른 값은 건드리지 않아요.</div>
+              <div class="settings-row-desc">연결된 두 항목 중 하나의 제목·본문을 고치면 다른 쪽도 같이 맞춰줘요. 메모↔포스트잇끼리는 체크박스·서식·사진까지 그대로 옮겨져요. 날짜·완료 여부처럼 타입마다 다른 값은 건드리지 않아요.</div>
               <div style="margin-top:8px;">
                 <label class="data-action-row" style="cursor:pointer;">
                   <div><b>고칠 때 물어보기 <span class="badge badge-neutral">기본값</span></b><span>저장하면 "연결된 항목도 함께 바꿀까요?"라고 확인해요</span></div>
                   <input type="radio" name="link-sync-mode" value="ask" />
                 </label>
                 <label class="data-action-row" style="cursor:pointer;">
-                  <div><b>자동으로 맞추기</b><span>확인 없이 양쪽 제목·본문을 같게 유지해요. 단, 체크박스·서식이 있는 항목을 덮어쓸 땐 한 번 물어봐요.</span></div>
+                  <div><b>자동으로 맞추기</b><span>확인 없이 양쪽을 같게 유지해요. 단, Todo·일정에 맞추느라 메모/포스트잇의 서식이 사라지게 될 땐 한 번 물어봐요.</span></div>
                   <input type="radio" name="link-sync-mode" value="auto" />
                 </label>
                 <label class="data-action-row" style="cursor:pointer;">

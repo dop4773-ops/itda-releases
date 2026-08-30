@@ -59,11 +59,15 @@
 - **이력**:
   - 8/29 세션(v2.54.0): 기능 최초 구현. 원 스펙이 "제목·본문 **텍스트**만 동기화, 타입 고유 필드 제외"라, `main/link-sync.js`가 HTML을 `htmlToPlain`으로 벗겨 비교/전파하고 되쓸 때 `plainToHtml`(줄바꿈만 `<br>`)로 되돌림 → 서식은 의도적으로 전파 안 함.
   - 8/30 세션: 전체 시나리오 CDP 재검증 — off/auto/ask 전 방향, 무한루프 없음, 타입 고유 필드 보존, 위젯 창 편집 동기화, 디바운스 정상, 에러 0건. **동작 자체는 정상**이고 서식 손실만 남음 확인.
-- **해결 (8/30 세션, v2.58.2)**:
-  - `main/link-sync.js`에 `RICH_MARKERS` 정규식 + `wouldLoseFormatting()` 추가. **auto 모드라도** 동기화 대상 memo/postit의 현재 본문에 서식 마커(`<input>` 체크박스 / `<img>` / `<b><i><u>` 등 / `style·class` 붙은 `<span>` / `text-align`)가 있고 본문 텍스트가 실제로 바뀌는 경우엔, 덮어쓰기 전에 확인창을 띄운다: `"연결된 [항목]에 체크박스·서식이 있어요. 내용을 맞추면 그 서식이 사라집니다. 그래도 바꿀까요?"` (기본 선택 = **아니오**, "다시 묻지 않기" 없음 = 매번 물음).
-  - 서식 없는 항목 / Todo·일정(평문 memo 칸) 대상은 종전대로 auto에서 조용히 반영.
-  - 스텁 다이얼로그 분기 테스트 + 라이브 CDP 검증 완료.
-- **남은 한계 (설계상, 이슈 아님)**: Todo/일정이 낀 연결에서 [예]를 누르면 여전히 서식은 사라진다(memo 칸이 평문 전용이라). 이제는 조용히가 아니라 **동의를 받고** 사라지는 것. memo↔postit끼리 서식까지 보존 전파하려면 `sanitizeRichHtml` 경유 별도 작업 필요.
+- **1차 해결 (8/30 세션, v2.58.2)**:
+  - `main/link-sync.js`에 `RICH_MARKERS` 정규식 + `wouldLoseFormatting()` 추가. **auto 모드라도** 동기화 대상 memo/postit의 현재 본문에 서식 마커(`<input>` 체크박스 / `<img>` / `<b><i><u>` 등 / `style·class` 붙은 `<span>` / `text-align`)가 있고 본문 텍스트가 실제로 바뀌는 경우엔, 덮어쓰기 전에 확인창을 띄운다.
+- **2차 해결 (8/30 세션, v2.58.3) — memo ↔ postit는 서식 보존 전파**:
+  - `readContent`에 `html` 필드 추가(memo/postit=저장된 서식 HTML, todo/event=null).
+  - `applyContent`: 소스도 memo/postit(`src.html != null`)이면 저장된 서식 HTML을 **그대로 복사** — 체크박스(체크상태 포함)·볼드·글자색·인라인 사진까지 보존. 그 HTML은 renderer가 저장 시 이미 `sanitizeRichHtml`을 거쳤고 불러올 때 또 정화하므로 안전.
+  - `needsUpdate`에 `richDiff` 추가 — memo↔postit는 텍스트가 같아도 서식 HTML이 다르면 동기화(볼드만 추가한 편집도 전파). 한쪽이 평문 타입이면 richDiff 무시.
+  - `wouldLoseFormatting`: 소스가 memo/postit면 `false`(서식 보존되므로 경고 불필요). **Todo/일정이 낀 연결에서만** 서식 손실 경고가 뜬다.
+  - 라이브 CDP 검증: memo(볼드+색+체크박스)↔postit 양방향 전파, 실제 에디터로 편집 시 두 에디터의 sanitize 결과가 동일 → **핑퐁/무한루프 없음**(memo↔postit 왕복 안정), 렌더링 정상. off/ask/todo↔postit 경고 회귀 정상.
+- **남은 한계 (설계상, 이슈 아님)**: Todo/일정이 낀 연결은 memo 칸이 평문 전용이라 여전히 텍스트만 오간다. 서식 있는 memo/postit를 Todo/일정에 맞추면 서식이 빠지지만, 이제 auto에서도 **확인을 받고** 빠진다(조용히 아님).
 
 ---
 
