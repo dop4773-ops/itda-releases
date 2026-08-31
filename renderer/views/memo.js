@@ -664,9 +664,14 @@ export async function mount(root) {
 
     const bodyEl = $('m-bodyInput');
     // 윈도우/리눅스 크로미움은 contenteditable 안 이미지에 "네이티브 리사이즈 핸들"을 기본으로 띄운다
-    // (맥은 기본 꺼짐). 그 핸들이 우리 커스텀 리사이즈(모서리 드래그)와 충돌해서 크기 조절이 안 되거나
-    // width/height 속성으로 바뀌어 저장 시 사라진다 — 꺼서 커스텀 로직만 동작하게 통일한다.
-    try { document.execCommand('enableObjectResizing', false, 'false'); } catch (_) {}
+    // (맥은 기본 꺼짐). 그 핸들이 우리 커스텀 리사이즈(드래그)와 충돌해서 크기 조절이 안 되거나
+    // width 속성으로 바뀌어 저장 시 사라진다 — 꺼서 커스텀 로직만 동작하게 통일한다.
+    // 윈도우에선 mount 시 한 번만으로는 안 먹는 경우가 있어 편집창에 포커스가 갈 때마다 다시 건다.
+    const disableNativeResizing = () => {
+      try { document.execCommand('enableObjectResizing', false, 'false'); } catch (_) {}
+    };
+    disableNativeResizing();
+    bodyEl.addEventListener('focus', disableNativeResizing);
     linkifyUrls(bodyEl); // 불러올 때 한 번만 URL을 링크로 표시(입력 중엔 절대 호출하지 않음 — 커서 깨짐 방지)
     loadInlineImages(bodyEl); // 저장된 인라인 사진들의 src를 첨부파일에서 다시 채워 넣음(마찬가지로 불러올 때 한 번만)
     const saveNow = async () => {
@@ -717,26 +722,32 @@ export async function mount(root) {
       reader.readAsDataURL(file);
     });
 
-    // 인라인 사진 크기 조절 — 이미지 우측 하단 모서리 근처를 눌러서 끌면 폭이 바뀐다
-    // (높이는 auto라 비율 그대로 유지됨). 별도 리사이즈 손잡이 엘리먼트를 저장 데이터에
-    // 남기지 않으려고, 핸들을 따로 그리지 않고 이미지 자체의 코너 히트 영역으로만 판정한다.
+    // 인라인 사진 크기 조절 — 이미지 위 아무 데나 눌러서 좌우로 끌면 폭이 바뀐다
+    // (커서가 이미 이미지 전체에서 ↔ 리사이즈 모양이라 그 힌트대로 동작하게 함. 높이는
+    // auto라 비율 그대로 유지됨). 별도 리사이즈 손잡이 엘리먼트를 저장 데이터에 남기지
+    // 않으려고 핸들을 따로 그리지 않고, 이미지는 contenteditable=false라 눌러도 캐럿/선택
+    // 동작이 없으니 전체를 드래그 영역으로 써도 부작용이 없다. 실제로 몇 px 움직였을 때만
+    // 리사이즈로 취급해서 단순 클릭으로 크기가 바뀌지 않게 한다.
     bodyEl.addEventListener('mousedown', (e) => {
       const img = e.target.closest('img.memo-inline-img');
       if (!img) return;
-      const rect = img.getBoundingClientRect();
-      const nearCorner = e.clientX > rect.right - 24 && e.clientY > rect.bottom - 24;
-      if (!nearCorner) return;
       e.preventDefault();
       const startX = e.clientX;
-      const startW = rect.width;
+      const startW = img.getBoundingClientRect().width;
+      let resizing = false;
       const onMove = (ev) => {
-        const nextW = Math.max(60, Math.min(bodyEl.clientWidth || 600, startW + (ev.clientX - startX)));
+        const dx = ev.clientX - startX;
+        if (!resizing && Math.abs(dx) < 3) return; // 클릭과 드래그 구분
+        resizing = true;
+        const nextW = Math.max(60, Math.min(bodyEl.clientWidth || 600, startW + dx));
         img.style.width = `${Math.round(nextW)}px`;
+        img.removeAttribute('width'); // 네이티브 핸들이 남긴 속성이 있으면 정리(우리 style.width로 통일)
+        img.removeAttribute('height');
       };
       const onUp = () => {
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
-        scheduleSave();
+        if (resizing) scheduleSave();
       };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);

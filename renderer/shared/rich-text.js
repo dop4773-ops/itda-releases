@@ -87,7 +87,12 @@ function sanitizeElement(el) {
         el.removeChild(child); // 유효하지 않으면(오염된 데이터, 외부 img 붙여넣기 등) 통째로 버림 — 대체할 텍스트가 없음
         continue;
       }
-      const width = child.style.width;
+      // 폭 보존: 우리 커스텀 모서리 드래그는 style.width(px)를 쓰지만, 윈도우/리눅스
+      // 크로미움의 "네이티브 이미지 리사이즈 핸들"은 width **속성**(숫자, px 없음)에 쓴다
+      // (enableObjectResizing을 꺼도 환경에 따라 새는 경우가 있음). 둘 다 인정해서, 어느
+      // 쪽으로 조절했든 저장 후 다시 열었을 때 크기가 유지되게 한다.
+      const attrW = child.getAttribute('width');
+      const width = child.style.width || (attrW && /^\d+(?:\.\d+)?$/.test(attrW) ? `${attrW}px` : '');
       Array.from(child.attributes).forEach((attr) => child.removeAttribute(attr.name));
       child.className = 'memo-inline-img';
       child.setAttribute('data-attachment-id', attachmentId);
