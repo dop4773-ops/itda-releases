@@ -10,6 +10,7 @@
  *   - app_settings.dashboard_layout.widgets[id] = { x, y, w, h }   (업무 카드와 공용)
  */
 import { escapeHtml } from './ui-utils.js';
+import { LOCAL_PATH_PATTERN } from './rich-text.js';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const MON_EN = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -217,6 +218,13 @@ function hydrateBlock(el, block) {
   }
 
   if (block.type === 'link') {
+    // 로컬 경로 바로가기 클릭 → OS 탐색기/기본 앱으로 (href 없는 a라 위임 처리)
+    el.querySelectorAll('a.is-local-path[data-local-path]').forEach((a) => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.itda?.app?.openPath?.(a.getAttribute('data-local-path'));
+      });
+    });
     el.querySelectorAll('img[data-fav]').forEach((img) => {
       const fallback = img.previousElementSibling;
       img.addEventListener('load', () => {
@@ -329,15 +337,25 @@ const PAINTERS = {
           /* 잘못된 URL */
         }
       }
-      return `<span class="lb-ico">${escapeHtml(it.icon || '🔗')}</span>`;
+      const fallback = it.icon || (LOCAL_PATH_PATTERN.test(it.url || '') ? '📁' : '🔗');
+      return `<span class="lb-ico">${escapeHtml(fallback)}</span>`;
     };
     const rows = items
       .map((it) => {
-        const href = escapeHtml(it.url || '#');
-        const label = escapeHtml(it.label || it.url || '링크');
-        return layout === 'grid'
-          ? `<a class="link-tile" href="${href}" target="_blank" rel="noopener"><span class="lt-icon">${iconCell(it)}</span><span class="lt-label">${label}</span></a>`
-          : `<a class="link-block-row" href="${href}" target="_blank" rel="noopener"><span class="link-block-icon">${iconCell(it)}</span><span class="link-block-label">${label}</span></a>`;
+        const url = it.url || '';
+        const label = escapeHtml(it.label || url || '링크');
+        const inner =
+          layout === 'grid'
+            ? `<span class="lt-icon">${iconCell(it)}</span><span class="lt-label">${label}</span>`
+            : `<span class="link-block-icon">${iconCell(it)}</span><span class="link-block-label">${label}</span>`;
+        const cls = layout === 'grid' ? 'link-tile' : 'link-block-row';
+        // 로컬 경로(C:\ · C:/ · \\서버 · file://)는 href에 넣으면 브라우저가 스킴 소문자화·
+        // 퍼센트인코딩(한글!)으로 망가뜨려 열기가 실패한다 — data-local-path에 원문 그대로 담고
+        // 클릭 시 IPC(app:openPath)로 연다. (메모/포스트잇 본문의 linkifyUrls와 동일한 방식.)
+        if (LOCAL_PATH_PATTERN.test(url)) {
+          return `<a class="${cls} is-local-path" role="link" data-local-path="${escapeHtml(url)}">${inner}</a>`;
+        }
+        return `<a class="${cls}" href="${escapeHtml(url || '#')}" target="_blank" rel="noopener">${inner}</a>`;
       })
       .join('');
     return `<div class="link-block lb-${layout}">

@@ -517,7 +517,7 @@ const TRAILING_PUNCTUATION = /[.,!?;:)\]]+$/;
 // 로컬 경로(윈도우 드라이브 C:\ · C:/, 네트워크 공유 \\서버\..., file:// URL)인지.
 // 이런 건 브라우저가 a.href에 넣으면 스킴 소문자화·퍼센트인코딩(한글 폴더명!)·punycode로 망가뜨려서
 // shell.openPath가 실패한다 — href 대신 data-local-path에 원문 그대로 담고 클릭 시 IPC로 연다.
-const LOCAL_PATH_PATTERN = /^([A-Za-z]:[\\/]|\\\\|file:\/\/)/i;
+export const LOCAL_PATH_PATTERN = /^([A-Za-z]:[\\/]|\\\\|file:\/\/)/i;
 
 /**
  * 저장된 텍스트 안의 URL을 클릭 가능한 링크로 "화면에만" 바꿔준다 — 저장 데이터 자체는 항상

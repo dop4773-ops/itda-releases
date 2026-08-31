@@ -1606,6 +1606,8 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .link-block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:8px;}
 .link-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;text-decoration:none;color:var(--text-soft);font-size:10.5px;text-align:center;background:var(--bg);border:1px solid var(--border);}
 .link-tile:hover{border-color:var(--brand);color:var(--brand);}
+/* href 없는 로컬 경로 바로가기(a.is-local-path)도 링크처럼 손 커서 */
+.link-block-row.is-local-path,.link-tile.is-local-path{cursor:pointer;}
 .lt-icon{font-size:24px;line-height:1;}
 .lt-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
 
