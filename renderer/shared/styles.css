@@ -1195,7 +1195,9 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 /* ================= 대시보드 레이아웃 =================
    위젯 그리드(.dash-main)는 항상 화면 전체 폭을 쓰고, 우측 사이드 패널(.dash-side)은
    그 위에 겹쳐 뜨는 슬라이드 오버레이다 — 열고 닫아도 위젯 레이아웃 폭엔 영향이 없다. */
-.dash-layout{display:block;position:relative;min-height:100%;}
+/* opacity:0으로 시작해서(dashboard.js mount) 레이아웃·배경·테마가 다 적용된 뒤 페이드 인 —
+   화면 전환 시 "기본 대시보드가 잠깐 보였다 커스텀 배치로 튀는" 깜빡임 방지(윈도우에서 두드러짐). */
+.dash-layout{display:block;position:relative;min-height:100%;transition:opacity .14s ease;}
 .dash-main{min-width:0;position:relative;z-index:1;}
 /* 대시보드 배경(색/이미지) — .main 패딩까지 덮도록 살짝 밖으로 빼서 깐다. pointer-events 없음.
    .dash-layout이 min-height:100%라 위젯이 적어도 배경이 스크롤 영역 전체를 항상 채운다.

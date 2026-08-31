@@ -109,19 +109,23 @@ function isSameDate(a, b) {
 export async function mount(root) {
   const now = new Date();
   const greeting = greetingByHour(now.getHours());
-  const userName = await getUserName();
   let viewDate = new Date();
   viewDate.setHours(0, 0, 0, 0);
 
+  // 사용자 이름은 IPC라 await가 필요한데, 이걸 먼저 기다리면 그 사이 화면이 빈 채로 남아
+  // (윈도우에선 IPC가 느려 몇 프레임) 화면 전환 시 깜빡임의 한 원인이 됐다 — 스켈레톤을 먼저
+  // 그리고 이름은 나중에 채운다. 또 레이아웃/배경/테마가 적용되기 전 "기본 대시보드"가 잠깐
+  // 보였다가 커스텀 배치로 튀는 것도 막기 위해, 준비될 때까지 #d-layout을 opacity:0으로 두고
+  // 다 적용된 뒤 페이드 인한다(styles.css .dash-layout transition).
   root.innerHTML = `
-    <div class="dash-layout" id="d-layout">
+    <div class="dash-layout" id="d-layout" style="opacity:0;">
       <div class="dash-bg" id="d-bg"></div>
       <div class="dash-main">
         <div class="dash-header">
           <div class="dash-greeting">
             <div class="dash-greeting-icon">${greeting.icon}</div>
             <div>
-              <h1 id="d-greetingText">${greeting.text}, ${escapeHtml(userName)}님!</h1>
+              <h1 id="d-greetingText">${greeting.text}님!</h1>
               <p>오늘도 화이팅하세요 💪</p>
             </div>
           </div>
@@ -313,6 +317,14 @@ export async function mount(root) {
   `;
 
   const $ = (id) => root.querySelector('#' + id);
+
+  // 이름은 스켈레톤을 그린 뒤 채운다(위 주석 참고). 기본값이면 굳이 다시 안 씀.
+  getUserName()
+    .then((name) => {
+      const h = $('d-greetingText');
+      if (h && name) h.textContent = `${greeting.text}, ${name}님!`;
+    })
+    .catch(() => {});
 
   // 카드 on/off (설정에서 저장한 JSON 하나로 관리). 사이드 패널 카드가 둘 다 꺼져 있으면
   // 우측 패널을 열 이유가 없으므로 헤더의 "사이드 패널 열기" 버튼을 숨긴다.
@@ -2657,6 +2669,11 @@ export async function mount(root) {
       window.itda.settings.set({ key: 'dashboard_workcenter_collapsed', value: wcCollapsed ? '1' : '0' }).catch(() => {});
     });
   })();
+
+  // 레이아웃·배경·테마·투명도·요약 카드까지 전부 적용된 상태 — 이제 페이드 인.
+  // (카드 안 데이터는 아래에서 채워지지만 각자 로딩 표시가 있어 깜빡임이 아님.)
+  const layoutEl = $('d-layout');
+  if (layoutEl) requestAnimationFrame(() => { layoutEl.style.opacity = '1'; });
 
   await Promise.allSettled([
     loadWorkCenter(),
