@@ -318,6 +318,22 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
 
+  // 대시보드 mount는 설정을 15개 넘게 읽는데, 예전엔 전부 순차 IPC라 화면 전환이 느렸다
+  // (특히 윈도우). 여기서 한 번에 당겨오고, 아래 모든 곳은 s(key)로 캐시에서 읽는다
+  // (프리페치에 없는 키만 IPC 폴백). set은 window.itda.settings.set 그대로.
+  const _pref = await window.itda.settings.getMany([
+    'dashboard_cards', 'dashboard_style_preset', 'dashboard_theme', 'dashboard_bg',
+    'dashboard_layout', 'dashboard_blocks', 'dashboard_widget_views',
+    'dashboard_widget_opacity', 'dashboard_glass_enabled', 'dashboard_header_style',
+    'dashboard_card_styles', 'dashboard_summary_collapsed', 'dashboard_summary_cards',
+    'dashboard_workcenter_collapsed', 'dashboard_side_open',
+  ]).catch(() => ({}));
+  // 프리페치 캐시는 "초기 mount 동안"만 유효. mount 끝나면 꺼서, 이후 이벤트 핸들러의
+  // read-modify-write(카드 on/off, 카드 스타일 등)는 항상 DB의 최신 값을 읽게 한다.
+  let _prefLive = true;
+  const s = (key) =>
+    _prefLive && Object.prototype.hasOwnProperty.call(_pref, key) ? _pref[key] : window.itda.settings.get(key);
+
   // 이름은 스켈레톤을 그린 뒤 채운다(위 주석 참고). 기본값이면 굳이 다시 안 씀.
   getUserName()
     .then((name) => {
@@ -334,7 +350,7 @@ export async function mount(root) {
     const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
     let config = defaults;
     try {
-      const raw = await window.itda.settings.get('dashboard_cards');
+      const raw = await s('dashboard_cards');
       if (raw) config = { ...defaults, ...JSON.parse(raw) };
     } catch (e) {
       // 저장된 값이 깨졌으면(수동 편집 등) 기본값으로 — 대시보드가 안 뜨는 것보다 나음
@@ -404,7 +420,7 @@ export async function mount(root) {
     // 대시보드 스타일 프리셋 — 전역 UI 테마와 별개로 대시보드만의 분위기(카드 표면·여백·
     // 라운드·그림자·기본 강조색·배경)를 한 번에 바꾼다. CSS가 .dash-layout[data-dashstyle]로 처리.
     try {
-      const sp = await window.itda.settings.get('dashboard_style_preset');
+      const sp = await s('dashboard_style_preset');
       if (DASHBOARD_STYLE_PRESETS.some((p) => p.id === sp && p.id !== 'default')) layout.dataset.dashstyle = sp;
       else delete layout.dataset.dashstyle;
     } catch (e) {
@@ -413,7 +429,7 @@ export async function mount(root) {
 
     let theme = 'default';
     try {
-      theme = (await window.itda.settings.get('dashboard_theme')) || 'default';
+      theme = (await s('dashboard_theme')) || 'default';
     } catch (e) {
       /* default */
     }
@@ -435,7 +451,7 @@ export async function mount(root) {
 
     let bg = { type: 'none' };
     try {
-      const raw = await window.itda.settings.get('dashboard_bg');
+      const raw = await s('dashboard_bg');
       if (raw) bg = JSON.parse(raw);
     } catch (e) {
       /* none */
@@ -574,7 +590,7 @@ export async function mount(root) {
     let presetId = DEFAULT_PRESET_ID;
     let positions = {};
     try {
-      const raw = await window.itda.settings.get('dashboard_layout');
+      const raw = await s('dashboard_layout');
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed?.widgets) {
@@ -1005,7 +1021,7 @@ export async function mount(root) {
   ];
   let widgetViews = {};
   try {
-    widgetViews = JSON.parse((await window.itda.settings.get('dashboard_widget_views')) || '{}') || {};
+    widgetViews = JSON.parse((await s('dashboard_widget_views')) || '{}') || {};
   } catch (e) {
     widgetViews = {};
   }
@@ -1028,7 +1044,7 @@ export async function mount(root) {
   let blocks = [];
   const blockEls = new Map(); // id -> DOM 엘리먼트
   try {
-    const raw = await window.itda.settings.get('dashboard_blocks');
+    const raw = await s('dashboard_blocks');
     const arr = raw ? JSON.parse(raw) : [];
     if (Array.isArray(arr)) blocks = arr.filter((b) => b && b.id && BLOCK_TYPES[b.type]);
   } catch (e) {
@@ -1271,7 +1287,7 @@ export async function mount(root) {
       const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));
       let cfg = { ...defaults };
       try {
-        const raw = await window.itda.settings.get('dashboard_cards');
+        const raw = await s('dashboard_cards');
         if (raw) cfg = { ...defaults, ...JSON.parse(raw) };
       } catch (e) {
         /* 기본값 */
@@ -1343,7 +1359,7 @@ export async function mount(root) {
   // ---- 레이아웃(위젯 배치) 저장/불러오기 — 설정의 "배치 프리셋"과 같은 dashboard_custom_presets를 씀 ----
   const loadLayoutPresets = async () => {
     try {
-      const raw = await window.itda.settings.get('dashboard_custom_presets');
+      const raw = await s('dashboard_custom_presets');
       const arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr : [];
     } catch (e) {
@@ -1365,7 +1381,7 @@ export async function mount(root) {
   ];
   const loadWorkspaces = async () => {
     try {
-      const raw = await window.itda.settings.get('dashboard_workspaces');
+      const raw = await s('dashboard_workspaces');
       const arr = raw ? JSON.parse(raw) : [];
       return Array.isArray(arr) ? arr : [];
     } catch (e) {
@@ -1374,6 +1390,7 @@ export async function mount(root) {
   };
   async function saveWorkspace(name) {
     const snap = {};
+    // 워크스페이스 저장은 "지금 이 순간의" 설정을 찍어야 하므로 캐시(s) 말고 항상 실제 값을 읽는다.
     for (const k of WS_KEYS) snap[k] = (await window.itda.settings.get(k)) || '';
     // 편집 중 최신 위치를 반영
     snap.dashboard_layout = JSON.stringify({ preset: 'flow', widgets: widgetGrid.snapshotLayout() });
@@ -1578,11 +1595,11 @@ export async function mount(root) {
     let globalOp = 100;
     let glassEnabled = true;
     try {
-      const rawOp = await window.itda.settings.get('dashboard_widget_opacity');
+      const rawOp = await s('dashboard_widget_opacity');
       // 주의: `Number(x) || 100`은 저장값이 '0'일 때 100으로 튕긴다(0이 falsy) — 0% 투명이 안 먹던 원인.
       const n = rawOp == null || rawOp === '' ? 100 : Number(rawOp);
       globalOp = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 100;
-      glassEnabled = (await window.itda.settings.get('dashboard_glass_enabled')) !== '0';
+      glassEnabled = (await s('dashboard_glass_enabled')) !== '0';
     } catch (e) {
       /* 기본값 */
     }
@@ -1597,7 +1614,7 @@ export async function mount(root) {
     const HEADER_STYLES = ['minimal', 'accent', 'label', 'floating', 'hidden'];
     let globalHeaderStyle = '';
     try {
-      const hs = await window.itda.settings.get('dashboard_header_style');
+      const hs = await s('dashboard_header_style');
       if (HEADER_STYLES.includes(hs)) globalHeaderStyle = hs;
     } catch (e) {
       /* standard */
@@ -1623,7 +1640,7 @@ export async function mount(root) {
     // --- 카드별 테마/투명도 ---
     let cardStyles = {};
     try {
-      cardStyles = JSON.parse((await window.itda.settings.get('dashboard_card_styles')) || '{}') || {};
+      cardStyles = JSON.parse((await s('dashboard_card_styles')) || '{}') || {};
     } catch (e) {
       cardStyles = {};
     }
@@ -1852,7 +1869,7 @@ export async function mount(root) {
     async function toggleSummaryOrCard(cardId, visible) {
       let cfg = {};
       try {
-        cfg = JSON.parse((await window.itda.settings.get('dashboard_cards')) || '{}');
+        cfg = JSON.parse((await s('dashboard_cards')) || '{}');
       } catch (e) {
         /* {} */
       }
@@ -1875,8 +1892,8 @@ export async function mount(root) {
     let collapsed = false;
     let cards = { todo: true, event: true, memo: true, postit: true, notif: true };
     try {
-      collapsed = (await window.itda.settings.get('dashboard_summary_collapsed')) === '1';
-      const raw = await window.itda.settings.get('dashboard_summary_cards');
+      collapsed = (await s('dashboard_summary_collapsed')) === '1';
+      const raw = await s('dashboard_summary_cards');
       if (raw) cards = { ...cards, ...JSON.parse(raw) };
     } catch (e) {
       /* 기본값 */
@@ -2661,7 +2678,7 @@ export async function mount(root) {
   (async () => {
     const wcCard = $('d-card-workCenter');
     const applyWcCollapsed = (c) => wcCard.classList.toggle('wc-collapsed', c);
-    let wcCollapsed = (await window.itda.settings.get('dashboard_workcenter_collapsed')) === '1';
+    let wcCollapsed = (await s('dashboard_workcenter_collapsed')) === '1';
     applyWcCollapsed(wcCollapsed);
     $('d-wcCollapse').addEventListener('click', () => {
       wcCollapsed = !wcCollapsed;
@@ -2669,6 +2686,8 @@ export async function mount(root) {
       window.itda.settings.set({ key: 'dashboard_workcenter_collapsed', value: wcCollapsed ? '1' : '0' }).catch(() => {});
     });
   })();
+
+  _prefLive = false; // 초기 mount 설정 읽기 끝 — 이후엔 항상 최신 값
 
   // 레이아웃·배경·테마·투명도·요약 카드까지 전부 적용된 상태 — 이제 페이드 인.
   // (카드 안 데이터는 아래에서 채워지지만 각자 로딩 표시가 있어 깜빡임이 아님.)

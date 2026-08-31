@@ -174,6 +174,7 @@ contextBridge.exposeInMainWorld('itda', {
   },
   settings: {
     get: (key) => ipcRenderer.invoke('settings:get', key),
+    getMany: (keys) => ipcRenderer.invoke('settings:getMany', keys),
     set: (payload) => ipcRenderer.invoke('settings:set', payload),
   },
   dashboardImages: {

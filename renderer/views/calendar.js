@@ -1026,14 +1026,15 @@ export async function mount(root) {
   };
   document.addEventListener('click', handleDocClickForSearch);
 
-  // 저장된 종일 순서 / 즐겨찾는 템플릿 / 종일 행 접힘·높이 불러오기
+  // 저장된 종일 순서 / 즐겨찾는 템플릿 / 종일 행 접힘·높이 — 한 번의 IPC로(순차 5회 → 1회)
   try {
-    const rawOrder = await window.itda.settings.get('calendar_allday_order');
-    if (rawOrder) alldayOrder = JSON.parse(rawOrder) || [];
-    const rawTpl = await window.itda.settings.get('calendar_event_templates');
-    if (rawTpl) eventTemplates = JSON.parse(rawTpl) || [];
-    alldayCollapsed = (await window.itda.settings.get('calendar_allday_collapsed')) === '1';
-    alldayHeight = Number(await window.itda.settings.get('calendar_allday_height')) || 0;
+    const cs = await window.itda.settings.getMany([
+      'calendar_allday_order', 'calendar_event_templates', 'calendar_allday_collapsed', 'calendar_allday_height',
+    ]);
+    if (cs.calendar_allday_order) alldayOrder = JSON.parse(cs.calendar_allday_order) || [];
+    if (cs.calendar_event_templates) eventTemplates = JSON.parse(cs.calendar_event_templates) || [];
+    alldayCollapsed = cs.calendar_allday_collapsed === '1';
+    alldayHeight = Number(cs.calendar_allday_height) || 0;
   } catch (e) {
     // 깨졌으면 빈 값으로 시작
   }
