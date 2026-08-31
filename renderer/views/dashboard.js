@@ -168,9 +168,11 @@ export async function mount(root) {
           <span class="dash-edit-presets">
             <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
             <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
-            <label class="dash-edit-opacity" title="모든 위젯 배경 투명도">
-              <input type="checkbox" id="d-opacityEnable" title="투명 효과 켜기/끄기" checked />배경 투명도
+            <label class="dash-edit-opacity" title="위젯 배경 투명도 (0 = 완전 투명)">배경 투명도
               <input type="range" id="d-opacityRange" min="0" max="100" step="5" value="100" />
+            </label>
+            <label class="dash-edit-opacity" title="투명한 배경을 흐릿하게(간유리). 끄면 뒤 배경이 그대로 선명하게 비쳐요">
+              <input type="checkbox" id="d-glassEnable" checked />흐림
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
             <button class="btn-secondary" id="d-arrangeBtn" title="위젯 자동 정렬">🧹 자동 정리 ▾</button>
@@ -1557,22 +1559,24 @@ export async function mount(root) {
   async function initCustomization() {
     const grid = $('d-widgetGrid');
 
-    // --- 전체 위젯 투명도 ---
-    // opacityEnabled=false면 슬라이더/카드별 값은 그대로 저장해두되 화면엔 전부 불투명하게
-    // ("껏다켰다" — 다시 켜면 마지막 값으로 복원). 슬라이더 값 자체는 안 건드린다.
+    // --- 전체 위젯 투명도 + 흐림(간유리) ---
+    // 투명도(--dash-op)는 항상 슬라이더 값 그대로 적용. glassEnabled는 "투명한 배경을 흐릿하게
+    // 할지"만 결정 — 끄면 backdrop-filter blur / 글자 후광 없이 뒤 배경이 그대로 선명하게 비친다
+    // ("완전 투명 ↔ 간유리" 토글). 설정키 dashboard_glass_enabled.
     let globalOp = 100;
-    let opacityEnabled = true;
+    let glassEnabled = true;
     try {
-      globalOp = Number(await window.itda.settings.get('dashboard_widget_opacity')) || 100;
-      opacityEnabled = (await window.itda.settings.get('dashboard_opacity_enabled')) !== '0';
+      const rawOp = await window.itda.settings.get('dashboard_widget_opacity');
+      // 주의: `Number(x) || 100`은 저장값이 '0'일 때 100으로 튕긴다(0이 falsy) — 0% 투명이 안 먹던 원인.
+      const n = rawOp == null || rawOp === '' ? 100 : Number(rawOp);
+      globalOp = Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 100;
+      glassEnabled = (await window.itda.settings.get('dashboard_glass_enabled')) !== '0';
     } catch (e) {
       /* 기본값 */
     }
     const applyGlobalOp = () => {
-      const op = opacityEnabled ? globalOp / 100 : 1;
-      grid.style.setProperty('--dash-op', op);
-      // 배경이 실제로 비칠 만큼 투명할 때만 "간유리" 처리(뒤 배경 흐림 + 글자 후광)를 켠다.
-      grid.classList.toggle('dash-translucent', opacityEnabled && globalOp < 95);
+      grid.style.setProperty('--dash-op', globalOp / 100);
+      grid.classList.toggle('dash-translucent', glassEnabled && globalOp < 95);
     };
     applyGlobalOp();
 
@@ -1587,7 +1591,6 @@ export async function mount(root) {
       /* standard */
     }
     $('d-opacityRange').value = globalOp;
-    $('d-opacityRange').disabled = !opacityEnabled;
     $('d-opacityRange').addEventListener('input', (e) => {
       globalOp = Number(e.target.value);
       applyGlobalOp();
@@ -1595,15 +1598,14 @@ export async function mount(root) {
     $('d-opacityRange').addEventListener('change', () => {
       window.itda.settings.set({ key: 'dashboard_widget_opacity', value: String(globalOp) }).catch(() => {});
     });
-    const opacityEnableBox = $('d-opacityEnable');
-    opacityEnableBox.checked = opacityEnabled;
-    opacityEnableBox.addEventListener('change', () => {
-      opacityEnabled = opacityEnableBox.checked;
-      $('d-opacityRange').disabled = !opacityEnabled;
+    const glassBox = $('d-glassEnable');
+    glassBox.checked = glassEnabled;
+    glassBox.addEventListener('change', () => {
+      glassEnabled = glassBox.checked;
       applyGlobalOp();
       DASHBOARD_CARDS.forEach((c) => applyCardStyle(c.id));
       grid.querySelectorAll('.dash-block').forEach((el) => applyCardStyle(el.dataset.card));
-      window.itda.settings.set({ key: 'dashboard_opacity_enabled', value: opacityEnabled ? '1' : '0' }).catch(() => {});
+      window.itda.settings.set({ key: 'dashboard_glass_enabled', value: glassEnabled ? '1' : '0' }).catch(() => {});
     });
 
     // --- 카드별 테마/투명도 ---
@@ -1618,11 +1620,10 @@ export async function mount(root) {
       if (!el) return;
       const s = cardStyles[id] || {};
       el.dataset.cardtheme = s.theme || '';
-      // 투명 효과 OFF면 카드별 투명도 값도 무시하고 불투명하게(값은 cardStyles에 그대로 보존)
-      if (opacityEnabled && s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
+      if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
-      // 카드별 투명도가 낮게 지정된 경우에도 간유리 처리(글로벌은 .dash-translucent가 담당)
-      el.classList.toggle('dash-card-translucent', opacityEnabled && s.opacity != null && s.opacity < 95);
+      // 카드별 투명도가 낮으면 간유리 처리 — 단 "흐림" 토글이 켜져 있을 때만(글로벌은 .dash-translucent)
+      el.classList.toggle('dash-card-translucent', glassEnabled && s.opacity != null && s.opacity < 95);
 
       // 테두리: 'none'(없음) / 'strong'(굵게) / #rrggbb(색) / 그 외=기본
       if (s.border === 'none') {
@@ -1869,20 +1870,26 @@ export async function mount(root) {
       /* 기본값 */
     }
     const anyOn = () => Object.values(cards).some(Boolean);
-    // 그리드가 안 보이는 경우는 두 가지 — 사용자가 "접기"를 눌렀거나(collapsed), 우클릭 메뉴에서
-    // 5개를 다 꺼서 보여줄 카드가 하나도 없거나(!anyOn). 둘 다 "▾ 요약 카드 펼치기" 바로
-    // 되돌릴 수 있어야 한다(예전엔 다 끄면 그리드가 display:none이라 우클릭조차 안 먹어서 영영 못 켰음).
+    const isEditing = () => document.getElementById('d-widgetGrid')?.classList.contains('editing');
+    // 그리드가 안 보이는 두 경우 — "접기"(collapsed)는 평상시에도 "▾ 펼치기" 바로 바로 복구.
+    // "5개 전부 끔"(!anyOn)은 편집 액션이므로 **편집모드에서만** "▾ 다시 켜기" 바를 보여준다
+    // (평상시엔 요약 영역이 그냥 비어있고, 편집모드 들어가면 복구 바가 뜬다).
     const applyState = () => {
       gridEl.querySelectorAll('[data-sum]').forEach((c) => {
         c.style.display = cards[c.dataset.sum] ? '' : 'none';
       });
-      const hidden = collapsed || !anyOn();
-      gridEl.style.display = hidden ? 'none' : '';
-      gridEl.classList.toggle('summary-empty', !anyOn());
-      expandBtn.style.display = hidden ? '' : 'none';
-      expandBtn.textContent = !anyOn() ? '▾ 요약 카드 다시 켜기' : '▾ 요약 카드 펼치기';
+      const allOff = !anyOn();
+      gridEl.style.display = collapsed || allOff ? 'none' : '';
+      gridEl.classList.toggle('summary-empty', allOff);
+      const showBar = collapsed || (allOff && isEditing());
+      expandBtn.style.display = showBar ? '' : 'none';
+      expandBtn.textContent = allOff ? '▾ 요약 카드 다시 켜기' : '▾ 요약 카드 펼치기';
     };
     applyState();
+    // 편집모드 토글(#d-widgetGrid의 .editing 클래스) 시 복구 바 노출 여부 다시 계산
+    const widgetGridEl = document.getElementById('d-widgetGrid');
+    const editObs = widgetGridEl ? new MutationObserver(() => applyState()) : null;
+    editObs?.observe(widgetGridEl, { attributes: true, attributeFilter: ['class'] });
 
     expandBtn.addEventListener('click', () => {
       collapsed = false;
@@ -1939,7 +1946,7 @@ export async function mount(root) {
       });
     });
 
-    return { closeSumMenu };
+    return { closeSumMenu, destroy: () => editObs?.disconnect() };
   }
   const summaryRow = await initSummaryRow();
 
@@ -2756,6 +2763,7 @@ export async function mount(root) {
     closeLayoutMenu();
     customization?.closeCardMenu();
     summaryRow?.closeSumMenu();
+    summaryRow?.destroy();
     document.removeEventListener('keydown', handleDashKeys);
     addPanelEscUnsub?.();
     setScreenShortcuts(null, []);

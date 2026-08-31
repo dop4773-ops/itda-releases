@@ -1632,7 +1632,13 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
    셀과 정확히 같아져서 어느 OS에서도 옆 칸과 어긋나지 않는다. 링크가 많으면 위젯을 키우면 됨.
    box-shadow도 제거 — 다른 꾸미기 블록(날씨·미니툴 등)은 테두리만이라 그림자 있는 링크 블록만
    깊이가 달라 보였다(정렬 어긋나 보임의 원인). */
-.link-block{width:100%;height:100%;padding:12px 14px;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-sizing:border-box;}
+.link-block{width:100%;height:100%;padding:12px 14px;overflow-x:hidden;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-sizing:border-box;}
+/* 테두리만 있는(장식 튀어나옴 없는) 프레임 블록은 래퍼도 clip — 윈도우 서브픽셀로 1px 삐져나와
+   옆 위젯을 침범/어긋나 보이던 것 방지. 폴라로이드·테이프·스티커처럼 그림자/장식이 밖으로
+   나오는 블록은 제외(overflow:visible 유지). */
+.dash-block[data-block="link"],.dash-block[data-block="weather"],
+.dash-block[data-block="miniTool"],.dash-block[data-block="progressBar"],
+.dash-block[data-block="progressRing"]{overflow:hidden;}
 .link-block::-webkit-scrollbar{width:0;height:0;}
 .link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:8px;}
 .link-block-list{display:flex;flex-direction:column;gap:2px;}
@@ -1679,6 +1685,14 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .lt-icon,.link-block-icon,.lb-ico{display:inline-flex;align-items:center;justify-content:center;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;}
 /* 다크 카드 테마에서 격자뷰 라벨도 밝게(리스트뷰 .link-block-row는 이미 처리됨) */
 .dash-block[data-cardtheme="dark"] .link-tile,.dash-block[data-cardtheme="dark"] .lt-label{color:#e8e8ee;}
+/* 링크/바로가기 블록은 다크모드에서도 라이트모드처럼 보이게 — 디자인 토큰을 라이트값으로
+   덮어써서 흰 카드 + 짙은 글자로. favicon(흰 배경 전제 아이콘)이 묻히는 문제를 근본적으로
+   피한다. 사용자가 카드 테마를 직접 'dark'로 고른 경우는 예외(그건 의도한 것). */
+html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark"]) .link-block{
+  --surface:#FFFFFF;--bg:#F7F7FB;--border:#EAEAF2;--divider:#F2F1F8;
+  --text:#2B2E3A;--text-soft:#767B8A;--text-faint:#A6ABB8;--brand:#6C8CF5;
+  color:#2B2E3A;
+}
 
 /* 스티커 */
 .sticker-block{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--stk,#ffe08a);border-radius:10px;box-shadow:0 5px 14px rgba(16,24,40,.2);padding:10px;position:relative;color:#5a4b1a;}
