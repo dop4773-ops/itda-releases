@@ -496,12 +496,21 @@ export async function mount(root) {
   function renderMonth(container, byDate) {
     container.innerHTML = buildMonthGridHtml(anchor, byDate, { alldayOrder });
 
+    const goToDay = (dateKey) => {
+      anchor = parseKey(dateKey);
+      currentView = 'day';
+      root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
+      load();
+    };
     container.querySelectorAll('.month-cell').forEach((cell) => {
-      cell.addEventListener('click', () => {
-        anchor = parseKey(cell.dataset.date);
-        currentView = 'day';
-        root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
-        load();
+      cell.addEventListener('click', (e) => {
+        // 구글 캘린더처럼 — 날짜 숫자/기존 일정/"+N 더보기"는 그 날 일(day) 뷰로,
+        // 칸의 빈 공간을 누르면 그 날짜·하루종일이 기본값인 "새 일정" 창을 띄운다.
+        if (e.target.closest('.date-num, .month-event-pill, .month-more')) {
+          goToDay(cell.dataset.date);
+        } else {
+          openModal(null, cell.dataset.date);
+        }
       });
     });
   }
@@ -699,7 +708,8 @@ export async function mount(root) {
 
   // ---------- 일정 추가/수정 모달 (동일한 폼을 재사용) ----------
   // evt가 있으면 "수정" 모드(값 미리 채움 + events:update 호출), 없으면 "추가" 모드.
-  function openModal(evt) {
+  // prefillDate: 'YYYY-MM-DD' — 월간 뷰에서 날짜 칸을 눌러 새로 만들 때 그 날짜를 기본값으로.
+  function openModal(evt, prefillDate) {
     const isEdit = !!evt;
     $('c-modalTitle').textContent = isEdit ? '일정 수정' : '새 일정';
     $('c-submitAdd').textContent = isEdit ? '저장' : '추가';
@@ -714,7 +724,13 @@ export async function mount(root) {
     const isAllDay = isEdit ? !!evt.all_day : true;
     $('c-allDay').checked = isAllDay;
     $('c-start').type = isAllDay ? 'date' : 'datetime-local';
-    $('c-start').value = isEdit ? (isAllDay ? (evt.start_at || '').slice(0, 10) : (evt.start_at || '').slice(0, 16).replace(' ', 'T')) : '';
+    $('c-start').value = isEdit
+      ? isAllDay
+        ? (evt.start_at || '').slice(0, 10)
+        : (evt.start_at || '').slice(0, 16).replace(' ', 'T')
+      : prefillDate && isAllDay
+        ? prefillDate
+        : '';
     $('c-end').style.display = isAllDay ? 'none' : '';
     $('c-end').value = isEdit && !isAllDay ? (evt.end_at || '').slice(0, 16).replace(' ', 'T') : '';
 
