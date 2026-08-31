@@ -1490,6 +1490,17 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-block{padding:0;overflow:visible;display:flex;background:transparent;border:none;box-shadow:none;}
 .dash-block > .dash-widget-grip{position:absolute;left:6px;top:6px;z-index:6;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px;box-shadow:0 1px 3px rgba(0,0,0,.12);}
 .dash-block-body{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;overflow:visible;}
+/* 프레임을 셀 전체로 채우는 블록들(링크/날씨/미니툴/진행바/날짜카드/지표/카운트다운/사진)은
+   부모의 center 정렬 영향을 받지 않도록 stretch로 셀을 꽉 채운다 — 윈도우에서 셀 크기와
+   블록 크기가 서브픽셀 단위로 어긋나며 중앙정렬로 밀려 옆 위젯과 안 맞아 보이던 문제 방지. */
+.dash-block-body > .link-block,
+.dash-block-body > .weather-block,
+.dash-block-body > .minitool,
+.dash-block-body > .progress-block,
+.dash-block-body > .datecard,
+.dash-block-body > .metric-block,
+.dash-block-body > .countdown-block,
+.dash-block-body > .image-block{align-self:stretch;flex:1 1 auto;min-width:0;min-height:0;}
 .dash-block-tools{position:absolute;right:6px;top:6px;z-index:6;display:none;gap:3px;}
 .dash-widget-grid.editing .dash-block-tools{display:flex;}
 .dash-block-tool{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text-soft);cursor:pointer;}
@@ -1621,7 +1632,7 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
    셀과 정확히 같아져서 어느 OS에서도 옆 칸과 어긋나지 않는다. 링크가 많으면 위젯을 키우면 됨.
    box-shadow도 제거 — 다른 꾸미기 블록(날씨·미니툴 등)은 테두리만이라 그림자 있는 링크 블록만
    깊이가 달라 보였다(정렬 어긋나 보임의 원인). */
-.link-block{width:100%;height:100%;padding:12px 14px;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}
+.link-block{width:100%;height:100%;padding:12px 14px;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-sizing:border-box;}
 .link-block::-webkit-scrollbar{width:0;height:0;}
 .link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:8px;}
 .link-block-list{display:flex;flex-direction:column;gap:2px;}
@@ -1658,10 +1669,16 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .clk-led-ghost{position:absolute;color:rgba(255,60,60,.12);}
 .clk-led-time{position:relative;color:#ff3b3b;text-shadow:0 0 10px rgba(255,59,59,.7),0 0 22px rgba(255,59,59,.35);}
 
-/* 링크 favicon */
-.lb-fav{width:16px;height:16px;object-fit:contain;flex-shrink:0;}
-.link-tile .lb-fav{width:24px;height:24px;}
-.lt-icon,.link-block-icon{display:inline-flex;align-items:center;justify-content:center;}
+/* 링크 favicon — 대부분 흰 배경 전제로 디자인된 아이콘이라, 다크모드/어두운 카드에선
+   검은 로고가 배경에 묻혀 안 보인다. 항상 흰 칩 위에 얹어서 밝기와 무관하게 보이게 한다
+   (라이트모드에선 카드도 흰색이라 티가 안 남). */
+.lb-fav{width:16px;height:16px;object-fit:contain;flex-shrink:0;background:#fff;border-radius:4px;padding:1px;box-sizing:border-box;}
+.link-tile .lb-fav{width:24px;height:24px;padding:2px;}
+/* 이모지 아이콘(📁 🔗 등)은 윈도우에서 앱 폰트로 폴백하면 흑백 글리프로 나올 수 있어
+   컬러 이모지 폰트를 명시(날씨 아이콘과 동일 처리). */
+.lt-icon,.link-block-icon,.lb-ico{display:inline-flex;align-items:center;justify-content:center;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;}
+/* 다크 카드 테마에서 격자뷰 라벨도 밝게(리스트뷰 .link-block-row는 이미 처리됨) */
+.dash-block[data-cardtheme="dark"] .link-tile,.dash-block[data-cardtheme="dark"] .lt-label{color:#e8e8ee;}
 
 /* 스티커 */
 .sticker-block{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:var(--stk,#ffe08a);border-radius:10px;box-shadow:0 5px 14px rgba(16,24,40,.2);padding:10px;position:relative;color:#5a4b1a;}

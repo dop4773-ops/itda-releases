@@ -168,7 +168,8 @@ export async function mount(root) {
           <span class="dash-edit-presets">
             <button class="btn-secondary" id="d-addWidgetBtn">＋ 위젯 추가</button>
             <button class="btn-secondary" id="d-bgBtn">🎨 배경</button>
-            <label class="dash-edit-opacity" title="모든 위젯 배경 투명도">배경 투명도
+            <label class="dash-edit-opacity" title="모든 위젯 배경 투명도">
+              <input type="checkbox" id="d-opacityEnable" title="투명 효과 켜기/끄기" checked />배경 투명도
               <input type="range" id="d-opacityRange" min="0" max="100" step="5" value="100" />
             </label>
             ${LAYOUT_PRESETS.map((p) => `<button class="btn-secondary" data-preset="${p.id}">${escapeHtml(p.label)}</button>`).join('')}
@@ -1557,16 +1558,21 @@ export async function mount(root) {
     const grid = $('d-widgetGrid');
 
     // --- 전체 위젯 투명도 ---
+    // opacityEnabled=false면 슬라이더/카드별 값은 그대로 저장해두되 화면엔 전부 불투명하게
+    // ("껏다켰다" — 다시 켜면 마지막 값으로 복원). 슬라이더 값 자체는 안 건드린다.
     let globalOp = 100;
+    let opacityEnabled = true;
     try {
       globalOp = Number(await window.itda.settings.get('dashboard_widget_opacity')) || 100;
+      opacityEnabled = (await window.itda.settings.get('dashboard_opacity_enabled')) !== '0';
     } catch (e) {
-      /* 100 */
+      /* 기본값 */
     }
     const applyGlobalOp = () => {
-      grid.style.setProperty('--dash-op', globalOp / 100);
+      const op = opacityEnabled ? globalOp / 100 : 1;
+      grid.style.setProperty('--dash-op', op);
       // 배경이 실제로 비칠 만큼 투명할 때만 "간유리" 처리(뒤 배경 흐림 + 글자 후광)를 켠다.
-      grid.classList.toggle('dash-translucent', globalOp < 95);
+      grid.classList.toggle('dash-translucent', opacityEnabled && globalOp < 95);
     };
     applyGlobalOp();
 
@@ -1581,12 +1587,23 @@ export async function mount(root) {
       /* standard */
     }
     $('d-opacityRange').value = globalOp;
+    $('d-opacityRange').disabled = !opacityEnabled;
     $('d-opacityRange').addEventListener('input', (e) => {
       globalOp = Number(e.target.value);
       applyGlobalOp();
     });
     $('d-opacityRange').addEventListener('change', () => {
       window.itda.settings.set({ key: 'dashboard_widget_opacity', value: String(globalOp) }).catch(() => {});
+    });
+    const opacityEnableBox = $('d-opacityEnable');
+    opacityEnableBox.checked = opacityEnabled;
+    opacityEnableBox.addEventListener('change', () => {
+      opacityEnabled = opacityEnableBox.checked;
+      $('d-opacityRange').disabled = !opacityEnabled;
+      applyGlobalOp();
+      DASHBOARD_CARDS.forEach((c) => applyCardStyle(c.id));
+      grid.querySelectorAll('.dash-block').forEach((el) => applyCardStyle(el.dataset.card));
+      window.itda.settings.set({ key: 'dashboard_opacity_enabled', value: opacityEnabled ? '1' : '0' }).catch(() => {});
     });
 
     // --- 카드별 테마/투명도 ---
@@ -1601,10 +1618,11 @@ export async function mount(root) {
       if (!el) return;
       const s = cardStyles[id] || {};
       el.dataset.cardtheme = s.theme || '';
-      if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
+      // 투명 효과 OFF면 카드별 투명도 값도 무시하고 불투명하게(값은 cardStyles에 그대로 보존)
+      if (opacityEnabled && s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
       // 카드별 투명도가 낮게 지정된 경우에도 간유리 처리(글로벌은 .dash-translucent가 담당)
-      el.classList.toggle('dash-card-translucent', s.opacity != null && s.opacity < 95);
+      el.classList.toggle('dash-card-translucent', opacityEnabled && s.opacity != null && s.opacity < 95);
 
       // 테두리: 'none'(없음) / 'strong'(굵게) / #rrggbb(색) / 그 외=기본
       if (s.border === 'none') {

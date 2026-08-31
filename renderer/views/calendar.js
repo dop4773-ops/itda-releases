@@ -88,15 +88,28 @@ export function groupByDateKey(events) {
 // 순수 HTML 빌더 — 이벤트 바인딩 없이 마크업만 반환 (달력 화면 + 대시보드 위젯이 공유)
 // compact:true면 대시보드 사이드 패널용 — pill을 늘어놓지 않고 "점 + 개수"만 표시해서
 // 하루에 일정이 몇 개든 셀 높이가 항상 일정하게 유지된다(월 전체 높이가 안정적).
-export function buildMonthGridHtml(anchor, byDate, { compact = false } = {}) {
+export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrder = [] } = {}) {
   const today = new Date();
   const dates = monthGridDates(anchor);
   const weekdayHeaders = WEEKDAY_LABELS.map((w) => `<div class="month-weekday-header">${w}</div>`).join('');
 
+  // 주/일 뷰와 동일하게 — 종일 일정은 사용자가 드래그로 정한 순서(alldayOrder)를 먼저 따르고
+  // (없는 건 시작일시), 그 다음 시간 지정 일정이 시작시각 순으로. buildTimeGridHtml과 규칙 일치.
+  const alldayIdx = (e) => {
+    const i = alldayOrder.indexOf(e.id);
+    return i === -1 ? Number.MAX_SAFE_INTEGER : i;
+  };
+  const sortDayEvents = (list) => {
+    const cmpStart = (a, b) => (a.start_at || '').localeCompare(b.start_at || '');
+    const allday = list.filter((e) => e.all_day).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpStart(a, b));
+    const timed = list.filter((e) => !e.all_day).sort(cmpStart);
+    return [...allday, ...timed];
+  };
+
   const cells = dates
     .map((d) => {
       const key = toKey(d);
-      const dayEvents = (byDate.get(key) || []).slice().sort((a, b) => (a.start_at < b.start_at ? -1 : 1));
+      const dayEvents = sortDayEvents(byDate.get(key) || []);
       const isOtherMonth = d.getMonth() !== anchor.getMonth();
       const isToday = isSameDay(d, today);
 
@@ -481,7 +494,7 @@ export async function mount(root) {
   }
 
   function renderMonth(container, byDate) {
-    container.innerHTML = buildMonthGridHtml(anchor, byDate);
+    container.innerHTML = buildMonthGridHtml(anchor, byDate, { alldayOrder });
 
     container.querySelectorAll('.month-cell').forEach((cell) => {
       cell.addEventListener('click', () => {
