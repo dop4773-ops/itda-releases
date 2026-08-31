@@ -1563,7 +1563,11 @@ export async function mount(root) {
     } catch (e) {
       /* 100 */
     }
-    const applyGlobalOp = () => grid.style.setProperty('--dash-op', globalOp / 100);
+    const applyGlobalOp = () => {
+      grid.style.setProperty('--dash-op', globalOp / 100);
+      // 배경이 실제로 비칠 만큼 투명할 때만 "간유리" 처리(뒤 배경 흐림 + 글자 후광)를 켠다.
+      grid.classList.toggle('dash-translucent', globalOp < 95);
+    };
     applyGlobalOp();
 
     // 위젯 헤더 스타일 — 설정 > 대시보드의 전체값. 카드 우클릭에서 카드별로 덮어쓸 수 있고,
@@ -1599,6 +1603,8 @@ export async function mount(root) {
       el.dataset.cardtheme = s.theme || '';
       if (s.opacity != null) el.style.setProperty('--dash-op', s.opacity / 100);
       else el.style.removeProperty('--dash-op');
+      // 카드별 투명도가 낮게 지정된 경우에도 간유리 처리(글로벌은 .dash-translucent가 담당)
+      el.classList.toggle('dash-card-translucent', s.opacity != null && s.opacity < 95);
 
       // 테두리: 'none'(없음) / 'strong'(굵게) / #rrggbb(색) / 그 외=기본
       if (s.border === 'none') {
@@ -1844,23 +1850,30 @@ export async function mount(root) {
     } catch (e) {
       /* 기본값 */
     }
-    const applyCards = () => {
+    const anyOn = () => Object.values(cards).some(Boolean);
+    // 그리드가 안 보이는 경우는 두 가지 — 사용자가 "접기"를 눌렀거나(collapsed), 우클릭 메뉴에서
+    // 5개를 다 꺼서 보여줄 카드가 하나도 없거나(!anyOn). 둘 다 "▾ 요약 카드 펼치기" 바로
+    // 되돌릴 수 있어야 한다(예전엔 다 끄면 그리드가 display:none이라 우클릭조차 안 먹어서 영영 못 켰음).
+    const applyState = () => {
       gridEl.querySelectorAll('[data-sum]').forEach((c) => {
         c.style.display = cards[c.dataset.sum] ? '' : 'none';
       });
-      const anyOn = Object.values(cards).some(Boolean);
-      gridEl.classList.toggle('summary-empty', !anyOn);
+      const hidden = collapsed || !anyOn();
+      gridEl.style.display = hidden ? 'none' : '';
+      gridEl.classList.toggle('summary-empty', !anyOn());
+      expandBtn.style.display = hidden ? '' : 'none';
+      expandBtn.textContent = !anyOn() ? '▾ 요약 카드 다시 켜기' : '▾ 요약 카드 펼치기';
     };
-    const applyCollapsed = () => {
-      gridEl.style.display = collapsed ? 'none' : '';
-      expandBtn.style.display = collapsed ? '' : 'none';
-    };
-    applyCards();
-    applyCollapsed();
+    applyState();
 
     expandBtn.addEventListener('click', () => {
       collapsed = false;
-      applyCollapsed();
+      // 다 꺼져 있으면 펼치기만으론 여전히 빈 화면이라, 이 경우엔 5개를 전부 다시 켠다.
+      if (!anyOn()) {
+        Object.keys(cards).forEach((k) => (cards[k] = true));
+        window.itda.settings.set({ key: 'dashboard_summary_cards', value: JSON.stringify(cards) }).catch(() => {});
+      }
+      applyState();
       window.itda.settings.set({ key: 'dashboard_summary_collapsed', value: '0' }).catch(() => {});
     });
 
@@ -1896,14 +1909,14 @@ export async function mount(root) {
           const k = b.dataset.sc;
           cards[k] = !cards[k];
           b.querySelector('span').textContent = cards[k] ? '☑' : '☐';
-          applyCards();
+          applyState();
           window.itda.settings.set({ key: 'dashboard_summary_cards', value: JSON.stringify(cards) }).catch(() => {});
         });
       });
       menu.querySelector('[data-sc-act="collapse"]').addEventListener('click', () => {
         closeSumMenu();
         collapsed = true;
-        applyCollapsed();
+        applyState();
         window.itda.settings.set({ key: 'dashboard_summary_collapsed', value: '1' }).catch(() => {});
       });
     });

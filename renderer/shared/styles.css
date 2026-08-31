@@ -1287,6 +1287,26 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
   border-color:color-mix(in srgb, var(--border) calc(var(--dash-op, 1) * 100%), transparent);
 }
 .dash-widget.panel.dragging{opacity:.95;}
+/* 투명도를 실제로 낮췄을 때만(.dash-translucent = 전체, .dash-card-translucent = 카드별)
+   "간유리" 처리: 카드 뒤 배경화면을 흐리게 + 글자에 옅은 후광 → 시끄러운 배경 위에서도 읽힘.
+   100% 불투명으로 쓰는 사용자에겐 아무 규칙도 걸리지 않음(변화 0). */
+.dash-widget-grid.dash-translucent .dash-widget.panel:not(.dash-block),
+.dash-widget-grid .dash-widget.panel.dash-card-translucent:not(.dash-block),
+.dash-widget-grid.dash-translucent .dash-block-body > .link-block,
+.dash-widget-grid.dash-translucent .dash-block-body > .weather-block,
+.dash-widget-grid.dash-translucent .dash-block-body > .minitool,
+.dash-widget-grid.dash-translucent .dash-block-body > .progress-block,
+.dash-widget-grid .dash-block.dash-card-translucent .dash-block-body > .link-block,
+.dash-widget-grid .dash-block.dash-card-translucent .dash-block-body > .weather-block,
+.dash-widget-grid .dash-block.dash-card-translucent .dash-block-body > .minitool,
+.dash-widget-grid .dash-block.dash-card-translucent .dash-block-body > .progress-block{
+  backdrop-filter:blur(7px);
+  -webkit-backdrop-filter:blur(7px);
+}
+.dash-widget-grid.dash-translucent .dash-widget:not(.dash-block),
+.dash-widget-grid .dash-widget.dash-card-translucent:not(.dash-block){
+  text-shadow:0 1px 2px var(--surface), 0 0 6px var(--surface);
+}
 /* 꾸미기 블록: 배경 투명도(--dash-op)는 "프레임 배경"에만 — 글자·숫자·아이콘은 항상 선명.
    프레임이 단색인 블록은 color-mix로 배경 알파만 낮추고, 그라데이션·질감 프레임(우드 시계,
    페이퍼 카드 등)은 사용자가 투명도를 실제로 지정했을 때만 프레임 전체가 함께 옅어진다.
@@ -1596,9 +1616,13 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .tb-quote .tb-content::before{content:"\201C";font-size:1.8em;color:var(--brand);opacity:.5;margin-right:3px;line-height:0;}
 
 /* 링크 / 바로가기 블록 */
-/* scrollbar-gutter:stable — 위젯을 작게 줄여 내용이 넘칠 때 윈도우의 세로 스크롤바(자리
-   차지형)가 갑자기 나타나 내용 폭이 옆 위젯과 어긋나 보이던 문제 방지(항상 같은 여백 확보). */
-.link-block{width:100%;height:100%;padding:12px 14px;overflow-y:auto;scrollbar-gutter:stable;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 2px 8px rgba(16,24,40,.06);}
+/* 위젯을 작게 줄여 내용이 넘칠 때 윈도우의 세로 스크롤바(자리 차지형)가 나타나 내용 폭이
+   옆 위젯과 어긋나 보이던 문제 → 스크롤바를 아예 숨긴다(휠 스크롤은 그대로 됨). 폭이 항상
+   셀과 정확히 같아져서 어느 OS에서도 옆 칸과 어긋나지 않는다. 링크가 많으면 위젯을 키우면 됨.
+   box-shadow도 제거 — 다른 꾸미기 블록(날씨·미니툴 등)은 테두리만이라 그림자 있는 링크 블록만
+   깊이가 달라 보였다(정렬 어긋나 보임의 원인). */
+.link-block{width:100%;height:100%;padding:12px 14px;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}
+.link-block::-webkit-scrollbar{width:0;height:0;}
 .link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:8px;}
 .link-block-list{display:flex;flex-direction:column;gap:2px;}
 .link-block-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;text-decoration:none;color:var(--text);font-size:12.5px;}
@@ -1781,7 +1805,7 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .clk-min[data-theme="dark"]{background:#1b1b20;border-radius:var(--radius-lg);}
 .clk-min[data-theme="dark"] .clk-min-time{color:#f0f0f4;}
 
-.progress-block{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 2px 8px rgba(16,24,40,.06);}
+.progress-block{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);}
 .pb-top{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--text-soft);}
 .pb-top b{font-size:13px;color:var(--text);font-variant-numeric:tabular-nums;}
 .pb-track{height:10px;border-radius:6px;background:var(--divider);overflow:hidden;}
