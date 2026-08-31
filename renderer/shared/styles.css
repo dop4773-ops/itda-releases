@@ -906,6 +906,14 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card input.card-title{background:transparent;border:none;outline:none;font-weight:600;font-size:13px;width:100%;font-family:inherit;color:rgba(0,0,0,.82);}
 .sticky-card input.card-title::placeholder{color:rgba(0,0,0,.35);font-weight:400;}
 .sticky-card .card-content{background:transparent;border:none;outline:none;font-size:12.5px;width:100%;font-family:inherit;color:rgba(0,0,0,.82);flex:1;line-height:1.5;overflow-wrap:break-word;overflow-y:auto;min-height:0;}
+/* 포스트잇 카드 본문 스크롤바는 숨긴다(휠 스크롤은 그대로). 이유 두 가지:
+   (1) 파스텔 배경 위에서 앱 전역 스크롤바 색(연회색)이 대비가 낮아, 윈도우 크로미움이
+       접근성 때문에 저자 색을 무시하고 "검은 스크롤바"로 덮어써 튀어 보였다.
+   (2) 윈도우의 자리 차지형 스크롤바 때문에 내용이 넘치는 카드만 본문 폭이 좁아져서
+       카드끼리 정렬이 어긋나 보였다. 숨기면 모든 카드 본문 폭이 같아 정렬이 맞는다.
+   내용이 넘치면 낱개 위젯 창(더블클릭/우클릭)에서 전체를 본다. */
+.sticky-card .card-content{scrollbar-width:none;}
+.sticky-card .card-content::-webkit-scrollbar{width:0;height:0;}
 .sticky-card .card-content:empty:before{content:attr(data-placeholder);color:rgba(0,0,0,.35);}
 .sticky-card .card-content b,.sticky-card .card-content strong{font-weight:700;}
 .rich-toolbar-mini{gap:1px;padding:0;}
@@ -1444,7 +1452,11 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 
 /* ---- 위젯 그리드: 12칸 CSS 그리드. 카드는 {gridColumn, gridRow}로 칸에 스냅되고,
    편집 모드(.editing)일 때만 그립/리사이즈 핸들이 나타나 드래그·리사이즈가 된다. ---- */
-.dash-widget-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:108px;gap:14px;margin-bottom:16px;}
+/* grid-auto-rows는 .panel의 min-height(120px)와 반드시 일치해야 한다 — 108px이던 시절엔
+   1행짜리 위젯이 min-height 때문에 트랙(108)을 12px 넘겨서, 아래 행 위젯과 간격이 2px로
+   좁아지고, 2행 스팬 위젯 옆에 놓인 1행 위젯의 아래 모서리가 12px 삐져나와 "옆 위젯과
+   가로선이 안 맞는" 문제가 있었다(윈도우에서 특히 눈에 띔). 행 높이 = min-height로 통일. */
+.dash-widget-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:120px;gap:14px;margin-bottom:16px;}
 /* 편집 모드에선 위젯 아래에도 우클릭할 여백을 확보(빈 공간 우클릭 메뉴용) */
 .dash-widget-grid.editing{min-height:62vh;}
 .dash-widget{min-width:0;overflow:hidden;position:relative;transition:transform .16s cubic-bezier(.4,0,.2,1),box-shadow .16s ease;}
