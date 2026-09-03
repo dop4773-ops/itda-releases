@@ -7,6 +7,7 @@
 export const SHORTCUTS = [
   { id: 'quickCapture', label: '빠른 입력 (Inbox에 바로 저장) — 잇다 안에서', default: 'CmdOrCtrl+K', scope: 'app' },
   { id: 'globalQuickCapture', label: '어디서든 빠른 입력 — 다른 프로그램을 쓰고 있어도', default: 'CmdOrCtrl+Alt+I', scope: 'global' },
+  { id: 'globalQuickFind', label: '어디서든 빠른 찾기 (Spotlight처럼) — 다른 프로그램을 쓰고 있어도', default: 'CmdOrCtrl+Shift+Space', scope: 'global' },
   { id: 'commandPalette', label: '빠른 실행 (원하는 화면·태그·항목으로 바로 이동)', default: 'CmdOrCtrl+Shift+P', scope: 'app' },
   { id: 'toggleSidebar', label: '사이드바 접기/펼치기', default: 'CmdOrCtrl+\\', scope: 'app' },
   { id: 'toggleNotifications', label: '알림 창 열기/닫기', default: 'CmdOrCtrl+Shift+N', scope: 'app' },

@@ -26,6 +26,7 @@ const { globalShortcut, ipcMain } = require('electron');
 
 const DEFAULTS = {
   globalQuickCapture: 'CmdOrCtrl+Alt+I',
+  globalQuickFind: 'CmdOrCtrl+Shift+Space', // Spotlight처럼 — 다른 프로그램 쓰다가도 바로 "빠른 찾기"(커맨드 팔레트)
   lockNow: 'CmdOrCtrl+Alt+L',
 };
 
@@ -50,6 +51,7 @@ function initGlobalShortcut(app, getMainWindow, settings) {
   function registerAll() {
     globalShortcut.unregisterAll();
     const quickCaptureAccel = settings.get('shortcut_globalQuickCapture') || DEFAULTS.globalQuickCapture;
+    const quickFindAccel = settings.get('shortcut_globalQuickFind') || DEFAULTS.globalQuickFind;
     const lockAccel = settings.get('shortcut_lockNow') || DEFAULTS.lockNow;
 
     lastStatus = {
@@ -58,6 +60,12 @@ function initGlobalShortcut(app, getMainWindow, settings) {
         if (!win) return;
         focusMainWindow(win);
         win.webContents.send('itda:openQuickCapture');
+      }),
+      globalQuickFind: registerOrLog(quickFindAccel, () => {
+        const win = getMainWindow();
+        if (!win) return;
+        focusMainWindow(win);
+        win.webContents.send('itda:openQuickFind');
       }),
       lockNow: registerOrLog(lockAccel, () => {
         const win = getMainWindow();

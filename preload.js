@@ -158,6 +158,12 @@ contextBridge.exposeInMainWorld('itda', {
     ipcRenderer.on('itda:openQuickCapture', listener);
     return () => ipcRenderer.removeListener('itda:openQuickCapture', listener);
   },
+  // OS 전역 단축키로 "빠른 찾기"(커맨드 팔레트)를 열 때
+  onOpenQuickFind: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('itda:openQuickFind', listener);
+    return () => ipcRenderer.removeListener('itda:openQuickFind', listener);
+  },
   // OS 전역 단축키(Ctrl/Cmd+Alt+L)로 "지금 잠그기"를 실행할 때 메인 창이 이 이벤트를 받는다
   onLockNow: (callback) => {
     const listener = () => callback();
