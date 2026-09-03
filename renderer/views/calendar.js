@@ -88,9 +88,10 @@ export function groupByDateKey(events) {
 // 순수 HTML 빌더 — 이벤트 바인딩 없이 마크업만 반환 (달력 화면 + 대시보드 위젯이 공유)
 // compact:true면 대시보드 사이드 패널용 — pill을 늘어놓지 않고 "점 + 개수"만 표시해서
 // 하루에 일정이 몇 개든 셀 높이가 항상 일정하게 유지된다(월 전체 높이가 안정적).
-export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrder = [] } = {}) {
+export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrder = [], trimMonth = false } = {}) {
   const today = new Date();
-  const dates = monthGridDates(anchor);
+  const dates = monthGridDates(anchor, { trim: trimMonth && !compact });
+  const weekCount = dates.length / 7;
   const weekdayHeaders = WEEKDAY_LABELS.map((w) => `<div class="month-weekday-header">${w}</div>`).join('');
 
   // 주/일 뷰와 동일하게 — 종일 일정은 사용자가 드래그로 정한 순서(alldayOrder)를 먼저 따르고
@@ -127,21 +128,34 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
 
       const visible = dayEvents.slice(0, 3);
       const overflow = dayEvents.length - visible.length;
+      const pill = (e) => {
+        const bg = e.source === 'google' ? '#9AA5B1' : e.color_hex || 'var(--text-faint)';
+        const fg = e.source === 'google' ? '#fff' : e.text_color || '#000';
+        // 여러 날짜에 걸친 종일 일정(휴가 등)은 구글 캘린더처럼 이어지는 막대로 — 시작/끝/중간
+        // 위치에 따라 모서리만 둥글게, 제목은 시작일(또는 주의 첫 칸)에만.
+        const evStart = (e.start_at || '').slice(0, 10);
+        const evEnd = (e.end_at || '').slice(0, 10);
+        const multi = e.all_day && evEnd && evEnd > evStart;
+        let spanCls = '';
+        let label = escapeHtml(e.title);
+        if (multi) {
+          const isStart = key === evStart;
+          const isEnd = key === evEnd;
+          spanCls = ` is-span${isStart ? ' span-start' : ''}${isEnd ? ' span-end' : ''}${!isStart && !isEnd ? ' span-mid' : ''}`;
+          if (!isStart && d.getDay() !== 0) label = '&nbsp;'; // 주의 첫 칸(일)엔 제목 다시 표시
+        }
+        return `<div class="month-event-pill ${e.source === 'google' ? 'is-google' : ''}${spanCls}" style="background:${bg};color:${fg}" data-source="${e.source || 'local'}" data-id="${e.id}">${label}</div>`;
+      };
       return `
       <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${key}">
         <span class="date-num">${d.getDate()}</span>
-        ${visible
-          .map(
-            (e) =>
-              `<div class="month-event-pill ${e.source === 'google' ? 'is-google' : ''}" style="background:${e.source === 'google' ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${e.source === 'google' ? '#fff' : e.text_color || '#000'}" data-source="${e.source || 'local'}">${escapeHtml(e.title)}</div>`
-          )
-          .join('')}
+        ${visible.map(pill).join('')}
         ${overflow > 0 ? `<div class="month-more">+${overflow}개 더보기</div>` : ''}
       </div>`;
     })
     .join('');
 
-  return `<div class="month-grid ${compact ? 'month-grid-compact' : ''}">${weekdayHeaders}${cells}</div>`;
+  return `<div class="month-grid ${compact ? 'month-grid-compact' : ''}" style="--month-weeks:${weekCount}">${weekdayHeaders}${cells}</div>`;
 }
 
 // 대시보드 사이드 패널 전용 — 상세 시간대 그리드 대신, 일정이 몇 개든 항상 일정한
@@ -218,10 +232,23 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
       const bars = allDayEvents
         .map((e) => {
           const isGoogle = e.source === 'google';
+          // 여러 날 이어지는 종일 일정은 구글 캘린더처럼 — 안쪽 모서리를 각지게, 제목은
+          // 시작일/주의 첫 칸에만. (칸 사이 세로 경계는 남지만 같은 색으로 이어져 보인다.)
+          const evStart = (e.start_at || '').slice(0, 10);
+          const evEnd = (e.end_at || '').slice(0, 10);
+          const multi = evEnd && evEnd > evStart;
+          let spanCls = '';
+          let showTitle = true;
+          if (multi) {
+            const isStart = key === evStart;
+            const isEnd = key === evEnd;
+            spanCls = ` is-span${isStart ? ' span-start' : ''}${isEnd ? ' span-end' : ''}${!isStart && !isEnd ? ' span-mid' : ''}`;
+            showTitle = isStart || d.getDay() === 0;
+          }
           return `
-          <div class="allday-bar ${isGoogle ? 'is-google' : ''} ${deletable && !isGoogle ? 'allday-bar-drag' : ''}" ${deletable && !isGoogle ? 'draggable="true"' : ''} style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
+          <div class="allday-bar ${isGoogle ? 'is-google' : ''} ${deletable && !isGoogle ? 'allday-bar-drag' : ''}${spanCls}" ${deletable && !isGoogle ? 'draggable="true"' : ''} style="background:${isGoogle ? '#9AA5B1' : e.color_hex || 'var(--text-faint)'};color:${isGoogle ? '#fff' : e.text_color || '#000'}" data-id="${e.id}" data-source="${isGoogle ? 'google' : 'local'}">
             ${deletable && !isGoogle ? `<button class="event-del" data-action="delete" data-id="${e.id}">${CLOSE_ICON}</button>` : ''}
-            <span>${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}</span>
+            <span>${showTitle ? `${isGoogle ? '📅 ' : ''}${escapeHtml(e.title)}` : '&nbsp;'}</span>
           </div>`;
         })
         .join('');
@@ -351,6 +378,7 @@ export async function mount(root) {
           <input type="text" id="c-search" class="input" placeholder="일정 검색 (F)" autocomplete="off" />
           <div class="cal-search-results" id="c-searchResults" style="display:none;"></div>
         </div>
+        <button class="btn-secondary" id="c-toggleMonthTrim" title="월간 뷰를 이 달이 걸치는 주만 / 항상 6주로" style="display:none;">한 달만</button>
         <button class="btn-secondary" id="c-toggleGoogle" title="구글 캘린더 일정 표시 켜기/끄기">${CAL_ICON} 구글 캘린더</button>
         <div class="tabs">
           <button class="tab active" data-view="month">월</button>
@@ -442,6 +470,7 @@ export async function mount(root) {
   let alldayHeight = 0; // 종일 행 사용자 조절 높이(px, 0=자동). app_settings: calendar_allday_height
   let alldayOrder = []; // 종일 일정 사용자 지정 순서(드래그) — app_settings: calendar_allday_order
   let eventTemplates = []; // 즐겨찾는 일정 템플릿 — app_settings: calendar_event_templates
+  let monthTrim = true; // 월간 뷰를 이 달이 걸치는 주 수만큼만(구글 캘린더식). app_settings: calendar_month_trim (기본 켬)
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
   async function loadCategories() {
@@ -494,7 +523,7 @@ export async function mount(root) {
   }
 
   function renderMonth(container, byDate) {
-    container.innerHTML = buildMonthGridHtml(anchor, byDate, { alldayOrder });
+    container.innerHTML = buildMonthGridHtml(anchor, byDate, { alldayOrder, trimMonth: monthTrim });
 
     const goToDay = (dateKey) => {
       anchor = parseKey(dateKey);
@@ -504,9 +533,16 @@ export async function mount(root) {
     };
     container.querySelectorAll('.month-cell').forEach((cell) => {
       cell.addEventListener('click', (e) => {
-        // 구글 캘린더처럼 — 날짜 숫자/기존 일정/"+N 더보기"는 그 날 일(day) 뷰로,
-        // 칸의 빈 공간을 누르면 그 날짜·하루종일이 기본값인 "새 일정" 창을 띄운다.
-        if (e.target.closest('.date-num, .month-event-pill, .month-more')) {
+        // 구글 캘린더처럼 — 기존 일정 클릭은 그 일정 상세, 날짜 숫자/"+N 더보기"는 그 날 일(day) 뷰,
+        // 칸의 빈 공간을 누르면 그 날짜·하루종일이 기본값인 "새 일정" 창.
+        const pill = e.target.closest('.month-event-pill');
+        if (pill) {
+          const evt = currentEvents.find((x) => x.id === Number(pill.dataset.id));
+          if (evt) openDetail({ ...evt, source: 'local' });
+          else goToDay(cell.dataset.date); // 구글 일정 등 — 그 날 뷰에서 확인
+          return;
+        }
+        if (e.target.closest('.date-num, .month-more')) {
           goToDay(cell.dataset.date);
         } else {
           openModal(null, cell.dataset.date);
@@ -697,14 +733,30 @@ export async function mount(root) {
     load();
   });
 
+  // 월간 뷰 "한 달만/6주" 토글 — 월간 뷰에서만 보임
+  const monthTrimBtn = $('c-toggleMonthTrim');
+  const syncMonthTrimBtn = () => {
+    monthTrimBtn.style.display = currentView === 'month' ? '' : 'none';
+    monthTrimBtn.classList.toggle('active', monthTrim);
+    monthTrimBtn.textContent = monthTrim ? '한 달만' : '6주 전체';
+  };
+  monthTrimBtn.addEventListener('click', () => {
+    monthTrim = !monthTrim;
+    window.itda.settings.set({ key: 'calendar_month_trim', value: monthTrim ? '1' : '0' }).catch(() => {});
+    syncMonthTrimBtn();
+    load();
+  });
+
   root.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
       root.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
       tab.classList.add('active');
       currentView = tab.dataset.view;
+      syncMonthTrimBtn();
       load();
     });
   });
+  syncMonthTrimBtn();
 
   // ---------- 일정 추가/수정 모달 (동일한 폼을 재사용) ----------
   // evt가 있으면 "수정" 모드(값 미리 채움 + events:update 호출), 없으면 "추가" 모드.
@@ -731,8 +783,21 @@ export async function mount(root) {
       : prefillDate && isAllDay
         ? prefillDate
         : '';
-    $('c-end').style.display = isAllDay ? 'none' : '';
-    $('c-end').value = isEdit && !isAllDay ? (evt.end_at || '').slice(0, 16).replace(' ', 'T') : '';
+    // 종일 일정도 종료 "날짜"를 받는다(휴가처럼 며칠 이어지는 일정). 하루짜리면 비워두면 됨.
+    $('c-end').type = isAllDay ? 'date' : 'datetime-local';
+    $('c-end').style.display = '';
+    $('c-end').placeholder = isAllDay ? '종료일 (선택)' : '종료 시각 (선택)';
+    if (isEdit) {
+      if (isAllDay) {
+        const endD = (evt.end_at || '').slice(0, 10);
+        const startD = (evt.start_at || '').slice(0, 10);
+        $('c-end').value = endD && endD > startD ? endD : ''; // 하루짜리(같은 날 23:59)면 비움
+      } else {
+        $('c-end').value = (evt.end_at || '').slice(0, 16).replace(' ', 'T');
+      }
+    } else {
+      $('c-end').value = '';
+    }
 
     // 반복은 "새로 만들 때"만 지정 가능 — 이미 있는 시리즈의 반복 패턴을 바꾸는 건 지원 안 함(간단한 반복 기능의 한계)
     $('c-recurrenceRow').style.display = isEdit ? 'none' : '';
@@ -789,17 +854,18 @@ export async function mount(root) {
     $('c-allDay').checked = false;
     $('c-start').type = 'datetime-local';
     $('c-start').value = '';
+    $('c-end').type = 'datetime-local';
     $('c-end').value = '';
     $('c-end').style.display = '';
   }
 
-  // 하루종일 체크 시: 시작 입력을 날짜만 받도록 바꾸고, 종료 시각 입력은 숨김
-  // (하루종일 이벤트는 종료 시각 자체가 의미 없으므로 입력을 안 받는다)
+  // 하루종일 체크 시: 시작/종료 입력을 날짜만 받도록 바꾼다(종일도 종료 "날짜"는 받음 — 며칠 이어지는 휴가 등)
   $('c-allDay').addEventListener('change', (e) => {
     const isAllDay = e.target.checked;
     $('c-start').type = isAllDay ? 'date' : 'datetime-local';
     $('c-start').value = '';
-    $('c-end').style.display = isAllDay ? 'none' : '';
+    $('c-end').type = isAllDay ? 'date' : 'datetime-local';
+    $('c-end').placeholder = isAllDay ? '종료일 (선택)' : '종료 시각 (선택)';
     $('c-end').value = '';
   });
 
@@ -847,9 +913,13 @@ export async function mount(root) {
       toast(isAllDay ? '제목과 날짜를 입력해주세요.' : '제목과 시작 시각을 입력해주세요.');
       return;
     }
-    // 종료 시각을 직접 입력한 경우에만 시작보다 늦은지 검사 (비워두면 서버가 기본값을 계산하므로 검사 불필요)
+    // 종료를 직접 입력한 경우에만 시작보다 늦은지 검사 (비워두면 서버가 기본값을 계산)
     if (!isAllDay && endRaw && startRaw >= endRaw) {
       toast('종료 시각이 시작 시각보다 늦어야 해요.');
+      return;
+    }
+    if (isAllDay && endRaw && endRaw < startRaw) {
+      toast('종료일이 시작일보다 빠를 수 없어요.');
       return;
     }
 
@@ -859,9 +929,14 @@ export async function mount(root) {
       const categoryId = $('c-category').value ? Number($('c-category').value) : null;
       const location = $('c-location').value.trim() || null;
       const memo = $('c-memo').value.trim() || null;
-      // 하루종일이면 날짜(YYYY-MM-DD)만 있으므로 'T00:00'을 붙여 datetime 형태로 맞춘다
+      // 하루종일이면 날짜(YYYY-MM-DD)만 있으므로 시각을 붙여 datetime 형태로 맞춘다.
+      // 종일 + 종료일 지정 → 그 날 끝(23:59:59)까지. 종료일 없으면 시작일 하루짜리.
       const startAt = isAllDay ? `${startRaw} 00:00:00` : startRaw.replace('T', ' ');
-      const endAt = !isAllDay && endRaw ? endRaw.replace('T', ' ') : null; // null이면 서버가 자동 계산
+      const endAt = isAllDay
+        ? `${endRaw && endRaw >= startRaw ? endRaw : startRaw} 23:59:59`
+        : endRaw
+          ? endRaw.replace('T', ' ')
+          : null; // 시간지정 + 종료 비움 → 서버가 자동 계산
       if (editId) {
         await window.itda.events.update({
           id: editId,
@@ -869,7 +944,7 @@ export async function mount(root) {
           categoryId,
           location,
           startAt,
-          endAt: endAt ?? (isAllDay ? `${startRaw} 23:59:59` : undefined),
+          endAt,
           allDay: isAllDay,
           memo,
         });
@@ -1045,12 +1120,14 @@ export async function mount(root) {
   // 저장된 종일 순서 / 즐겨찾는 템플릿 / 종일 행 접힘·높이 — 한 번의 IPC로(순차 5회 → 1회)
   try {
     const cs = await window.itda.settings.getMany([
-      'calendar_allday_order', 'calendar_event_templates', 'calendar_allday_collapsed', 'calendar_allday_height',
+      'calendar_allday_order', 'calendar_event_templates', 'calendar_allday_collapsed', 'calendar_allday_height', 'calendar_month_trim',
     ]);
     if (cs.calendar_allday_order) alldayOrder = JSON.parse(cs.calendar_allday_order) || [];
     if (cs.calendar_event_templates) eventTemplates = JSON.parse(cs.calendar_event_templates) || [];
     alldayCollapsed = cs.calendar_allday_collapsed === '1';
     alldayHeight = Number(cs.calendar_allday_height) || 0;
+    monthTrim = cs.calendar_month_trim !== '0'; // 기본 켬
+    syncMonthTrimBtn();
   } catch (e) {
     // 깨졌으면 빈 값으로 시작
   }

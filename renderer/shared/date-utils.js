@@ -37,10 +37,17 @@ export function isSameDay(a, b) {
   return dateKey(a) === dateKey(b);
 }
 
-export function monthGridDates(anchor) {
+export function monthGridDates(anchor, { trim = false } = {}) {
   const firstOfMonth = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
   const gridStart = startOfWeek(firstOfMonth);
-  return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  let weeks = 6;
+  if (trim) {
+    // 이 달이 실제로 걸치는 주 수만큼만(구글 캘린더 방식) — 보통 5주, 가끔 4·6주.
+    const lastOfMonth = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
+    const spanDays = Math.round((lastOfMonth - gridStart) / 86400000) + 1;
+    weeks = Math.ceil(spanDays / 7);
+  }
+  return Array.from({ length: weeks * 7 }, (_, i) => addDays(gridStart, i));
 }
 
 // SQLite 'YYYY-MM-DD HH:MM:SS' 문자열에서 하루 중 분(minute) 오프셋 추출

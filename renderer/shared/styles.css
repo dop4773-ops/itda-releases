@@ -673,8 +673,19 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .main[data-view="calendar"]{padding-bottom:12px;display:flex;flex-direction:column;min-height:0;}
 #c-gridArea{flex:1 1 auto;min-height:420px;}
 .main[data-view="calendar"] .cal-legend{flex-shrink:0;}
-#c-gridArea .month-grid{height:100%;grid-template-rows:auto repeat(6,1fr);}
-#c-gridArea .month-cell{height:auto;min-height:0;overflow:hidden;}
+/* 주 수는 --month-weeks(4~6, "한 달만" 토글). 적을수록 칸이 커져 하루 일정이 더 보인다. */
+#c-gridArea .month-grid{height:100%;grid-template-rows:auto repeat(var(--month-weeks,6),1fr);}
+/* 세로는 넘치면 잘라내되(is-span 막대가 칸 사이를 넘어 이어질 수 있게 가로는 안 자름) */
+#c-gridArea .month-cell{height:auto;min-height:0;overflow:visible;}
+/* 여러 날 종일 일정 = 진짜로 이어지는 막대 (구글 캘린더식). 칸 사이 여백(패딩6+gap1=7px)만큼
+   음수 마진으로 당겨서 옆 칸 막대와 맞붙인다. 안쪽 모서리는 각지게, 제목은 시작일/주의 첫 칸에만. */
+.month-event-pill.is-span,.allday-bar.is-span{border-radius:0;}
+.month-event-pill.is-span.span-start,.allday-bar.is-span.span-start{border-top-left-radius:5px;border-bottom-left-radius:5px;}
+.month-event-pill.is-span.span-end,.allday-bar.is-span.span-end{border-top-right-radius:5px;border-bottom-right-radius:5px;}
+.month-event-pill.is-span:not(.span-start){margin-left:-7px;}
+.month-event-pill.is-span:not(.span-end){margin-right:-7px;}
+/* 주 경계에서 줄바꿈되며 끊긴 부분은 양끝을 살짝 둥글게(끊김 표시) */
+.month-event-pill.is-span.span-mid{border-radius:1px;}
 #c-gridArea .time-grid{height:100%;}
 /* 종일 행 — 기본은 모든 종일 일정이 다 보이도록 내용 높이 그대로(아주 많으면 45vh에서 스크롤).
    "종일 ▾" 라벨을 누르면 접혀서 2개 정도만, 아래 모서리를 드래그(resize)하면 원하는 높이로 고정.
