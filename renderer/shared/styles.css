@@ -686,6 +686,14 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .month-event-pill.is-span:not(.span-end){margin-right:-7px;}
 /* 주 경계에서 줄바꿈되며 끊긴 부분은 양끝을 살짝 둥글게(끊김 표시) */
 .month-event-pill.is-span.span-mid{border-radius:1px;}
+/* 주간/일간 뷰 종일 막대도 동일 — 칸 패딩(6)+칸 경계선(1)만큼 당겨 옆 칸과 맞붙임.
+   이어지는 가운데/끝 칸은 삭제(×) 버튼·오른쪽 여백을 없애 막대가 균일하게. */
+.allday-cell{overflow:visible;}
+.allday-bar.is-span:not(.span-start){margin-left:-7px;padding-left:9px;}
+.allday-bar.is-span:not(.span-end){margin-right:-7px;padding-right:9px;}
+.allday-bar.is-span:not(.span-start) .event-del{display:none;}
+/* 이번 주 첫 날 칸(그리드 2번째 자식, "종일" 라벨 다음)의 이어지는 막대는 라벨을 덮지 않게 */
+.allday-row > .allday-cell:nth-child(2) .allday-bar.is-span:not(.span-start){margin-left:-6px;}
 #c-gridArea .time-grid{height:100%;}
 /* 종일 행 — 기본은 모든 종일 일정이 다 보이도록 내용 높이 그대로(아주 많으면 45vh에서 스크롤).
    "종일 ▾" 라벨을 누르면 접혀서 2개 정도만, 아래 모서리를 드래그(resize)하면 원하는 높이로 고정.
