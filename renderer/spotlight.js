@@ -1,6 +1,7 @@
 // macOS Spotlight식 작은 창 — 잇다 본체를 안 띄우고 화면 가운데에 검색/입력만.
 // main/spotlight/window-manager.js 가 이 페이지를 frameless 창에 띄운다.
 import { debounce } from './shared/ui-utils.js';
+import { stripHtmlToPlainText } from './shared/rich-text.js';
 
 // 이 작은 팝업에는 다크모드 + UI 테마 팔레트만 맞춰준다(배율/폰트는 굳이 안 함 — shell.js
 // 전체 테마 로직을 끌어오면 의존성이 커진다).
@@ -127,7 +128,8 @@ const debouncedItemSearch = debounce(async (kw) => {
   if (inputEl.value.trim() !== kw.trim()) return;
   const itemMatches = rows.slice(0, 8).map((row) => ({
     icon: TYPE_EMOJI[row.entity_type] || '•',
-    label: (row.title || row.content || '').replace(/\s+/g, ' ').trim() || '(제목 없음)',
+    // 메모/포스트잇 content는 HTML이라 태그를 벗겨서 순수 텍스트로.
+    label: stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 70) || '(제목 없음)',
     run: () => openItem(row),
   }));
   items = [...itemMatches, ...items];
