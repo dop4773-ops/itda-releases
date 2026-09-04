@@ -118,6 +118,8 @@ function onInput() {
   if (mode === 'find') refreshFind(inputEl.value);
 }
 
+let screenItems = []; // 이번 검색어에 걸린 "큰 카테고리"(화면) — 항상 결과 맨 위에 온다
+
 const debouncedItemSearch = debounce(async (kw) => {
   let rows = [];
   try {
@@ -132,19 +134,20 @@ const debouncedItemSearch = debounce(async (kw) => {
     label: stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 70) || '(제목 없음)',
     run: () => openItem(row),
   }));
-  items = [...itemMatches, ...items];
+  // 큰 카테고리(화면) 먼저, 그 다음 개별 항목
+  items = [...screenItems, ...itemMatches];
   active = 0;
   renderResults();
 }, 160);
 
 function refreshFind(kw) {
   const k = kw.trim().toLowerCase();
-  const screenMatches = SCREEN_COMMANDS.filter((c) => !k || c.kw.includes(k) || c.label.toLowerCase().includes(k)).map((c) => ({
+  screenItems = SCREEN_COMMANDS.filter((c) => !k || c.kw.includes(k) || c.label.toLowerCase().includes(k)).map((c) => ({
     icon: c.icon,
     label: c.label,
     run: () => openRoute(c.route),
   }));
-  items = screenMatches;
+  items = screenItems;
   active = 0;
   renderResults();
   if (k) debouncedItemSearch(kw);
