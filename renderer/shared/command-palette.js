@@ -264,11 +264,6 @@ export function initCommandPalette({ openQuickCapture }) {
       }
     }
   });
-
-  // OS 전역 단축키(main/global-shortcut)로 "빠른 찾기"를 열 때 — 메인 창을 앞으로 가져온 뒤 팔레트를 연다
-  window.itda.onOpenQuickFind?.(() => {
-    if (!overlay?.classList.contains('open')) open();
-  });
 }
 
 export const COMMAND_PALETTE_HINT = navigator.platform?.toUpperCase().includes('MAC') ? ACCELERATOR_LABEL_MAC : ACCELERATOR_LABEL_WIN;

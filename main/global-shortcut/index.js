@@ -45,7 +45,7 @@ function registerOrLog(accelerator, handler) {
   return ok;
 }
 
-function initGlobalShortcut(app, getMainWindow, settings) {
+function initGlobalShortcut(app, getMainWindow, settings, { openSpotlight } = {}) {
   let lastStatus = {};
 
   function registerAll() {
@@ -55,18 +55,9 @@ function initGlobalShortcut(app, getMainWindow, settings) {
     const lockAccel = settings.get('shortcut_lockNow') || DEFAULTS.lockNow;
 
     lastStatus = {
-      globalQuickCapture: registerOrLog(quickCaptureAccel, () => {
-        const win = getMainWindow();
-        if (!win) return;
-        focusMainWindow(win);
-        win.webContents.send('itda:openQuickCapture');
-      }),
-      globalQuickFind: registerOrLog(quickFindAccel, () => {
-        const win = getMainWindow();
-        if (!win) return;
-        focusMainWindow(win);
-        win.webContents.send('itda:openQuickFind');
-      }),
+      // Spotlight식 작은 창 — 잇다 본체를 통째로 띄우지 않는다(main/spotlight).
+      globalQuickCapture: registerOrLog(quickCaptureAccel, () => openSpotlight?.('capture')),
+      globalQuickFind: registerOrLog(quickFindAccel, () => openSpotlight?.('find')),
       lockNow: registerOrLog(lockAccel, () => {
         const win = getMainWindow();
         if (!win) return;

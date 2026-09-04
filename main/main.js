@@ -4,6 +4,7 @@ const { initDb } = require('./db');
 const registerIpcHandlers = require('./ipc');
 const { initUpdater } = require('./updater');
 const { initGlobalShortcut } = require('./global-shortcut');
+const { initSpotlight } = require('./spotlight');
 const { initTray } = require('./tray');
 const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
@@ -107,7 +108,8 @@ if (!gotLock) {
     const { openWidgetByType, openPostitById } = registerIpcHandlers(ipcMain, db, () => mainWindow);
     createWindow();
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
-    initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
+    const { openSpotlight } = initSpotlight(); // Spotlight식 작은 창(빠른입력/빠른찾기) — main/spotlight
+    initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db), { openSpotlight }); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
     initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).

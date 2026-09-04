@@ -164,6 +164,16 @@ contextBridge.exposeInMainWorld('itda', {
     ipcRenderer.on('itda:openQuickFind', listener);
     return () => ipcRenderer.removeListener('itda:openQuickFind', listener);
   },
+  // Spotlight식 작은 창(renderer/spotlight.js) 전용
+  spotlight: {
+    close: () => ipcRenderer.invoke('spotlight:close'),
+    resize: (height) => ipcRenderer.invoke('spotlight:resize', height),
+    onSetMode: (callback) => {
+      const listener = (event, mode) => callback(mode);
+      ipcRenderer.on('spotlight:setMode', listener);
+      return () => ipcRenderer.removeListener('spotlight:setMode', listener);
+    },
+  },
   // OS 전역 단축키(Ctrl/Cmd+Alt+L)로 "지금 잠그기"를 실행할 때 메인 창이 이 이벤트를 받는다
   onLockNow: (callback) => {
     const listener = () => callback();

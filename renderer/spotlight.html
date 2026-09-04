@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'" />
+<title>잇다 빠른 실행</title>
+<link rel="stylesheet" href="shared/styles.css" />
+<style>
+  html, body { background: transparent; margin: 0; overflow: hidden; }
+  #sp-root { padding: 8px; box-sizing: border-box; }
+  .sp-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+    box-shadow: 0 18px 50px rgba(16,24,40,.28), 0 2px 8px rgba(16,24,40,.14);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .sp-input-row { display: flex; align-items: center; gap: 10px; padding: 14px 18px; }
+  .sp-input-row .sp-icon { flex-shrink: 0; color: var(--text-faint); display: flex; }
+  #sp-input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-size: 19px; color: var(--text); font-family: inherit;
+  }
+  #sp-input::placeholder { color: var(--text-faint); }
+  .sp-hint { font-size: 11px; color: var(--text-faint); flex-shrink: 0; white-space: nowrap; }
+  #sp-results { max-height: 360px; overflow-y: auto; border-top: 1px solid var(--divider); padding: 6px; }
+  #sp-results:empty { display: none; }
+  .sp-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+    cursor: pointer; font-size: 13.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sp-item .sp-item-icon { flex-shrink: 0; width: 18px; text-align: center; }
+  .sp-item .sp-item-label { overflow: hidden; text-overflow: ellipsis; }
+  .sp-item.active { background: var(--brand-soft); color: var(--brand); }
+  .sp-empty { padding: 14px 16px; font-size: 12.5px; color: var(--text-faint); }
+</style>
+</head>
+<body>
+<div id="sp-root"></div>
+<script type="module" src="spotlight.js"></script>
+</body>
+</html>

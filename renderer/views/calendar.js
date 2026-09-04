@@ -85,6 +85,13 @@ export function groupByDateKey(events) {
   return map;
 }
 
+// 여러 날에 걸친 종일 일정(휴가·연휴 등) 판별 — 종일이고 종료일이 시작일보다 뒤.
+function isMultiDayAllDay(e) {
+  const s = (e.start_at || '').slice(0, 10);
+  const en = (e.end_at || '').slice(0, 10);
+  return !!e.all_day && !!en && en > s;
+}
+
 // 순수 HTML 빌더 — 이벤트 바인딩 없이 마크업만 반환 (달력 화면 + 대시보드 위젯이 공유)
 // compact:true면 대시보드 사이드 패널용 — pill을 늘어놓지 않고 "점 + 개수"만 표시해서
 // 하루에 일정이 몇 개든 셀 높이가 항상 일정하게 유지된다(월 전체 높이가 안정적).
@@ -101,10 +108,13 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
   const sortDayEvents = (list) => {
-    const cmpStart = (a, b) => (a.start_at || '').localeCompare(b.start_at || '');
-    const allday = list.filter((e) => e.all_day).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpStart(a, b));
+    const cmpStart = (a, b) => (a.start_at || '').localeCompare(b.start_at || '') || (a.id > b.id ? 1 : -1);
+    // 여러 날 이어지는 종일 일정은 어느 칸에서도 항상 맨 위 같은 자리에 오게 — 안 그러면 구글 일정
+    // 등이 사이에 끼어 칸마다 위치가 달라져 막대가 끊겨 보인다. (시작일→id 순으로 결정적 정렬)
+    const multi = list.filter((e) => isMultiDayAllDay(e)).sort(cmpStart);
+    const allday = list.filter((e) => e.all_day && !isMultiDayAllDay(e)).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpStart(a, b));
     const timed = list.filter((e) => !e.all_day).sort(cmpStart);
-    return [...allday, ...timed];
+    return [...multi, ...allday, ...timed];
   };
 
   const cells = dates
@@ -210,8 +220,13 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
     const i = alldayOrder.indexOf(e.id);
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
-  const sortAllDay = (list) =>
-    list.slice().sort((a, b) => alldayIdx(a) - alldayIdx(b) || (a.start_at || '').localeCompare(b.start_at || ''));
+  // 여러 날 이어지는 종일 일정을 맨 위 같은 자리에 고정 — 구글 일정이 사이에 껴도 막대가 안 끊기게.
+  const cmpAllDay = (a, b) => (a.start_at || '').localeCompare(b.start_at || '') || (a.id > b.id ? 1 : -1);
+  const sortAllDay = (list) => {
+    const multi = list.filter(isMultiDayAllDay).sort(cmpAllDay);
+    const single = list.filter((e) => !isMultiDayAllDay(e)).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpAllDay(a, b));
+    return [...multi, ...single];
+  };
   const today = new Date();
   const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
   const hourCount = HOUR_END - HOUR_START;
