@@ -14,10 +14,11 @@ const path = require('path');
 
 let win = null;
 
-// 높이는 renderer가 내용에 맞춰 spotlight:resize로 다시 알려준다(아래는 첫 표시용 시작값).
+// 창 크기는 모드별로 고정 — 키 입력마다 창을 리사이즈하면 위치가 튀고 입력이 버벅인다.
+// find는 결과가 많으면 내부(#sp-results)에서 스크롤.
 const SIZE = {
-  capture: { width: 640, height: 96 },
-  find: { width: 640, height: 112 },
+  capture: { width: 640, height: 100 },
+  find: { width: 640, height: 424 },
 };
 
 function openSpotlight(mode = 'capture') {
@@ -71,14 +72,6 @@ function openSpotlight(mode = 'capture') {
   return win;
 }
 
-// 창 높이를 내용에 맞게(빠른 찾기에서 결과 수에 따라). renderer가 spotlight:resize로 알려준다.
-function resizeSpotlight(height) {
-  if (!win || win.isDestroyed()) return;
-  const b = win.getBounds();
-  const h = Math.max(80, Math.min(560, Math.round(height)));
-  win.setBounds({ x: b.x, y: b.y, width: b.width, height: h });
-}
-
 function closeSpotlight() {
   if (win && !win.isDestroyed()) win.close();
 }
@@ -94,4 +87,4 @@ function centered({ width, height }) {
   };
 }
 
-module.exports = { openSpotlight, resizeSpotlight, closeSpotlight };
+module.exports = { openSpotlight, closeSpotlight };

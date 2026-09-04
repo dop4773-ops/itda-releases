@@ -53,6 +53,11 @@ function openItem(row) {
 }
 
 function render() {
+  document.body.dataset.mode = mode;
+  // 카드 밖(투명한 여백)을 누르면 닫힘 — blur가 안 잡히는 경우 대비 + 맥 Spotlight 감각
+  root.onmousedown = (e) => {
+    if (!e.target.closest('.sp-card')) close();
+  };
   root.innerHTML = `
     <div class="sp-card">
       <div class="sp-input-row">
@@ -69,15 +74,26 @@ function render() {
   resultsEl = document.getElementById('sp-results');
   inputEl.addEventListener('input', onInput);
   inputEl.addEventListener('keydown', onKeyDown);
+  // 리스너는 한 번만(위임) — 키 입력마다 붙였다 떼면 버벅인다.
+  resultsEl.addEventListener('mousedown', (e) => {
+    const el = e.target.closest('.sp-item');
+    if (!el) return;
+    e.preventDefault();
+    items[Number(el.dataset.i)]?.run();
+  });
+  resultsEl.addEventListener('mousemove', (e) => {
+    const el = e.target.closest('.sp-item');
+    if (!el || Number(el.dataset.i) === active) return;
+    active = Number(el.dataset.i);
+    syncActive();
+  });
   setTimeout(() => inputEl.focus(), 20);
   if (mode === 'find') refreshFind('');
-  else fitHeight();
 }
 
 function renderResults() {
   if (mode !== 'find') {
     resultsEl.innerHTML = '';
-    fitHeight();
     return;
   }
   resultsEl.innerHTML = items.length
@@ -89,25 +105,6 @@ function renderResults() {
         )
         .join('')
     : `<div class="sp-empty">일치하는 항목이 없어요</div>`;
-  resultsEl.querySelectorAll('.sp-item').forEach((el) => {
-    el.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      items[Number(el.dataset.i)]?.run();
-    });
-    el.addEventListener('mouseenter', () => {
-      active = Number(el.dataset.i);
-      resultsEl.querySelectorAll('.sp-item').forEach((x) => x.classList.toggle('active', x === el));
-    });
-  });
-  fitHeight();
-}
-
-function fitHeight() {
-  // #sp-root(패딩8) + .sp-card 내용 높이. card는 flex 컬럼이라 자연 높이로 큰다.
-  requestAnimationFrame(() => {
-    const h = (root.offsetHeight || 80) + 4;
-    window.itda.spotlight.resize(h);
-  });
 }
 
 function escapeHtml(s) {

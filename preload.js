@@ -167,7 +167,6 @@ contextBridge.exposeInMainWorld('itda', {
   // Spotlight식 작은 창(renderer/spotlight.js) 전용
   spotlight: {
     close: () => ipcRenderer.invoke('spotlight:close'),
-    resize: (height) => ipcRenderer.invoke('spotlight:resize', height),
     onSetMode: (callback) => {
       const listener = (event, mode) => callback(mode);
       ipcRenderer.on('spotlight:setMode', listener);
