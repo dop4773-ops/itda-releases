@@ -81,11 +81,12 @@ const EDIT_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" s
 const PLUS_MINI_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
 const RESET_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.7 3L3 9"/><path d="M3 4v5h5"/></svg>`;
 
+// 종류 구분이 한눈에 되도록 색 있는 이모지 (links-ui.js TYPE_EMOJI와 통일)
 const TYPE_META = {
-  todo: { label: 'Todo', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`, route: '#/todo' },
-  event: { label: '일정', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`, route: '#/calendar' },
-  memo: { label: '메모', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`, route: '#/memo' },
-  postit: { label: '포스트잇', icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>`, route: '#/postit' },
+  todo: { label: 'Todo', icon: '✅', route: '#/todo' },
+  event: { label: '일정', icon: '📅', route: '#/calendar' },
+  memo: { label: '메모', icon: '📝', route: '#/memo' },
+  postit: { label: '포스트잇', icon: '📌', route: '#/postit' },
 };
 
 function greetingByHour(hour) {

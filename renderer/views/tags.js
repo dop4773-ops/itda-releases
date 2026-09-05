@@ -11,7 +11,7 @@ const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 
 // 탐색 모달에 쓸 타입별 순서/라벨 — Todo → 일정 → 메모 → 포스트잇 순으로 고정 노출
 const BROWSE_TYPE_ORDER = ['todo', 'event', 'memo', 'postit'];
-const BROWSE_TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌' };
+const BROWSE_TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌' };
 
 // 설정 화면(renderer/views/settings.js) 안의 "태그" 탭에 마운트된다 — 예전엔 독립된
 // #/tags 화면이었지만, 자주 안 쓰는 관리 화면이라 설정 하위로 옮겨달라는 요청 반영.

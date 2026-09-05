@@ -78,6 +78,28 @@ module.exports = function createLinksRepository(db) {
       return db.prepare(query).get(id);
     },
 
+    // 목록 화면에서 "이 항목에 연결이 있나 / 어떤 종류가 연결됐나"만 알고 싶을 때 —
+    // 항목마다 listFor(+getPreview) N번 도는 대신, 한 방에 { id: Set(연결된 종류) } 를 만든다.
+    kindsForMany(type, ids) {
+      const out = {};
+      if (!Array.isArray(ids) || ids.length === 0) return out;
+      const placeholders = ids.map(() => '?').join(',');
+      const rows = db
+        .prepare(
+          `SELECT a_type, a_id, b_type, b_id FROM item_links
+           WHERE (a_type = ? AND a_id IN (${placeholders}))
+              OR (b_type = ? AND b_id IN (${placeholders}))`
+        )
+        .all(type, ...ids, type, ...ids);
+      for (const r of rows) {
+        const isA = r.a_type === type && ids.includes(r.a_id);
+        const selfId = isA ? r.a_id : r.b_id;
+        const otherType = isA ? r.b_type : r.a_type;
+        (out[selfId] = out[selfId] || new Set()).add(otherType);
+      }
+      return out;
+    },
+
     deleteAllFor(type, id) {
       db.prepare(`DELETE FROM item_links WHERE (a_type = ? AND a_id = ?) OR (b_type = ? AND b_id = ?)`).run(type, id, type, id);
     },

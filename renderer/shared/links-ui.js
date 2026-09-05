@@ -3,14 +3,9 @@ import { stripHtmlToPlainText } from './rich-text.js';
 
 export const LINK_TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
 export const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
-export const TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
-const TYPE_ICON = {
-  todo: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>`,
-  event: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
-  memo: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>`,
-  postit: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v6l3-2 3 2V3"/></svg>`,
-  inbox: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>`,
-};
+// 항목 종류를 한눈에 구분하려면 흑백 SVG보다 색이 있는 이모지가 낫다는 피드백.
+// ✅ 초록 / 📅 파랑 / 📝 노랑 / 📌 빨강 / 📥 파랑 — 색만으로도 투두/메모/일정이 바로 구분된다.
+export const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
 const SMALL_X_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const PLUS_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
 
@@ -78,7 +73,7 @@ export async function mountLinksWidget(container, self) {
     return `
       <div class="link-item link-item-suggested" data-type="${d.type}" data-id="${d.id}">
         <a class="link-item-main" href="${TYPE_ROUTE[d.type]}">
-          <span class="link-type-icon">${TYPE_ICON[d.type]}</span>
+          <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
           <span class="link-item-label">${escapeHtml(plainLabel(d.label))}</span>
         </a>
         <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>
@@ -88,26 +83,33 @@ export async function mountLinksWidget(container, self) {
   function render() {
     const linkableTypes = Object.keys(LINK_TYPE_LABEL).filter((t) => t !== self.type || true); // 같은 타입끼리도 연결 허용(예: Todo-Todo)
     const hasDiscovered = discovered.sameCategory.length > 0 || discovered.similar.length > 0;
+    // 종류별로 묶어서 보여준다 — "이게 투두인지 메모인지" 한눈에 구분되게(피드백/디자인 시안 반영).
+    const grouped = {};
+    links.forEach((l) => {
+      (grouped[l.type] = grouped[l.type] || []).push(l);
+    });
+    const linkRow = (l) => `
+      <div class="link-item" data-type="${l.type}" data-id="${l.id}">
+        <a class="link-item-main" href="${TYPE_ROUTE[l.type]}">
+          <span class="link-item-label">${escapeHtml(plainLabel(l.label))}</span>
+          ${subtitleFor(l) ? `<span class="link-item-sub">${escapeHtml(subtitleFor(l))}</span>` : ''}
+        </a>
+        <button class="btn-icon" data-action="unlink" data-type="${l.type}" data-id="${l.id}" title="연결 해제">${SMALL_X_ICON}</button>
+      </div>`;
+    const groupsHtml = Object.keys(LINK_TYPE_LABEL)
+      .filter((t) => grouped[t] && grouped[t].length)
+      .map(
+        (t) => `
+        <div class="link-group" data-type="${t}">
+          <div class="link-group-head"><span class="link-type-icon">${TYPE_EMOJI[t]}</span>${LINK_TYPE_LABEL[t]} <span class="link-group-count">${grouped[t].length}</span></div>
+          ${grouped[t].map(linkRow).join('')}
+        </div>`
+      )
+      .join('');
     container.innerHTML = `
       <div class="links-widget">
         <div class="links-list" id="lw-list">
-          ${
-            links.length
-              ? links
-                  .map(
-                    (l) => `
-              <div class="link-item" data-type="${l.type}" data-id="${l.id}">
-                <a class="link-item-main" href="${TYPE_ROUTE[l.type]}">
-                  <span class="link-type-icon">${TYPE_ICON[l.type]}</span>
-                  <span class="link-item-label">${escapeHtml(plainLabel(l.label))}</span>
-                  ${subtitleFor(l) ? `<span class="link-item-sub">${escapeHtml(subtitleFor(l))}</span>` : ''}
-                </a>
-                <button class="btn-icon" data-action="unlink" data-type="${l.type}" data-id="${l.id}" title="연결 해제">${SMALL_X_ICON}</button>
-              </div>`
-                  )
-                  .join('')
-              : `<div class="links-empty">연결된 항목이 없어요</div>`
-          }
+          ${links.length ? groupsHtml : `<div class="links-empty">연결된 항목이 없어요</div>`}
         </div>
 
         ${

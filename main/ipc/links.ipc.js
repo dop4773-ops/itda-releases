@@ -60,6 +60,13 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
       .filter(Boolean);
   });
 
+  // 목록 화면 배지용 — 여러 항목의 "연결된 종류"를 한 번의 IPC/쿼리로. { id: ['todo','event'] }
+  ipcMain.handle('links:kindsFor', (event, { type, ids }) => {
+    assertValidType(type);
+    const map = links.kindsForMany(type, (ids || []).map(Number));
+    return Object.fromEntries(Object.entries(map).map(([k, set]) => [k, [...set]]));
+  });
+
   // "@검색" 빠른 연결 — 메모/포스트잇 본문에서 @를 입력하면 이 핸들러로 후보를 찾는다.
   ipcMain.handle('links:search', (event, { keyword, excludeType, excludeId }) => {
     if (!keyword || !keyword.trim()) return [];

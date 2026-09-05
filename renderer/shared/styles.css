@@ -780,6 +780,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
    .list-row 기본값(넓은 패딩·큰 아이콘)을 여기서만 줄인다(다른 화면의 .list-row는 그대로 둠). */
 .compact-list .list-row{padding:8px 10px;margin-bottom:5px;gap:8px;}
 .compact-list .list-row .row-icon{width:24px;height:24px;}
+/* 휴지통 행 아이콘은 이모지(종류 구분) — 상자 배경 없이 크게 */
+.main[data-view="trash"] .list-row .row-icon{background:transparent;font-size:17px;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",var(--app-font-family);}
 .compact-list .list-row .main b{font-size:12.5px;}
 /* 보드형(태그 관리) — 같은 .list-row를 그리드 카드 안에서 세로로 쌓아서 재사용한다
    (마크업/이벤트 바인딩은 그대로 두고 배치만 CSS로 바꿈). */
@@ -873,12 +875,22 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 
 /* ================= 🔗 연결된 항목 위젯 (Todo/일정/메모/포스트잇 상세화면 공용) ================= */
 .links-widget{display:flex;flex-direction:column;gap:6px;}
-.links-list{display:flex;flex-direction:column;gap:4px;}
+.links-list{display:flex;flex-direction:column;gap:8px;}
 .links-empty{font-size:11.5px;color:var(--text-faint);padding:4px 0;}
+/* 종류별 그룹 — 헤더(이모지 + 이름 + 개수)로 투두/메모/일정을 한눈에 구분 */
+.link-group{display:flex;flex-direction:column;gap:3px;}
+.link-group-head{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--text-soft);padding:0 2px 1px;border-left:3px solid var(--link-tone,var(--border));padding-left:7px;}
+.link-group-count{font-weight:600;color:var(--text-faint);font-size:10px;background:var(--bg);border-radius:999px;padding:0 5px;}
+.link-group[data-type="todo"]{--link-tone:#4FB897;}
+.link-group[data-type="event"]{--link-tone:#6C8CF5;}
+.link-group[data-type="memo"]{--link-tone:#E7B54F;}
+.link-group[data-type="postit"]{--link-tone:#E2686B;}
+.link-group[data-type="inbox"]{--link-tone:#8B93A7;}
+.link-group .link-item{margin-left:9px;}
 .link-item{display:flex;align-items:center;gap:4px;}
 .link-item-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);background:var(--bg);text-decoration:none;color:inherit;font-size:12px;}
 .link-item-main:hover{background:var(--brand-soft);}
-.link-type-icon{flex-shrink:0;color:var(--text-faint);display:flex;}
+.link-type-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:17px;font-size:13.5px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
 .link-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .link-item-sub{flex-shrink:0;font-size:10px;color:var(--text-faint);}
 .link-add-btn{display:flex;align-items:center;gap:5px;justify-content:center;border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:7px;font-size:11.5px;color:var(--text-faint);background:none;cursor:pointer;}
@@ -1893,7 +1905,7 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .linked-connector{color:var(--text-faint);flex-shrink:0;display:flex;}
 .linked-card{flex-shrink:0;min-width:130px;background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;display:flex;flex-direction:column;gap:4px;text-decoration:none;color:inherit;}
 .linked-card.linked-anchor{background:var(--brand-soft);}
-.linked-card-type{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text-faint);font-weight:600;}
+.linked-card-type{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-faint);font-weight:600;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",var(--app-font-family);}
 .linked-card b{font-size:12.5px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .linked-card span{font-size:10.5px;color:var(--text-faint);}
 

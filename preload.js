@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld('itda', {
     add: (payload) => ipcRenderer.invoke('links:add', payload),
     remove: (payload) => ipcRenderer.invoke('links:remove', payload),
     listFor: (payload) => ipcRenderer.invoke('links:listFor', payload),
+    kindsFor: (payload) => ipcRenderer.invoke('links:kindsFor', payload), // { type, ids } → { id: ['todo',...] }
     search: (payload) => ipcRenderer.invoke('links:search', payload),
     discover: (payload) => ipcRenderer.invoke('links:discover', payload),
   },

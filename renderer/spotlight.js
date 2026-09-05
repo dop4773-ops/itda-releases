@@ -28,14 +28,14 @@ let active = 0;
 const SCREEN_COMMANDS = [
   { icon: '🏠', label: '대시보드', kw: '대시보드 홈 dashboard', route: '#/dashboard' },
   { icon: '📥', label: 'Inbox (빠른 입력함)', kw: 'inbox 인박스', route: '#/inbox' },
-  { icon: '☑', label: 'Todo (할 일)', kw: 'todo 투두 할일', route: '#/todo' },
+  { icon: '✅', label: 'Todo (할 일)', kw: 'todo 투두 할일', route: '#/todo' },
   { icon: '📅', label: '일정 (캘린더)', kw: 'calendar 캘린더 일정', route: '#/calendar' },
   { icon: '📝', label: '메모', kw: 'memo 메모 노트', route: '#/memo' },
   { icon: '📌', label: '포스트잇', kw: 'postit 포스트잇', route: '#/postit' },
   { icon: '🔍', label: '전체 검색', kw: 'search 검색', route: '#/search' },
   { icon: '⚙️', label: '설정', kw: 'settings 설정 환경설정', route: '#/settings' },
 ];
-const TYPE_EMOJI = { todo: '☑', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
+const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
 
 function close() {
   window.itda.spotlight.close();

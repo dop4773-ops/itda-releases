@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const { initDb } = require('./db');
+const { initDb, closeDb } = require('./db');
 const registerIpcHandlers = require('./ipc');
 const { initUpdater } = require('./updater');
 const { initGlobalShortcut } = require('./global-shortcut');
@@ -125,7 +125,10 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
-    if (db) db.close();
+    if (db) closeDb(db); // 통계 갱신 + WAL 합치기 후 닫기
     if (process.platform !== 'darwin') app.quit();
+  });
+  app.on('will-quit', () => {
+    if (db) closeDb(db); // 자동 업데이트 재시작 등 window-all-closed를 안 거치는 종료 경로 대비
   });
 }

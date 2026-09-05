@@ -139,6 +139,14 @@ export async function mount(root) {
         )
         .join('') + `<div class="new-sticky-card" id="p-newCard">+ 새 포스트잇</div>`;
 
+    // 연결 배지용 "종류 맵"을 카드마다가 아니라 한 번에 (예전엔 카드당 listFor N+1).
+    let linkKinds = {};
+    try {
+      linkKinds = await window.itda.links.kindsFor({ type: 'postit', ids: sorted.map((i) => i.id) });
+    } catch (e) {
+      /* 배지 없이 진행 */
+    }
+
     grid.querySelectorAll('.sticky-card').forEach((card) => {
       const id = Number(card.dataset.id);
       const contentArea = card.querySelector('[data-action="content"]');
@@ -232,24 +240,18 @@ export async function mount(root) {
       // 연결·전환은 전부 우클릭 메뉴로 — 포스트잇은 본문(contenteditable) 위에서도 메뉴가 열리게 openAnywhere.
       attachContextMenu(card, () => ({ type: 'postit', id }), { onDeleted: () => load(), openAnywhere: true });
 
-      // 변환 배지 — 연결된 Todo/일정이 있으면 표시하고, 누르면 해당 목록으로 이동.
-      // ponytail: 카드마다 listFor 한 번(N+1). 포스트잇 수가 크게 늘면 bulk 조회 API 추가.
+      // 변환 배지 — 연결된 Todo/일정이 있으면 표시하고, 누르면 해당 목록으로 이동. (linkKinds는 위에서 한 번에 조회)
       const badgeHost = card.querySelector('[data-badge-host]');
-      window.itda.links
-        .listFor({ type: 'postit', id })
-        .then((linked) => {
-          const kinds = new Set(linked.map((l) => l.type));
-          const pill = (label, route) =>
-            `<button class="postit-convert-badge" data-goto="${route}" title="연결된 ${label}(으)로 이동">${label} 연결됨</button>`;
-          badgeHost.innerHTML =
-            (kinds.has('todo') ? pill('Todo', '#/todo') : '') + (kinds.has('event') ? pill('일정', '#/calendar') : '');
-          badgeHost.querySelectorAll('[data-goto]').forEach((b) => {
-            b.addEventListener('click', () => {
-              location.hash = b.dataset.goto;
-            });
-          });
-        })
-        .catch(() => {});
+      const kinds = new Set(linkKinds[id] || []);
+      const pill = (label, route) =>
+        `<button class="postit-convert-badge" data-goto="${route}" title="연결된 ${label}(으)로 이동">${label} 연결됨</button>`;
+      badgeHost.innerHTML =
+        (kinds.has('todo') ? pill('Todo', '#/todo') : '') + (kinds.has('event') ? pill('일정', '#/calendar') : '');
+      badgeHost.querySelectorAll('[data-goto]').forEach((b) => {
+        b.addEventListener('click', () => {
+          location.hash = b.dataset.goto;
+        });
+      });
 
       const selectCb = card.querySelector('[data-action="select"]');
       selectCb.checked = selected.has(id);

@@ -14,9 +14,15 @@ function initDb() {
   const isNew = !fs.existsSync(dbPath);
 
   const db = new Database(dbPath);
+  // WAL + synchronous=NORMAL: WAL 모드에선 안전(전원 차단 시 마지막 트랜잭션만 유실, 손상 없음)
+  //   하면서 기본값(FULL)보다 쓰기가 눈에 띄게 빠르다 — SQLite 공식 권장 조합.
   db.pragma('journal_mode = WAL');
+  db.pragma('synchronous = NORMAL');
   db.pragma('foreign_keys = ON');
-  db.pragma('busy_timeout = 2000');
+  db.pragma('busy_timeout = 5000'); // 자동 백업/체크포인트와 겹쳐도 잠깐 기다렸다 진행
+  db.pragma('cache_size = -16000'); // 16MB 페이지 캐시(기본 ~2MB) — 목록/검색 반복 조회가 빨라짐
+  db.pragma('temp_store = MEMORY'); // ORDER BY/임시 인덱스를 디스크 대신 메모리에
+  db.pragma('mmap_size = 67108864'); // 64MB memory-map 읽기
 
   if (isNew) {
     const schemaPath = path.join(__dirname, '..', 'schema', 'itda_schema_v1.sql');
@@ -28,7 +34,26 @@ function initDb() {
     runLightweightMigrations(db);
   }
 
+  // 쿼리 플래너 통계 갱신 — 연결할 때마다 가볍게(초기 실행 후엔 거의 즉시). 인덱스 선택이 좋아진다.
+  try {
+    db.pragma('optimize');
+  } catch (e) {
+    /* 통계 갱신 실패는 치명적이지 않음 */
+  }
+
   return db;
+}
+
+// 앱 종료 직전 호출 — 통계 최종 갱신 + WAL 파일을 본체로 합쳐(TRUNCATE) 크기를 되돌린다.
+function closeDb(db) {
+  if (!db || !db.open) return;
+  try {
+    db.pragma('optimize');
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  } catch (e) {
+    /* 무시 — 어차피 닫는 중 */
+  }
+  db.close();
 }
 
 /**
@@ -243,4 +268,4 @@ function runLightweightMigrations(db) {
   }
 }
 
-module.exports = { initDb, runLightweightMigrations };
+module.exports = { initDb, runLightweightMigrations, closeDb };
