@@ -685,7 +685,31 @@ export async function initShell() {
   initUpdateOverlay(); // 수동 업데이트 모드의 다운로드 진행/재시작 확인을 화면과 무관하게 전역으로 표시
   initErrorSafetyNet();
   initCommandPalette({ openQuickCapture }); // Ctrl/Cmd+Shift+P — 어느 화면에서든 주요 동작을 키보드로 바로 실행
+  initSidebarNavShortcuts(); // Ctrl/Cmd+1~9 — 좌측 사이드바 항목 순서대로 이동
   initAltShortcutOverlay();
+}
+
+// 좌측 사이드바 항목을 위에서부터 Ctrl/Cmd+1, 2, 3 … 으로 이동 (브라우저 탭 전환과 같은 관례).
+// 사이드바가 정적이라 DOM 순서 = 표시 순서. 재바인딩 없는 고정 관례라 설정 목록엔 안 넣는다.
+function initSidebarNavShortcuts() {
+  const navEls = [...document.querySelectorAll('.sidebar .nav-item[data-route]')];
+  const routes = navEls.map((el) => el.dataset.route);
+  if (!routes.length) return;
+  // 마우스 올렸을 때 단축키가 보이게 툴팁도 붙여준다
+  const isMac = navigator.platform?.toUpperCase().includes('MAC');
+  navEls.slice(0, 9).forEach((el, i) => {
+    const name = el.querySelector('.label')?.textContent?.trim() || '';
+    el.title = `${name} (${isMac ? '⌘' : 'Ctrl+'}${i + 1})`;
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+    // 모달(빠른입력·커맨드팔레트·일정추가 등)이 떠 있을 땐 뒤 화면을 바꾸지 않는다.
+    if (document.querySelector('.modal-overlay.open')) return;
+    const n = Number(e.key);
+    if (!Number.isInteger(n) || n < 1 || n > routes.length) return;
+    e.preventDefault();
+    location.hash = routes[n - 1];
+  });
 }
 
 // 화면 코드에서 try/catch를 빠뜨린 경우를 위한 마지막 안전망.
