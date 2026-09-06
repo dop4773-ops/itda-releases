@@ -2,17 +2,12 @@
 // _shared.linkNewItem + repos.transaction 조합을 실제 in-memory DB로 검증한다.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
-const Database = require('better-sqlite3');
 const createRepositories = require('../main/repositories');
 const { linkNewItem } = require('../main/ipc/_shared');
-
-const SCHEMA = fs.readFileSync(path.join(__dirname, '..', 'schema', 'itda_schema_v1.sql'), 'utf-8');
+const { freshDb } = require('../scripts/test-helpers');
 
 function freshRepos() {
-  const db = new Database(':memory:');
-  db.exec(SCHEMA);
+  const db = freshDb();
   return { db, repos: createRepositories(db) };
 }
 

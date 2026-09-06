@@ -7,6 +7,8 @@ const LIST_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="no
 const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="9" rx="1"/><rect x="19" y="4" width="2" height="5" rx="1"/></svg>`;
 
 const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
+// 검색 결과가 왜 나왔는지 (search.repository의 matchedIn)
+const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치' };
 const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
 // 타입별로 실제 삭제 API가 다르다 (todo/event/memo/postit는 소프트 삭제=휴지통행, inbox는 하드 삭제)
 const DELETE_API = {
@@ -76,12 +78,13 @@ export async function mount(root) {
 
   function renderResultCard(type, i) {
     const key = `${type}:${i.entity_id}`;
+    const badge = MATCH_LABEL[i.matchedIn] ? `<span class="search-match-badge" data-match="${i.matchedIn}">${MATCH_LABEL[i.matchedIn]}</span>` : '';
     if (currentView === 'board') {
       return `
         <div class="search-card" data-key="${key}">
           <input type="checkbox" data-action="select" data-key="${key}" />
           <a class="search-card-body" href="${TYPE_ROUTE[type] || '#/dashboard'}">
-            <b>${escapeHtml(i.title || '(제목 없음)')}</b>
+            <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
             <p>${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 80))}</p>
           </a>
         </div>`;
@@ -90,7 +93,7 @@ export async function mount(root) {
       <div class="list-row search-result-row" data-key="${key}">
         <input type="checkbox" data-action="select" data-key="${key}" />
         <a class="main" href="${TYPE_ROUTE[type] || '#/dashboard'}">
-          <b>${escapeHtml(i.title || '(제목 없음)')}</b>
+          <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
           <div class="meta">${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 60))}</div>
         </a>
       </div>`;

@@ -2014,6 +2014,10 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .search-card-body{flex:1;min-width:0;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:4px;}
 .search-card-body b{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .search-card-body p{font-size:11.5px;color:var(--text-faint);margin:0;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}
+/* 검색 결과가 왜 나왔는지 (제목/초성/본문 일치) — 작은 회색 배지 */
+.search-match-badge{display:inline-block;margin-left:6px;padding:1px 6px;font-size:9.5px;font-weight:600;line-height:1.5;color:var(--text-faint);background:var(--bg);border:1px solid var(--border);border-radius:999px;vertical-align:middle;white-space:nowrap;}
+.search-match-badge[data-match="title"]{color:var(--brand);}
+.search-match-badge[data-match="chosung"]{color:#8A6FBF;}
 
 .search-bulk-bar{display:flex;align-items:center;gap:14px;margin-top:12px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-md);}
 

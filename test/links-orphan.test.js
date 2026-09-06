@@ -3,18 +3,11 @@
 //  2) 마이그레이션이 기존 고아 item_links 행을 1회 청소한다
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
-const Database = require('better-sqlite3');
 const createRepositories = require('../main/repositories');
 const { runLightweightMigrations } = require('../main/db.js');
+const { freshDb } = require('../scripts/test-helpers');
 
-const SCHEMA = fs.readFileSync(path.join(__dirname, '..', 'schema', 'itda_schema_v1.sql'), 'utf-8');
-const fresh = () => {
-  const db = new Database(':memory:');
-  db.exec(SCHEMA);
-  return db;
-};
+const fresh = freshDb;
 
 test('kindsForMany: 살아있는 상대는 집계, 완전삭제된 상대는 제외', () => {
   const db = fresh();

@@ -227,78 +227,12 @@ CREATE INDEX idx_postits_active ON postits(is_always_on_top) WHERE deleted_at IS
 
 
 -- ------------------------------------------------------------
--- 8. 통합검색 : FTS5 가상 테이블 (todos/events/memos/postits/inbox 전체)
+-- 8. 통합검색 : search_index (일반 테이블 + 초성 컬럼)
 -- ------------------------------------------------------------
-CREATE VIRTUAL TABLE search_index USING fts5(
-  entity_type,   -- 'todo' | 'event' | 'memo' | 'postit' | 'inbox'
-  entity_id UNINDEXED,
-  title,
-  content,
-  tokenize = 'unicode61'
-);
-
--- 각 테이블 변경 시 search_index를 동기화하는 트리거
-CREATE TRIGGER trg_todos_ai AFTER INSERT ON todos BEGIN
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  VALUES ('todo', new.id, new.title, coalesce(new.memo, ''));
-END;
--- 소프트삭제(deleted_at 설정)되면 검색 인덱스에서도 함께 빠지도록,
--- new.deleted_at이 NULL일 때만 다시 넣는다(복원 시엔 다시 NULL이 되므로 자동으로 재등록됨).
-CREATE TRIGGER trg_todos_au AFTER UPDATE ON todos BEGIN
-  DELETE FROM search_index WHERE entity_type='todo' AND entity_id = old.id;
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  SELECT 'todo', new.id, new.title, coalesce(new.memo, '') WHERE new.deleted_at IS NULL;
-END;
-CREATE TRIGGER trg_todos_ad AFTER DELETE ON todos BEGIN
-  DELETE FROM search_index WHERE entity_type='todo' AND entity_id = old.id;
-END;
-
-CREATE TRIGGER trg_events_ai AFTER INSERT ON events BEGIN
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  VALUES ('event', new.id, new.title, coalesce(new.memo, ''));
-END;
-CREATE TRIGGER trg_events_au AFTER UPDATE ON events BEGIN
-  DELETE FROM search_index WHERE entity_type='event' AND entity_id = old.id;
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  SELECT 'event', new.id, new.title, coalesce(new.memo, '') WHERE new.deleted_at IS NULL;
-END;
-CREATE TRIGGER trg_events_ad AFTER DELETE ON events BEGIN
-  DELETE FROM search_index WHERE entity_type='event' AND entity_id = old.id;
-END;
-
-CREATE TRIGGER trg_memos_ai AFTER INSERT ON memos BEGIN
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  VALUES ('memo', new.id, coalesce(new.title, ''), new.content);
-END;
-CREATE TRIGGER trg_memos_au AFTER UPDATE ON memos BEGIN
-  DELETE FROM search_index WHERE entity_type='memo' AND entity_id = old.id;
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  SELECT 'memo', new.id, coalesce(new.title, ''), new.content WHERE new.deleted_at IS NULL;
-END;
-CREATE TRIGGER trg_memos_ad AFTER DELETE ON memos BEGIN
-  DELETE FROM search_index WHERE entity_type='memo' AND entity_id = old.id;
-END;
-
-CREATE TRIGGER trg_postits_ai AFTER INSERT ON postits BEGIN
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  VALUES ('postit', new.id, coalesce(new.title, ''), new.content);
-END;
-CREATE TRIGGER trg_postits_au AFTER UPDATE ON postits BEGIN
-  DELETE FROM search_index WHERE entity_type='postit' AND entity_id = old.id;
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  SELECT 'postit', new.id, coalesce(new.title, ''), new.content WHERE new.deleted_at IS NULL;
-END;
-CREATE TRIGGER trg_postits_ad AFTER DELETE ON postits BEGIN
-  DELETE FROM search_index WHERE entity_type='postit' AND entity_id = old.id;
-END;
-
-CREATE TRIGGER trg_inbox_ai AFTER INSERT ON inbox_items BEGIN
-  INSERT INTO search_index(entity_type, entity_id, title, content)
-  VALUES ('inbox', new.id, '', new.content);
-END;
-CREATE TRIGGER trg_inbox_ad AFTER DELETE ON inbox_items BEGIN
-  DELETE FROM search_index WHERE entity_type='inbox' AND entity_id = old.id;
-END;
+-- 테이블/트리거/초기적재는 main/db.js의 rebuildSearchIndex()가 만든다 —
+-- chosung() SQL 함수(main/shared/hangul.js)에 의존하고, 기존 DB의 FTS5 → 일반 테이블
+-- 전환(마이그레이션 v3)과 동일한 정의를 한 곳에서 관리하기 위함.
+-- (신규 DB도 이 파일 적용 직후 db.js가 rebuildSearchIndex를 호출한다.)
 
 
 -- ------------------------------------------------------------

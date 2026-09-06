@@ -15,31 +15,11 @@ const PREVIEW_QUERIES = {
 // item_links의 타입 → 실제 테이블. 고아 연결(상대 항목이 완전삭제됨) 판별에 쓴다.
 const LINK_TABLES = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits', inbox: 'inbox_items' };
 
-// 사용자가 입력한 검색어를 FTS5 MATCH 문법에 안전하게 넣기 위한 변환.
-// 토큰마다 큰따옴표로 감싸고 뒤에 *를 붙여 "접두어 일치"로 검색한다(예: "회의"* "준" 준 처럼 앞부분만 쳐도 걸리게).
-// 큰따옴표로 감싸두면 FTS5 예약 문자(-, :, ( 등)가 섞여 들어와도 구문 에러 없이 안전하게 리터럴로 처리된다.
-function buildFtsPrefixQuery(raw) {
-  const tokens = (raw || '')
-    .replace(/"/g, '""')
-    .split(/\s+/)
-    .filter(Boolean);
-  if (!tokens.length) return null;
-  return tokens.map((t) => `"${t}"*`).join(' ');
-}
-
-// title이 비어있는 경우(memo/postit은 제목 없이 본문만 있을 수 있음) content로 대체하되,
-// 검색 인덱스의 content는 저장된 HTML 그대로일 수 있어 태그를 벗겨서 짧게 자른다(정밀 파싱은 렌더러 몫).
-function snippetLabel(row) {
-  const title = (row.title || '').trim();
-  if (title) return title;
-  const plain = (row.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return plain.slice(0, 60) || '(제목 없음)';
-}
-
 // 자동 관련 항목 발견 — 카테고리(태그)가 있는 4개 타입 전부(포스트잇도 category_id가 생겼음)
 const CATEGORY_TABLES = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits' };
 
-module.exports = function createLinksRepository(db) {
+// search: search.repository — "@검색"과 "비슷한 내용" 추천이 통합검색과 같은 매칭을 쓰게 한다.
+module.exports = function createLinksRepository(db, search) {
   return {
     // link는 { a_type, a_id, b_type, b_id } 형태로, 이미 정규화되어 들어온다고 가정 (정규화는 ipc 레이어 책임)
     insertIgnore(link) {
@@ -129,30 +109,9 @@ module.exports = function createLinksRepository(db) {
       db.prepare(`DELETE FROM item_links WHERE (a_type = ? AND a_id = ?) OR (b_type = ? AND b_id = ?)`).run(type, id, type, id);
     },
 
-    // "@검색" 빠른 연결용 — search_index(FTS5)를 그대로 활용해 todo/event/memo/postit 전체에서
-    // 접두어 일치로 후보를 찾는다. inbox는 연결 대상 타입이 아니므로 제외.
-    // (소프트 삭제된 항목은 search_index 트리거가 이미 빼놨으므로 여기서 따로 필터링할 필요 없음)
+    // "@검색" 빠른 연결용 — 통합검색과 동일한 매칭(search.candidates). inbox는 연결 대상 아님.
     searchCandidates(keyword, excludeType, excludeId) {
-      const ftsQuery = buildFtsPrefixQuery(keyword);
-      if (!ftsQuery) return [];
-      let rows;
-      try {
-        rows = db
-          .prepare(
-            `SELECT entity_type AS type, entity_id AS id, title, content
-             FROM search_index
-             WHERE search_index MATCH ? AND entity_type IN ('todo','event','memo','postit')
-             ORDER BY rank
-             LIMIT 20`
-          )
-          .all(ftsQuery);
-      } catch (e) {
-        return []; // 검색어에 FTS5가 못 씹는 문자가 섞여도(따옴표 escape 실패 등) 조용히 빈 결과만 반환
-      }
-      return rows
-        .filter((r) => !(excludeType && excludeId != null && r.type === excludeType && Number(r.id) === Number(excludeId)))
-        .slice(0, 8)
-        .map((r) => ({ type: r.type, id: r.id, label: snippetLabel(r) }));
+      return search.candidates(keyword, excludeType, excludeId);
     },
 
     // "연결을 관리하는 프로그램이 아니라 연결을 발견하게 해주는 프로그램" — 사용자가 직접 연결하지 않아도
@@ -210,33 +169,18 @@ module.exports = function createLinksRepository(db) {
         }
       }
 
-      // 2) 비슷한 내용 — 제목(또는 본문 대체 텍스트)에서 뽑은 키워드를 OR로 묶어 FTS 검색.
-      //    빠른연결(searchCandidates)은 사용자가 타이핑한 걸 좁혀가는 AND 검색이지만,
-      //    여긴 자동 추천이라 하나라도 겹치면 후보로 보이게 OR로 넓게 잡는다.
+      // 2) 비슷한 내용 — 제목(또는 본문 대체 텍스트)에서 뽑은 키워드로 넓게(OR) 훑는다.
       const plainText = (preview.label || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
       const tokens = [...new Set(plainText.split(' ').filter((t) => t.length >= 2))].slice(0, 8);
-      let similar = [];
-      if (tokens.length) {
-        const ftsQuery = tokens.map((t) => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
-        try {
-          const rows = db
-            .prepare(
-              `SELECT entity_type AS type, entity_id AS id, title, content
-               FROM search_index
-               WHERE search_index MATCH ? AND entity_type IN ('todo','event','memo','postit')
-               ORDER BY rank
-               LIMIT 20`
-            )
-            .all(ftsQuery);
-          similar = rows
-            .filter((r) => !alreadyLinked.has(`${r.type}:${r.id}`))
-            .filter((r) => !sameCategory.some((sc) => sc.type === r.type && sc.id === r.id))
-            .slice(0, 6)
-            .map((r) => ({ type: r.type, id: r.id, label: snippetLabel(r) }));
-        } catch (e) {
-          similar = [];
-        }
-      }
+      const excludeKeys = new Set([...alreadyLinked, ...sameCategory.map((sc) => `${sc.type}:${sc.id}`)]);
+      const similar = search
+        .similarTo(tokens, excludeKeys)
+        .slice(0, 6)
+        .map((r) => ({
+          type: r.type,
+          id: r.id,
+          label: (r.title || '').trim() || (r.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '(제목 없음)',
+        }));
 
       return { sameCategory, similar };
     },

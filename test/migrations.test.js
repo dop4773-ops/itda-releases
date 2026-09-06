@@ -2,16 +2,13 @@
 // better-sqlite3(네이티브)를 쓰므로 이 파일은 Electron의 Node ABI로 실행해야 한다 → `npm test` 참고.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('node:path');
-const fs = require('node:fs');
-const Database = require('better-sqlite3');
 const { runLightweightMigrations, SCHEMA_VERSION } = require('../main/db.js');
+const { freshDb, SCHEMA, Database, registerSqlFunctions } = require('../scripts/test-helpers');
 
-const SCHEMA = fs.readFileSync(path.join(__dirname, '..', 'schema', 'itda_schema_v1.sql'), 'utf-8');
-
-// 최신 schema로 만든 뒤 "마이그레이션으로 추가되는 것들"을 제거해서 구버전 DB를 흉내낸다.
+// 최신 상태 DB에서 "마이그레이션으로 추가되는 것들"을 되돌려 구버전 DB를 흉내낸다.
 function oldDb() {
   const db = new Database(':memory:');
+  registerSqlFunctions(db);
   db.exec(SCHEMA);
   db.exec('DROP INDEX IF EXISTS idx_todos_status');
   db.exec('DROP INDEX IF EXISTS idx_memos_folder');
@@ -23,6 +20,9 @@ function oldDb() {
   db.exec('ALTER TABLE memos DROP COLUMN folder_id');
   db.exec('ALTER TABLE memos DROP COLUMN is_locked');
   db.exec('ALTER TABLE postits DROP COLUMN category_id');
+  // v3 이전: search_index가 FTS5였음 — 옛 형태로 되돌려 v3 마이그레이션이 실제로 돌게
+  db.exec(`DROP TABLE IF EXISTS search_index`);
+  db.exec(`CREATE VIRTUAL TABLE search_index USING fts5(entity_type, entity_id UNINDEXED, title, content, tokenize='unicode61')`);
   db.pragma('user_version = 0');
   return db;
 }
@@ -56,12 +56,22 @@ test('user_version 게이트: 최신이면 두 번째 호출은 아무것도 안
   db.close();
 });
 
-test('신규(최신 schema) DB는 스탬프만 있으면 마이그레이션을 건너뜀', () => {
-  const db = new Database(':memory:');
-  db.exec(SCHEMA);
-  db.pragma(`user_version = ${SCHEMA_VERSION}`);
+test('신규(최신) DB는 스탬프가 있으면 마이그레이션을 건너뜀', () => {
+  const db = freshDb();
   runLightweightMigrations(db);
   assert.equal(version(db), SCHEMA_VERSION);
+  db.close();
+});
+
+test('v3: 구버전 FTS5 search_index → 일반 테이블(chosung 포함)로 재구축', () => {
+  const db = oldDb();
+  db.prepare("INSERT INTO todos (title) VALUES ('김부수 평가 메모')").run();
+  runLightweightMigrations(db);
+  const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='search_index'").get().sql;
+  assert.ok(!sql.includes('fts5'), '일반 테이블로 바뀜');
+  assert.ok(hasCol(db, 'search_index', 'chosung'));
+  const row = db.prepare("SELECT title, chosung FROM search_index WHERE entity_type='todo'").get();
+  assert.equal(row.chosung, 'ㄱㅂㅅ ㅍㄱ ㅁㅁ', '초성 채워짐');
   db.close();
 });
 

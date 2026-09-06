@@ -346,9 +346,22 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 | **6** ✅ | 시작/라우트 타이밍 계측: `main/perf.js` + `renderer/shared/perf.js`. 콘솔 전용·기본 꺼짐(개발 모드 자동 / 패키지 빌드는 `ITDA_PERF=1`). main은 initDb·IPC등록·createWindow·독립모듈·renderer로드완료, renderer는 스타일적용·initShell·라우트별 mount ms. 최적화는 이 수치 본 뒤 별도 — v2.58.30 | `main.js`, `app.ipc.js`, `preload.js`, `router.js` | 낮음 |
 | **7** ✅ | 위젯 오류 격리: mount-time 로드는 이미 `Promise.allSettled`(격리 OK). `guardWidget(name, cardId, fn)` 추가 — 로더가 던지면 그 카드 안에만 "다시 시도" 인라인 오류(다른 위젯·대시보드 전체는 정상). mount·라이브새로고침·T키 전부 경유. 꾸미기 블록 렌더 루프 개별 try. `widget-loader.js` 동적 import에 `.catch`. CDP로 강제 실패 시 격리+복구 확인 — v2.58.31 | `dashboard.js`, `widget-loader.js`, `styles.css` | 낮음 |
 | **8** ✅ | debounce 언마운트 후 null 참조 **근본 해결**: `debounce`가 `.cancel()` 붙은 함수 반환 → memo/inbox/tags/todo/postit/calendar 6개 뷰 cleanup에서 취소. `links-ui`는 `load()` 첫 줄 `container.isConnected` 가드. KNOWN_ISSUES [해결됨]으로 갱신 — v2.58.32 | `ui-utils.js` + 7개 파일 | 낮음 |
-| — | (사용자가 추후) 검색 랭킹/초성/정규화/필터/일치이유 | — | — |
 | — | (추후) 단축키 통합 레지스트리 (P5) | — | — |
 | — | (사용자 계정 필요) 공용 OAuth 클라이언트 + 동의화면 게시 | — | — |
 
 각 파트는 CLAUDE.md "세션당 한 작업 티어" 원칙에 따라 세션 단위로 진행하고, 끝날 때마다
 변경 파일 / 내용 / 이유 / 테스트 결과 / 남은 문제를 요약한다.
+
+---
+
+# 검색 재편 (2026-09-06~, 목업 기반) — 엔진 하나 + 표면 여러 개
+
+| # | 내용 | 스키마 | 상태 |
+|---|---|---|---|
+| **S1** ✅ | **엔진 코어**: `search_index`를 FTS5 → 일반 테이블(LIKE 스캔) + `chosung` 컬럼으로 재구축(마이그레이션 v3). `search.repository.query()` = 정규화(공백/꼬리말) → 랭킹(제목정확>시작>포함>초성>본문) + `matchedIn`(일치이유). 한글 부분일치("부수"→"김부수")·띄어쓰기무관("김 부수"=="김부수")·초성("ㄱㅂㅅ") 지원. `chosung()`는 SQLite 커스텀 함수로 트리거에서도 사용. `links.searchCandidates`/`discoverRelated 비슷한내용`도 같은 엔진 사용(FTS MATCH 제거). `#/search`에 "제목/초성/본문 일치" 배지. — v2.58.33 | **마이그레이션 v3** | 완료 |
+| S2 | "관련 항목" 섹션 (상위 매치의 links/태그) — `{direct, related}` | 없음 | |
+| S3 | 필터 popover (기간/상태, 클라 필터) + 종류 탭 | 없음 | |
+| S4 | 최근 검색/최근 항목 시작화면 + 결과 바로가기 액션(convertItem 재사용) | `app_settings` JSON | |
+| S5 | 커맨드팔레트를 같은 엔진 위로 + "새로 만들기" 명령 | 없음 | |
+
+**보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
