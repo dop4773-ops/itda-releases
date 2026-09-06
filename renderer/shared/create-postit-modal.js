@@ -40,7 +40,8 @@ function ensureModal() {
  * @param {{title?: string, memo?: string}} prefill
  * @returns {Promise<object|null>} 등록된 포스트잇(postits:add 결과), 취소하면 null
  */
-export function openCreatePostitModal({ title = '', memo = '' } = {}) {
+// link / fromInbox: 전환·Inbox 캡처 시 "포스트잇 생성 + 연결/처리표시"를 서버에서 한 트랜잭션으로.
+export function openCreatePostitModal({ title = '', memo = '', link = null, fromInbox = null } = {}) {
   const el = ensureModal();
   const $ = (id) => el.querySelector('#' + id);
 
@@ -76,6 +77,8 @@ export function openCreatePostitModal({ title = '', memo = '' } = {}) {
           title: titleVal || null,
           content: plainTextToHtml(contentVal || titleVal),
           categoryId,
+          link,
+          fromInbox,
         });
         toast('포스트잇으로 등록했어요');
         finish(newPostit);

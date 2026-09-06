@@ -1,9 +1,9 @@
-// main/ipc/links.ipc.js canonicalizeLink — (a,b)와 (b,a)를 같은 정규형으로 접어 중복 연결 방지
+// main/ipc/_shared.js canonicalizeLink — (a,b)와 (b,a)를 같은 정규형으로 접어 중복 연결 방지
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { canonicalizeLink } = require('../main/ipc/links.ipc');
+const { canonicalizeLink } = require('../main/ipc/_shared');
 
-// VALID_TYPES 순서: ['todo','event','memo','postit','inbox'] — 타입 랭크가 낮은 쪽이 a
+// LINK_TYPES 순서: ['todo','event','memo','postit','inbox'] — 타입 랭크가 낮은 쪽이 a
 test('타입이 다르면 랭크 낮은 쪽이 a (방향 무관 동일 결과)', () => {
   const fwd = canonicalizeLink('memo', 5, 'todo', 9);
   const rev = canonicalizeLink('todo', 9, 'memo', 5);

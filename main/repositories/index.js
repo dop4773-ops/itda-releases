@@ -16,6 +16,10 @@ const createMemoFoldersRepository = require('./memoFolders.repository');
 // ipc/index.js에서 한 번 호출해서 각 ipc 등록 함수에 나눠준다.
 function createRepositories(db) {
   return {
+    // 여러 repository에 걸친 쓰기를 원자적으로 묶을 때 — better-sqlite3 db.transaction 그대로.
+    // fn을 감싼 함수를 돌려주므로 repos.transaction(fn)() 로 호출한다. 중첩되면 savepoint로 처리됨.
+    transaction: (fn) => db.transaction(fn),
+
     categories: createCategoriesRepository(db),
     todos: createTodosRepository(db),
     events: createEventsRepository(db),

@@ -50,7 +50,9 @@ function ensureModal() {
  * @param {{title?: string, memo?: string, dueDate?: string}} prefill
  * @returns {Promise<object|null>} 등록된 할 일(todos:add 결과), 취소하면 null
  */
-export function openCreateTodoModal({ title = '', memo = '', dueDate = null } = {}) {
+// link / fromInbox: 다른 항목에서 전환하거나 Inbox에서 캡처할 때 — "Todo 생성 + 연결/처리표시"가
+// 서버에서 한 트랜잭션으로 처리되도록 todos:add 페이로드에 그대로 실어 보낸다.
+export function openCreateTodoModal({ title = '', memo = '', dueDate = null, link = null, fromInbox = null } = {}) {
   const el = ensureModal();
   const $ = (id) => el.querySelector('#' + id);
 
@@ -84,7 +86,7 @@ export function openCreateTodoModal({ title = '', memo = '', dueDate = null } = 
         const dueDateVal = $('ctm-due').value || null;
         const priority = Number($('ctm-priority').value);
         const memoVal = $('ctm-memo').value.trim() || null;
-        const newTodo = await window.itda.todos.add({ title: titleVal, categoryId, dueDate: dueDateVal, priority, memo: memoVal });
+        const newTodo = await window.itda.todos.add({ title: titleVal, categoryId, dueDate: dueDateVal, priority, memo: memoVal, link, fromInbox });
         toast('Todo로 등록했어요');
         finish(newTodo);
       } catch (e) {

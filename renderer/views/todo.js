@@ -580,14 +580,19 @@ export async function mount(root) {
     });
 
     $('tp-toEvent').addEventListener('click', async () => {
-      const newEvent = await openCreateEventModal({ title: todo.title, memo: todo.memo || '', dueDate: todo.due_date || null });
+      // 일정 생성 + Todo와의 연결을 서버에서 한 트랜잭션으로 처리(link 옵션)
+      const newEvent = await openCreateEventModal({
+        title: todo.title,
+        memo: todo.memo || '',
+        dueDate: todo.due_date || null,
+        link: { type: 'todo', id: todo.id },
+      });
       if (!newEvent) return; // 취소
       try {
-        await window.itda.links.add({ aType: 'todo', aId: todo.id, bType: 'event', bId: newEvent.id });
         const fresh = await window.itda.todos.get(todo.id);
         renderPanel(fresh); // 연결된 항목 목록에 방금 만든 일정이 바로 보이도록 다시 그림
       } catch (e) {
-        errorToast(e, '일정과 연결하지 못했어요');
+        errorToast(e, '목록을 새로고침하지 못했어요');
       }
     });
 

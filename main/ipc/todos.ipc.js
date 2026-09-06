@@ -1,4 +1,4 @@
-const { assertNonEmpty } = require('./_shared');
+const { assertNonEmpty, linkNewItem } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { generateOccurrenceDates } = require('../shared/recurrence');
 const { scheduleContentSync } = require('../link-sync');
@@ -22,15 +22,26 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     return todo;
   });
 
-  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule }) => {
+  // link/fromInbox가 오면(다른 항목에서 전환·Inbox 캡처) "항목 생성 + 연결/처리표시"를 한 트랜잭션으로 묶는다.
+  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, link, fromInbox }) => {
     assertNonEmpty(title, '할 일 제목을 입력해주세요.');
     if (recurrenceRule) assertNonEmpty(dueDate, '반복하려면 마감일이 필요해요.');
-    const result = todos.insert({ title: title.trim(), memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule });
-    if (recurrenceRule) {
-      const occurrences = generateOccurrenceDates(dueDate, recurrenceRule);
-      if (occurrences.length) todos.insertSeries(todos.getById(result.id), occurrences);
-    }
+    const create = () => {
+      const result = todos.insert({
+        title: title.trim(), memo, categoryId, dueDate, dueTime, priority,
+        sourceInboxId: sourceInboxId ?? fromInbox, recurrenceRule,
+      });
+      if (recurrenceRule) {
+        const occurrences = generateOccurrenceDates(dueDate, recurrenceRule);
+        if (occurrences.length) todos.insertSeries(todos.getById(result.id), occurrences);
+      }
+      linkNewItem(repos, 'todo', result.id, { link, fromInbox });
+      return result;
+    };
+    const result = link || fromInbox != null ? repos.transaction(create)() : create();
     broadcastDataChanged('todo', result.id);
+    if (link) broadcastDataChanged('link');
+    if (fromInbox != null) broadcastDataChanged('inbox', Number(fromInbox));
     return result;
   });
 

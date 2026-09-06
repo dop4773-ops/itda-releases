@@ -1,4 +1,4 @@
-const { assertNonEmpty } = require('./_shared');
+const { assertNonEmpty, linkNewItem } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { scheduleContentSync } = require('../link-sync');
 
@@ -13,10 +13,17 @@ module.exports = function registerPostitsIpc(ipcMain, repos, { closeWidgetIfOpen
     return postits.getById(id);
   });
 
-  ipcMain.handle('postits:add', (event, { title, content, colorHex, categoryId, posX, posY, width, height }) => {
+  ipcMain.handle('postits:add', (event, { title, content, colorHex, categoryId, posX, posY, width, height, link, fromInbox }) => {
     assertNonEmpty(content, '포스트잇 내용을 입력해주세요.');
-    const result = postits.insert({ title, content: content.trim(), colorHex, categoryId, posX, posY, width, height });
+    const create = () => {
+      const result = postits.insert({ title, content: content.trim(), colorHex, categoryId, posX, posY, width, height });
+      linkNewItem(repos, 'postit', result.id, { link, fromInbox }); // 전환/캡처면 연결·처리표시까지 한 트랜잭션
+      return result;
+    };
+    const result = link || fromInbox != null ? repos.transaction(create)() : create();
     broadcastDataChanged('postit', result.id);
+    if (link) broadcastDataChanged('link');
+    if (fromInbox != null) broadcastDataChanged('inbox', Number(fromInbox));
     return result;
   });
 

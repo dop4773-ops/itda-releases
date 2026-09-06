@@ -39,7 +39,8 @@ function ensureModal() {
  * @param {{title?: string, memo?: string}} prefill
  * @returns {Promise<object|null>} 등록된 메모(memos:add 결과), 취소하면 null
  */
-export function openCreateMemoModal({ title = '', memo = '' } = {}) {
+// link / fromInbox: 전환·Inbox 캡처 시 "메모 생성 + 연결/처리표시"를 서버에서 한 트랜잭션으로.
+export function openCreateMemoModal({ title = '', memo = '', link = null, fromInbox = null } = {}) {
   const el = ensureModal();
   const $ = (id) => el.querySelector('#' + id);
 
@@ -71,7 +72,7 @@ export function openCreateMemoModal({ title = '', memo = '' } = {}) {
       $('cmm-submit').disabled = true;
       try {
         const categoryId = $('cmm-category').value ? Number($('cmm-category').value) : null;
-        const newMemo = await window.itda.memos.add({ title: titleVal || null, content: plainTextToHtml(contentVal), categoryId });
+        const newMemo = await window.itda.memos.add({ title: titleVal || null, content: plainTextToHtml(contentVal), categoryId, link, fromInbox });
         toast('메모로 등록했어요');
         finish(newMemo);
       } catch (e) {

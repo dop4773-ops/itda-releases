@@ -55,7 +55,8 @@ function ensureModal() {
  * @param {{title?: string, memo?: string, dueDate?: string}} prefill - dueDate는 본문에서 날짜를 못 찾았을 때의 대체값
  * @returns {Promise<object|null>} 등록된 일정(events:add 결과), 취소하면 null
  */
-export function openCreateEventModal({ title = '', memo = '', dueDate = null } = {}) {
+// link / fromInbox: 전환·Inbox 캡처 시 "일정 생성 + 연결/처리표시"를 서버에서 한 트랜잭션으로.
+export function openCreateEventModal({ title = '', memo = '', dueDate = null, link = null, fromInbox = null } = {}) {
   const el = ensureModal();
   const $ = (id) => el.querySelector('#' + id);
 
@@ -105,6 +106,8 @@ export function openCreateEventModal({ title = '', memo = '', dueDate = null } =
           endAt,
           allDay: isAllDay,
           memo: memoVal,
+          link,
+          fromInbox,
         });
         toast('일정으로 등록했어요');
         finish(newEvent);

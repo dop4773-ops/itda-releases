@@ -1,4 +1,4 @@
-const { assertNonEmpty } = require('./_shared');
+const { assertNonEmpty, linkNewItem } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { scheduleContentSync } = require('../link-sync');
 
@@ -19,9 +19,16 @@ module.exports = function registerMemosIpc(ipcMain, repos) {
 
   // 애플 메모장처럼 "빈 메모"로 시작할 수 있어야 하므로 content를 필수로 강제하지 않는다
   // (완전히 빈 채로 두면 사용자가 나중에 지우거나 계속 비워둘 수도 있음 — 정상적인 사용 흐름)
-  ipcMain.handle('memos:add', (event, { title, content, categoryId, colorHex, folderId }) => {
-    const result = memos.insert({ title, content: content ?? '', categoryId, colorHex, folderId });
+  ipcMain.handle('memos:add', (event, { title, content, categoryId, colorHex, folderId, link, fromInbox }) => {
+    const create = () => {
+      const result = memos.insert({ title, content: content ?? '', categoryId, colorHex, folderId });
+      linkNewItem(repos, 'memo', result.id, { link, fromInbox }); // 전환/캡처면 연결·처리표시까지 한 트랜잭션
+      return result;
+    };
+    const result = link || fromInbox != null ? repos.transaction(create)() : create();
     broadcastDataChanged('memo', result.id);
+    if (link) broadcastDataChanged('link');
+    if (fromInbox != null) broadcastDataChanged('inbox', Number(fromInbox));
     return result;
   });
 

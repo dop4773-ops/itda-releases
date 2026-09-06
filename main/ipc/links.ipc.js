@@ -1,27 +1,5 @@
-const { assertNonEmpty } = require('./_shared');
+const { assertNonEmpty, assertLinkType, canonicalizeLink } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
-
-const VALID_TYPES = ['todo', 'event', 'memo', 'postit', 'inbox'];
-
-function assertValidType(type) {
-  if (!VALID_TYPES.includes(type)) throw new Error(`연결할 수 없는 항목 타입입니다: ${type}`);
-}
-
-// (a,b)와 (b,a)가 별개 행으로 중복 저장되는 걸 막기 위한 정규화.
-// 타입 순서를 고정(VALID_TYPES 인덱스)하고, 같은 타입이면 id로 비교해서 항상 "작은 쪽"을 a로 둔다.
-function canonicalizeLink(aType, aId, bType, bId) {
-  assertValidType(aType);
-  assertValidType(bType);
-  if (aType === bType && Number(aId) === Number(bId)) {
-    throw new Error('같은 항목끼리는 연결할 수 없습니다.');
-  }
-  const aRank = VALID_TYPES.indexOf(aType);
-  const bRank = VALID_TYPES.indexOf(bType);
-  const aFirst = aRank !== bRank ? aRank < bRank : Number(aId) < Number(bId);
-  return aFirst
-    ? { a_type: aType, a_id: Number(aId), b_type: bType, b_id: Number(bId) }
-    : { a_type: bType, a_id: Number(bId), b_type: aType, b_id: Number(aId) };
-}
 
 module.exports = function registerLinksIpc(ipcMain, repos) {
   const { links } = repos;
@@ -45,7 +23,7 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
 
   // type/id를 가진 항목 기준으로, 연결된 "상대방" 목록을 미리보기 정보와 함께 반환한다.
   ipcMain.handle('links:listFor', (event, { type, id }) => {
-    assertValidType(type);
+    assertLinkType(type);
     const rows = links.listRawFor(type, id);
 
     return rows
@@ -62,7 +40,7 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
 
   // 목록 화면 배지용 — 여러 항목의 "연결된 종류"를 한 번의 IPC/쿼리로. { id: ['todo','event'] }
   ipcMain.handle('links:kindsFor', (event, { type, ids }) => {
-    assertValidType(type);
+    assertLinkType(type);
     const map = links.kindsForMany(type, (ids || []).map(Number));
     return Object.fromEntries(Object.entries(map).map(([k, set]) => [k, [...set]]));
   });
@@ -75,7 +53,7 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
 
   // 자동 관련 항목 발견 — 사용자가 연결을 직접 지정하지 않아도 같은 카테고리/비슷한 내용의 항목을 추천한다.
   ipcMain.handle('links:discover', (event, { type, id }) => {
-    assertValidType(type);
+    assertLinkType(type);
     return links.discoverRelated(type, Number(id));
   });
 
@@ -86,6 +64,3 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
 
   return { deleteLinksFor };
 };
-
-// 순수 함수 — registerLinksIpc와 무관하게 단독 검증할 수 있게 노출(test/links.test.js)
-module.exports.canonicalizeLink = canonicalizeLink;

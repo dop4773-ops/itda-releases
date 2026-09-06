@@ -70,15 +70,13 @@ export async function convertItem(item, target) {
     errorToast(e, '내용을 불러오지 못했어요');
     return;
   }
-  const created = await target.open({ title: source.title, memo: source.memo, dueDate: source.dueDate });
+  // "항목 생성 + 연결/처리표시"를 서버에서 한 트랜잭션으로 — 중간에 실패해도 고아 항목이 안 남는다.
+  // Inbox는 소프트삭제 대상이 아니라 자체 "처리됨" 상태로 관리되므로 링크 대신 fromInbox(markProcessed).
+  const openOpts = { title: source.title, memo: source.memo, dueDate: source.dueDate };
+  if (item.type === 'inbox') openOpts.fromInbox = item.id;
+  else openOpts.link = { type: item.type, id: item.id };
+  const created = await target.open(openOpts);
   if (!created) return; // 취소
-  try {
-    // Inbox는 소프트 삭제 대상이 아니라 자체 "처리됨" 상태로 관리되므로 링크 대신 markProcessed를 쓴다.
-    if (item.type === 'inbox') await window.itda.inbox.markProcessed({ id: item.id, type: target.type, refId: created.id });
-    else await window.itda.links.add({ aType: item.type, aId: item.id, bType: target.type, bId: created.id });
-  } catch (e) {
-    errorToast(e, '전환한 항목과 연결하지 못했어요');
-  }
   return created;
 }
 

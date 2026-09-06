@@ -1,4 +1,4 @@
-const { assertNonEmpty } = require('./_shared');
+const { assertNonEmpty, linkNewItem } = require('./_shared');
 const { broadcastDataChanged } = require('../broadcast');
 const { generateOccurrenceDates } = require('../shared/recurrence');
 const { scheduleContentSync } = require('../link-sync');
@@ -43,33 +43,40 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
 
   ipcMain.handle(
     'events:add',
-    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo }) => {
+    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo, link, fromInbox }) => {
       assertNonEmpty(title, '일정 제목을 입력해주세요.');
       assertNonEmpty(startAt, '시작 시각이 필요합니다.');
 
       const isAllDay = !!allDay;
       const finalEndAt = resolveEndAt(startAt, endAt, isAllDay);
 
-      const result = events.insert({
-        title: title.trim(),
-        categoryId,
-        location,
-        startAt,
-        endAt: finalEndAt,
-        allDay: isAllDay,
-        recurrenceRule,
-        memo,
-      });
-
-      // 반복 지정 시: 방금 만든 걸 부모로 삼아 앞으로 180일치 발생일을 실제 행으로 미리 채워둔다
-      if (recurrenceRule) {
-        const occurrences = generateOccurrenceDates(startAt, recurrenceRule);
-        if (occurrences.length) {
-          events.insertSeries(events.getById(result.id), occurrences);
+      const create = () => {
+        const result = events.insert({
+          title: title.trim(),
+          categoryId,
+          location,
+          startAt,
+          endAt: finalEndAt,
+          allDay: isAllDay,
+          recurrenceRule,
+          memo,
+        });
+        // 반복 지정 시: 방금 만든 걸 부모로 삼아 앞으로 180일치 발생일을 실제 행으로 미리 채워둔다
+        if (recurrenceRule) {
+          const occurrences = generateOccurrenceDates(startAt, recurrenceRule);
+          if (occurrences.length) {
+            events.insertSeries(events.getById(result.id), occurrences);
+          }
         }
-      }
+        // 다른 항목에서 전환·Inbox 캡처로 왔으면 "항목 생성 + 연결/처리표시"를 한 트랜잭션으로
+        linkNewItem(repos, 'event', result.id, { link, fromInbox });
+        return result;
+      };
+      const result = link || fromInbox != null ? repos.transaction(create)() : create();
 
       broadcastDataChanged('event', result.id);
+      if (link) broadcastDataChanged('link');
+      if (fromInbox != null) broadcastDataChanged('inbox', Number(fromInbox));
       return result;
     }
   );

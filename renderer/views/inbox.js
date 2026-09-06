@@ -99,8 +99,8 @@ export async function mount(root) {
         const id = Number(btn.dataset.id);
         const content = btn.dataset.content;
         try {
-          const newTodo = await window.itda.todos.add({ title: content, sourceInboxId: id });
-          await window.itda.inbox.markProcessed({ id, type: 'todo', refId: newTodo.id });
+          // Todo 생성 + Inbox 처리표시를 서버에서 한 트랜잭션으로(fromInbox)
+          await window.itda.todos.add({ title: content, fromInbox: id });
           toast('Todo로 전환했어요');
           load();
         } catch (e) {
@@ -114,14 +114,10 @@ export async function mount(root) {
       btn.addEventListener('click', async () => {
         const id = Number(btn.dataset.id);
         const content = btn.dataset.content;
-        const newEvent = await openCreateEventModal({ title: content });
+        // 일정 생성 + Inbox 처리표시를 서버에서 한 트랜잭션으로(fromInbox)
+        const newEvent = await openCreateEventModal({ title: content, fromInbox: id });
         if (!newEvent) return; // 취소
-        try {
-          await window.itda.inbox.markProcessed({ id, type: 'event', refId: newEvent.id });
-          load();
-        } catch (e) {
-          errorToast(e, 'Inbox 항목을 처리 표시하지 못했어요');
-        }
+        load();
       });
     });
 
