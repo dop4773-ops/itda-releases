@@ -1058,10 +1058,15 @@ export async function mount(root) {
   }
 
   // initWidgetGrid가 초기 위젯으로 인식하도록 그 호출 전에 블록 DOM을 먼저 그리드에 넣는다.
+  // 블록 하나가 깨져도(config 손상 등) 나머지 블록·위젯·그리드 초기화까지 막지 않도록 개별 try.
   for (const b of blocks) {
-    const el = renderBlockElement(b);
-    $('d-widgetGrid').appendChild(el);
-    blockEls.set(b.id, el);
+    try {
+      const el = renderBlockElement(b);
+      $('d-widgetGrid').appendChild(el);
+      blockEls.set(b.id, el);
+    } catch (e) {
+      console.error(`[dashboard] 꾸미기 블록(${b.type}) 렌더 실패`, e);
+    }
   }
 
   const widgetGrid = await initWidgetGrid();
@@ -2695,18 +2700,37 @@ export async function mount(root) {
   const layoutEl = $('d-layout');
   if (layoutEl) requestAnimationFrame(() => { layoutEl.style.opacity = '1'; });
 
+  // 위젯 하나가 던져도 나머지 위젯/대시보드 전체는 살아있게 — 실패한 위젯만 인라인 오류+다시시도.
+  // (loadFn 자체가 IPC 실패는 이미 errorToast로 처리하지만, 렌더 코드에서 동기 throw가 나면
+  //  Promise.allSettled가 조용히 삼켜서 스켈레톤만 남던 걸 눈에 보이게 만든다.)
+  function guardWidget(name, cardId, fn) {
+    const card = cardId ? document.getElementById(`d-card-${cardId}`) : null;
+    card?.querySelector('.dash-widget-error')?.remove(); // 재시도/새로고침 성공 시 이전 오류 표시 정리
+    return Promise.resolve().then(fn).catch((e) => {
+      console.error(`[dashboard] '${name}' 위젯 로드 실패`, e);
+      if (!card || card.querySelector('.dash-widget-error')) return;
+      const div = document.createElement('div');
+      div.className = 'dash-widget-error';
+      div.innerHTML = `이 위젯을 불러오지 못했어요 <button class="dash-widget-retry" data-retry>다시 시도</button>`;
+      div.querySelector('[data-retry]').addEventListener('click', () => guardWidget(name, cardId, fn));
+      const head = card.querySelector('.panel-head');
+      if (head) head.insertAdjacentElement('afterend', div);
+      else card.prepend(div);
+    });
+  }
+
   await Promise.allSettled([
-    loadWorkCenter(),
-    loadTodos(),
-    loadEvents(),
-    loadMemos(),
-    loadPinnedPostits(),
-    loadSideCalendar(),
-    loadSidePostits(),
-    loadNotifCard(),
-    loadLinkedRow(),
-    loadRecentActivity(),
-    loadWeekSummary(),
+    guardWidget('업무센터', 'workCenter', loadWorkCenter),
+    guardWidget('오늘 할 일', 'todo', loadTodos),
+    guardWidget('오늘 일정', 'event', loadEvents),
+    guardWidget('최근 메모', 'memo', loadMemos),
+    guardWidget('고정 포스트잇', 'postit', loadPinnedPostits),
+    guardWidget('사이드 캘린더', null, loadSideCalendar),
+    guardWidget('사이드 포스트잇', null, loadSidePostits),
+    guardWidget('알림 카드', null, loadNotifCard),
+    guardWidget('연결된 업무', 'linked', loadLinkedRow),
+    guardWidget('최근 활동', 'activity', loadRecentActivity),
+    guardWidget('이번 주 요약', 'weekSummary', loadWeekSummary),
   ]);
 
   // 다른 창(위젯 등)에서 데이터가 바뀌면 대시보드의 관련 카드만 골라서 새로고침한다.
@@ -2724,18 +2748,18 @@ export async function mount(root) {
       if (unmounted) return;
       const entities = pendingEntities;
       pendingEntities = new Set();
-      if (entities.has('todo')) loadTodos();
-      if (entities.has('event')) loadEvents();
-      if (entities.has('todo') || entities.has('event')) loadWorkCenter();
-      if (entities.has('memo')) loadMemos();
+      if (entities.has('todo')) guardWidget('오늘 할 일', 'todo', loadTodos);
+      if (entities.has('event')) guardWidget('오늘 일정', 'event', loadEvents);
+      if (entities.has('todo') || entities.has('event')) guardWidget('업무센터', 'workCenter', loadWorkCenter);
+      if (entities.has('memo')) guardWidget('최근 메모', 'memo', loadMemos);
       if (entities.has('postit')) {
-        loadPinnedPostits();
-        loadSidePostits();
+        guardWidget('고정 포스트잇', 'postit', loadPinnedPostits);
+        guardWidget('사이드 포스트잇', null, loadSidePostits);
       }
-      if (entities.has('link')) loadLinkedRow();
+      if (entities.has('link')) guardWidget('연결된 업무', 'linked', loadLinkedRow);
       if (['todo', 'event', 'memo', 'postit', 'inbox'].some((t) => entities.has(t))) {
-        loadRecentActivity();
-        loadNotifCard();
+        guardWidget('최근 활동', 'activity', loadRecentActivity);
+        guardWidget('알림 카드', null, loadNotifCard);
       }
     }, 200);
   };
@@ -2767,7 +2791,11 @@ export async function mount(root) {
         viewDate = new Date();
         viewDate.setHours(0, 0, 0, 0);
         refreshDateLabel();
-        Promise.allSettled([loadTodos(), loadEvents(), loadWorkCenter()]);
+        Promise.allSettled([
+          guardWidget('오늘 할 일', 'todo', loadTodos),
+          guardWidget('오늘 일정', 'event', loadEvents),
+          guardWidget('업무센터', 'workCenter', loadWorkCenter),
+        ]);
         break;
       case 'ArrowLeft': e.preventDefault(); stepDate(-1); break;
       case 'ArrowRight': e.preventDefault(); stepDate(1); break;

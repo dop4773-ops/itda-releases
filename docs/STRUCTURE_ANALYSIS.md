@@ -344,7 +344,7 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 | **4** ✅ | 교차 엔티티 원자성: `*:add`에 `link`/`fromInbox` 옵션 → "항목 생성 + 연결/Inbox 처리표시"를 `repos.transaction` 한 방에. 전환(우클릭·Todo→일정)·Inbox 캡처가 이제 별도 IPC 2회가 아님 — v2.58.28 | `_shared.js`, 4개 add ipc, 4개 모달, context-menu/todo/inbox | 중간 |
 | **5** ✅ | 고아 연결 정리: `kindsForMany`가 완전삭제된 상대는 배지 집계에서 제외(종류당 1쿼리로 존재 확인, 소프트삭제는 유지). 마이그레이션 v2 = 기존 고아 `item_links` 행 1회 청소. 하드삭제 경로(`purgeOne`/`inbox:delete`)는 이미 `deleteLinksFor` 호출 중 — v2.58.29 | `links.repository.js`, `db.js` | 낮음 |
 | **6** ✅ | 시작/라우트 타이밍 계측: `main/perf.js` + `renderer/shared/perf.js`. 콘솔 전용·기본 꺼짐(개발 모드 자동 / 패키지 빌드는 `ITDA_PERF=1`). main은 initDb·IPC등록·createWindow·독립모듈·renderer로드완료, renderer는 스타일적용·initShell·라우트별 mount ms. 최적화는 이 수치 본 뒤 별도 — v2.58.30 | `main.js`, `app.ipc.js`, `preload.js`, `router.js` | 낮음 |
-| 7 | 위젯 오류 격리 감사: 위젯 1개 throw ≠ 대시보드 사망 (`Promise.allSettled` 전수 + 위젯별 try) | `dashboard.js`, `widget-loader.js` | 낮음 |
+| **7** ✅ | 위젯 오류 격리: mount-time 로드는 이미 `Promise.allSettled`(격리 OK). `guardWidget(name, cardId, fn)` 추가 — 로더가 던지면 그 카드 안에만 "다시 시도" 인라인 오류(다른 위젯·대시보드 전체는 정상). mount·라이브새로고침·T키 전부 경유. 꾸미기 블록 렌더 루프 개별 try. `widget-loader.js` 동적 import에 `.catch`. CDP로 강제 실패 시 격리+복구 확인 — v2.58.31 | `dashboard.js`, `widget-loader.js`, `styles.css` | 낮음 |
 | 8 | debounce load() null 가드 스윕 (memo/inbox/tags) | 3개 뷰 | 낮음 |
 | — | (사용자가 추후) 검색 랭킹/초성/정규화/필터/일치이유 | — | — |
 | — | (추후) 단축키 통합 레지스트리 (P5) | — | — |

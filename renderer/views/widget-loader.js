@@ -19,7 +19,13 @@ const type = new URLSearchParams(location.search).get('type');
 const loader = REGISTRY[type];
 
 if (loader) {
-  loader();
+  // 위젯 모듈 로드/초기화가 실패해도 빈 창으로 두지 않고 최소한 이유를 보여준다(error-report.js가 로그도 남김).
+  Promise.resolve()
+    .then(loader)
+    .catch((e) => {
+      console.error(`[widget] '${type}' 로드 실패`, e);
+      document.getElementById('widget-root').innerHTML = `<div class="widget-error">위젯을 불러오지 못했어요</div>`;
+    });
 } else {
   document.getElementById('widget-root').innerHTML = `<div class="widget-error">알 수 없는 위젯이에요</div>`;
 }

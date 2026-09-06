@@ -1329,6 +1329,10 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
   border-color:color-mix(in srgb, var(--border) calc(var(--dash-op, 1) * 100%), transparent);
 }
 .dash-widget.panel.dragging{opacity:.95;}
+/* 위젯 하나가 로드에 실패했을 때 그 카드 안에만 뜨는 안내 — 나머지 위젯은 정상 동작 */
+.dash-widget-error{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 2px;padding:7px 10px;font-size:11.5px;color:var(--danger);background:var(--danger-soft);border:1px solid var(--danger-border);border-radius:var(--radius-sm);}
+.dash-widget-retry{font-size:11px;font-weight:600;color:var(--danger);background:transparent;border:1px solid var(--danger-border);border-radius:var(--radius-sm);padding:2px 8px;cursor:pointer;}
+.dash-widget-retry:hover{background:var(--surface);}
 /* 투명도를 실제로 낮췄을 때만(.dash-translucent = 전체, .dash-card-translucent = 카드별)
    "간유리" 처리: 카드 뒤 배경화면을 흐리게 + 글자에 옅은 후광 → 시끄러운 배경 위에서도 읽힘.
    100% 불투명으로 쓰는 사용자에겐 아무 규칙도 걸리지 않음(변화 0). */
