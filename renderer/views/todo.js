@@ -732,6 +732,7 @@ export async function mount(root) {
     unmounted = true;
     unsubscribeEsc();
     offDataChanged?.();
+    debouncedRefresh.cancel(); // 언마운트 직전 브로드캐스트로 걸린 타이머 정리
     document.removeEventListener('keydown', handleQuickAddKey);
     setScreenShortcuts(null, []);
   };

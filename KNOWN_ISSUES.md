@@ -26,13 +26,14 @@
 
 ---
 
-## [부분해결] 화면 언마운트 후 debounce load()가 발동해 null 참조
+## [해결됨] 화면 언마운트 후 debounce load()가 발동해 null 참조
 
-- **심각도**: 3티어 (콘솔/error.log 에러 1건, 데이터 손실·크래시 없음)
+- **심각도**: 3티어 (콘솔/error.log 에러 1건, 데이터 손실·크래시 없음)이었음
 - **재현 조건**: 어떤 화면에서 데이터 변경(추가/삭제 등)이 일어난 직후 200ms 안에 다른 화면으로 이동. 그 화면의 `onDataChanged` → `debounce(load, 200)` 타이머가 언마운트 후 발동 → `load()`가 `$('...')`로 컨테이너를 다시 찾는데 `root.innerHTML=''`로 이미 비워져서 null → `TypeError: Cannot read properties of null`.
 - **이력**:
-  - 8/31 세션: 로컬 경로 링크 작업 중 빠른 화면 전환 테스트에서 `postit.js:100` (`grid.classList.remove`)로 재현. `postit.js`에 `if (!grid) return;` 가드 추가(v2.58.5). `calendar.js`는 이미 `if (unmounted || !$('c-periodLabel')) return;` 가드가 있었음.
-- **다음 시도 시 참고**: 같은 `debounce(load,200)` + `onDataChanged` 패턴이 `memo.js`(1138) / `inbox.js`(43) / `tags.js`(109)에도 있음 — 아직 가드 없음. 근본 해결은 `ui-utils.js`의 `debounce`가 `.cancel()`을 반환하게 하고 각 뷰 cleanup에서 취소하는 것. 아니면 각 `load()` 첫 줄에 컨테이너 null 가드. 전용 스윕 세션에서 4곳 한 번에.
+  - 8/31 세션: `postit.js:100` (`grid.classList.remove`)로 재현. `postit.js`에 `if (!grid) return;` 가드 추가(v2.58.5). `calendar.js`는 이미 `if (unmounted || ...) return;` 가드가 있었음. → 증상 패치만, memo/inbox/tags는 미해결로 남음.
+- **근본 해결 (STEP 8, v2.58.32)**: `ui-utils.js`의 `debounce`가 `.cancel()`이 붙은 함수를 반환하게 하고(대기 중 타이머 clearTimeout), **`memo`/`inbox`/`tags`/`todo`/`postit`/`calendar` 6개 뷰의 cleanup에서 각자 `debouncedLoad.cancel()`(calendar는 `debouncedSearch`도, todo는 `debouncedRefresh`)를 호출**. 언마운트되면 타이머가 아예 없어지므로 발동 자체가 안 일어난다. `links-ui.js`는 cleanup 훅이 없어 `load()` 첫 줄에 `if (!container.isConnected) return;` 가드.
+- **검증**: CDP로 memo/inbox에서 "데이터 변경 → 30ms 뒤 화면 이동"을 5회 반복 — 렌더러 에러 0, main 로그에 TypeError/null 참조 0.
 
 ---
 

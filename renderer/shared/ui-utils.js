@@ -21,12 +21,20 @@ export function isUserTyping() {
 // 자신이 이미 한 번 새로고침을 하는데, 그 액션이 만든 브로드캐스트가 같은 화면에 다시 돌아와서
 // "또" 새로고침을 트리거하는 경우가 많다(자기 자신에게 온 메아리). 매번 이중으로 IPC 왕복하는
 // 대신, 짧은 시간(기본 250ms) 안에 들어온 호출은 마지막 한 번으로 합친다.
+// 반환된 함수에는 .cancel()이 붙어있다 — 화면 언마운트(라우터가 root를 비우는 시점) cleanup에서
+// 꼭 불러줘야 한다. 안 그러면 언마운트 직전 200ms 안에 들어온 호출의 타이머가 언마운트 뒤에
+// 발동해서, 이미 사라진 DOM을 참조하다 TypeError(콘솔 에러)를 낸다.
 export function debounce(fn, wait = 250) {
   let timer = null;
-  return (...args) => {
+  const debounced = (...args) => {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), wait);
   };
+  debounced.cancel = () => {
+    clearTimeout(timer);
+    timer = null;
+  };
+  return debounced;
 }
 
 let toastTimer = null;

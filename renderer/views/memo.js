@@ -1366,6 +1366,7 @@ export async function mount(root) {
     closeFolderMenu();
     unsubscribeEsc();
     offDataChanged?.();
+    debouncedLoad.cancel(); // 언마운트 직전 브로드캐스트로 걸린 타이머가 사라진 DOM을 건드리지 않게
     setScreenShortcuts(null, []); // 다른 화면으로 이동하면 이 화면 전용 단축키는 오버레이에서 빠져야 함
   };
 }

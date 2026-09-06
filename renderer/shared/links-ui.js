@@ -51,6 +51,7 @@ export async function mountLinksWidget(container, self) {
   let pickerType = 'todo';
 
   async function load() {
+    if (!container.isConnected) return; // 위젯이 이미 DOM에서 떨어졌으면(다른 항목 선택 등) 조회 자체를 생략
     try {
       // 설정 → 편의 기능에서 끌 수 있음 — 꺼져있으면 아예 요청하지 않는다(불필요한 조회 생략)
       const autoSuggestOn = (await window.itda.settings.get('links_auto_suggest')) !== '0';

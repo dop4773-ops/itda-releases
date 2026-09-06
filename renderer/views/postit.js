@@ -315,5 +315,6 @@ export async function mount(root) {
   return () => {
     document.removeEventListener('keydown', handleNewPostitShortcut);
     offDataChanged?.();
+    debouncedLoad.cancel(); // 언마운트 직전 브로드캐스트로 걸린 타이머가 사라진 DOM을 건드리지 않게
   };
 }

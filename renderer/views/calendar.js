@@ -1165,5 +1165,7 @@ export async function mount(root) {
     document.removeEventListener('click', handleDocClickForSearch);
     setScreenShortcuts(null, []);
     offDataChanged?.();
+    debouncedLoad.cancel(); // 언마운트 직전 브로드캐스트로 걸린 타이머 정리
+    debouncedSearch.cancel(); // 검색 입력 debounce도 함께
   };
 }
