@@ -362,7 +362,9 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 | **S2** ✅ | **"관련 항목" 섹션**: `search:query`에 `related:true` 주면 `{direct, related}` 반환(기본은 평평한 배열 — 하위호환). `related` = 상위 6개 직접일치의 ① `item_links` 상대(휴지통·고아 제외) ② 같은 카테고리 항목. 직접일치·중복 제외, 최대 10건. `links.listForWithPreview()`로 통일(`links:listFor` IPC도 이걸 씀). `#/search`에 "🔗 관련 항목" 그룹(연결된 항목 / 같은 태그 배지). — v2.58.34 | 없음 | 완료 |
 | **S3** ✅ | **필터 + 종류 탭**: `#/search`에 결과 종류 탭(전체 N / 메모 N …, 클라 필터 — 재검색 X). "필터" popover = 기간(전체/오늘/이번주/직접지정)·상태(전체/미완료/완료). 기간·상태는 서버 필터 → `search.repository.applyMetaFilters()`가 원본 테이블에서 날짜(todo=due_date/event=start_at/memo·postit=created_at)·is_done 조회해 후처리. 날짜 없는 항목은 기간 필터 시 제외, 상태는 Todo만. — v2.58.35 | 없음 | 완료 |
 | **S4** ✅ | **시작화면 + 바로가기**: `#/search` 검색어 없을 때 최근 검색(칩, `search_recent` JSON 8개, 결과 나오면 1.4s 뒤 기록) + 최근 항목(`search.recentItems` = todo/event/memo/postit `updated_at` 최신순). 모든 결과·시작화면 행에 `attachContextMenu`(열기·연결·전환·삭제·위젯) 우클릭. — v2.58.37 | `search_recent` (app_settings) | 완료 |
-| S5 | 커맨드팔레트를 같은 엔진 위로 + "새로 만들기" 명령 | 없음 | |
+| **S5** ✅ | **커맨드팔레트 정리**: 이미 `search.query`(S1 엔진) 사용 중이던 걸 정렬/구성 통일 — (0) 정확히 일치(항목 제목 / 명령 라벨 전체) → (1) 항목("검색 결과" 섹션) → (2) 명령("명령" 섹션). 항목 행에 일치이유 배지. "새 X 만들기" 명령 라벨·키워드 정리(`새 Todo 만들기` 등). 검색어 없을 땐 섹션 헤더 없이 명령만. — v2.58.38 | 없음 | 완료 |
+
+**검색 재편 5단계 완료.** 남은 것(사용자 판단): 오타 보정 / 검색어 자동완성·연관어 / Spotlight를 이 엔진에 완전 통일.
 
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
 

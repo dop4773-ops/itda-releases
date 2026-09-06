@@ -45,12 +45,12 @@ function goToThen(hash, then) {
 
 function buildCommands({ openQuickCapture }) {
   return [
-    { id: 'search', icon: SEARCH_ICON, label: '전체 검색', run: () => goToThen('#/search') },
-    { id: 'new-memo', icon: PLUS_ICON, label: '새 메모', run: () => goToThen('#/memo', () => document.getElementById('m-newBtn')?.click()) },
-    { id: 'new-todo', icon: PLUS_ICON, label: '새 투두', run: () => goToThen('#/todo', () => document.getElementById('t-title')?.focus()) },
-    { id: 'new-event', icon: PLUS_ICON, label: '새 일정', run: () => goToThen('#/calendar', () => document.getElementById('c-openAdd')?.click()) },
-    { id: 'new-inbox', icon: PLUS_ICON, label: '새 인박스 (빠른입력)', run: () => openQuickCapture() },
-    { id: 'new-postit', icon: PLUS_ICON, label: '포스트잇 만들기', run: () => goToThen('#/postit', () => document.getElementById('p-newCard')?.click()) },
+    { id: 'search', icon: SEARCH_ICON, label: '전체 검색', keywords: '검색', run: () => goToThen('#/search') },
+    { id: 'new-memo', icon: PLUS_ICON, label: '새 메모 만들기', keywords: '메모 작성', run: () => goToThen('#/memo', () => document.getElementById('m-newBtn')?.click()) },
+    { id: 'new-todo', icon: PLUS_ICON, label: '새 Todo 만들기', keywords: '투두 할일', run: () => goToThen('#/todo', () => document.getElementById('t-title')?.focus()) },
+    { id: 'new-event', icon: PLUS_ICON, label: '새 일정 추가', keywords: '캘린더 이벤트', run: () => goToThen('#/calendar', () => document.getElementById('c-openAdd')?.click()) },
+    { id: 'new-inbox', icon: PLUS_ICON, label: '새 인박스 (빠른입력)', keywords: '빠른입력 캡처', run: () => openQuickCapture() },
+    { id: 'new-postit', icon: PLUS_ICON, label: '새 포스트잇 만들기', keywords: '포스트잇', run: () => goToThen('#/postit', () => document.getElementById('p-newCard')?.click()) },
     {
       id: 'today',
       icon: CAL_ICON,
@@ -89,6 +89,8 @@ function buildTagCommand(category) {
 // 실제 항목(Todo/일정/메모/포스트잇/Inbox)을 검색어로 바로 찾아서, 목록 화면이 아니라
 // 그 항목의 상세(위젯)로 바로 연다 — "디테일하게 접근"의 핵심. inbox는 낱개 위젯이 없어서
 // Inbox 목록 화면으로만 이동한다.
+const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치' };
+
 function buildItemCommand(row) {
   const label = plainLabel(row.title || row.content);
   const emoji = TYPE_EMOJI[row.entity_type] || '';
@@ -96,6 +98,8 @@ function buildItemCommand(row) {
     id: `item-${row.entity_type}-${row.entity_id}`,
     icon: `<span>${emoji}</span>`,
     label,
+    _kind: 'item',
+    matchedIn: row.matchedIn || null,
     run: () => {
       if (row.entity_type === 'inbox') {
         location.hash = '#/inbox';
@@ -134,17 +138,25 @@ export function initCommandPalette({ openQuickCapture }) {
   }
 
   function render() {
-    listEl.innerHTML = filtered.length
-      ? filtered
-          .map(
-            (c, i) => `
-        <div class="cmdk-item ${i === activeIndex ? 'active' : ''}" data-index="${i}">
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="cmdk-empty">일치하는 게 없어요</div>`;
+      return;
+    }
+    // 섹션 구분선: "검색 결과"(항목) 블록이 시작되는 지점, "명령" 블록이 시작되는 지점에 헤더를 낀다.
+    const firstItem = queryActive ? filtered.findIndex((c) => c._kind === 'item' && c._rank !== 0) : -1;
+    const firstCmd = queryActive ? filtered.findIndex((c) => c._kind !== 'item' && c._rank !== 0) : -1;
+    listEl.innerHTML = filtered
+      .map((c, i) => {
+        const badge = c._kind === 'item' && MATCH_LABEL[c.matchedIn] ? `<span class="cmdk-badge">${MATCH_LABEL[c.matchedIn]}</span>` : '';
+        const header =
+          (i === firstItem && firstItem !== -1 ? `<div class="cmdk-section">검색 결과</div>` : '') +
+          (i === firstCmd && firstCmd !== -1 ? `<div class="cmdk-section">명령</div>` : '');
+        return `${header}<div class="cmdk-item ${i === activeIndex ? 'active' : ''}" data-index="${i}">
           <span class="cmdk-item-icon">${c.icon}</span>
-          <span class="cmdk-item-label">${escapeHtml(c.label)}</span>
-        </div>`
-          )
-          .join('')
-      : `<div class="cmdk-empty">일치하는 명령이 없어요</div>`;
+          <span class="cmdk-item-label">${escapeHtml(c.label)}${badge}</span>
+        </div>`;
+      })
+      .join('');
 
     listEl.querySelectorAll('.cmdk-item').forEach((row) => {
       row.addEventListener('mousedown', (e) => {
@@ -158,6 +170,20 @@ export function initCommandPalette({ openQuickCapture }) {
     });
   }
 
+  let commandMatches = []; // 이번 검색어에 걸린 명령(정적+태그)
+  let itemMatchesCache = []; // 이번 검색어에 걸린 실제 항목
+  let queryActive = false; // 검색어가 있을 때만 "검색 결과 / 명령" 섹션 헤더를 보인다
+
+  // 정렬: (0) 정확히 일치(명령 라벨/키워드 토큰, 항목 제목) → (1) 항목 → (2) 명령.
+  // "검색 결과"(항목)를 "명령"보다 위에 두는 목업 구성 + 정확일치는 무조건 최상단.
+  function mergeSorted() {
+    filtered = [...commandMatches, ...itemMatchesCache]
+      .map((c, i) => ({ ...c, _i: i }))
+      .sort((a, b) => a._rank - b._rank || a._i - b._i);
+    activeIndex = 0;
+    render();
+  }
+
   const debouncedItemSearch = debounce(async (keyword, generation) => {
     let rows = [];
     try {
@@ -166,20 +192,38 @@ export function initCommandPalette({ openQuickCapture }) {
       rows = [];
     }
     if (generation !== searchGeneration) return; // 그 사이 입력이 더 바뀌었으면 이 결과는 버림
-    const itemMatches = rows.slice(0, 8).map(buildItemCommand);
-    filtered = [...itemMatches, ...filtered];
-    activeIndex = 0;
-    render();
+    const q = keyword.trim().toLowerCase();
+    itemMatchesCache = rows.slice(0, 8).map((row) => {
+      const c = buildItemCommand(row);
+      c._rank = (row.title || '').trim().toLowerCase() === q ? 0 : 1;
+      return c;
+    });
+    mergeSorted();
   }, 150);
+
+  // 명령은 라벨 전체가 검색어와 같을 때만 "정확히 일치"(0). 그 외엔 2(명령 섹션).
+  // "메모" 입력에 "새 메모 만들기"가 정확일치로 튀어오르지 않게 — 그건 제목이 "메모"인 항목 몫.
+  function commandRank(c, q) {
+    return c.label.toLowerCase() === q ? 0 : 2;
+  }
 
   function filterCommands(keyword) {
     searchGeneration += 1;
     const q = keyword.trim().toLowerCase();
+    queryActive = !!q;
     const all = allStaticCommands();
-    filtered = q ? all.filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q)) : all;
-    activeIndex = 0;
-    render();
-    if (q.length >= 2) debouncedItemSearch(q, searchGeneration);
+    if (!q) {
+      commandMatches = all.map((c) => ({ ...c, _rank: 2 }));
+      itemMatchesCache = [];
+      mergeSorted();
+      return;
+    }
+    commandMatches = all
+      .filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q))
+      .map((c) => ({ ...c, _rank: commandRank(c, q) }));
+    itemMatchesCache = []; // 항목 결과는 debounce 뒤에 채워짐
+    mergeSorted();
+    if (q.length >= 1) debouncedItemSearch(q, searchGeneration);
   }
 
   function run(index) {
@@ -236,17 +280,12 @@ export function initCommandPalette({ openQuickCapture }) {
 
   function open() {
     ensureBuilt();
-    filtered = allStaticCommands(); // 태그 새로고침 전엔 일단 지금까지 캐시된 걸로 즉시 보여주고
-    activeIndex = 0;
     inputEl.value = '';
-    render();
+    filterCommands(''); // 태그 새로고침 전엔 지금까지 캐시된 명령으로 즉시
     overlay.classList.add('open');
     setTimeout(() => inputEl.focus(), 30);
     refreshTagCommands().then(() => {
-      if (overlay.classList.contains('open') && !inputEl.value.trim()) {
-        filtered = allStaticCommands(); // 열려있는 동안 새로 불러온 태그 목록으로 갱신(검색 중이 아닐 때만)
-        render();
-      }
+      if (overlay.classList.contains('open') && !inputEl.value.trim()) filterCommands(''); // 새 태그 목록 반영
     });
   }
 
