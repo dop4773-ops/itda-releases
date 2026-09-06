@@ -71,6 +71,30 @@ test('normalizeQuery: 공백 정리 + 꼬리말 제거', () => {
   assert.equal(normalizeQuery('김 부수'), '김 부수'); // 내부 공백은 유지(엔진이 두 형태 다 시도)
 });
 
+test('기간 필터: dateFrom/dateTo 밖의 항목과 날짜 없는 항목 제외', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  repos.todos.insert({ title: '김부수 오늘 할일', dueDate: '2026-09-06' });
+  repos.todos.insert({ title: '김부수 지난주 할일', dueDate: '2026-08-30' });
+  repos.todos.insert({ title: '김부수 기한없는 할일' }); // due_date NULL
+  const inRange = repos.search.query('김부수', { dateFrom: '2026-09-01', dateTo: '2026-09-30' });
+  assert.deepEqual(inRange.map((h) => h.title), ['김부수 오늘 할일']);
+});
+
+test('상태 필터: status는 Todo에만 적용, 다른 타입은 통과', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const done = repos.todos.insert({ title: '김부수 완료 할일' });
+  repos.todos.setStatus(done.id, 'done');
+  repos.todos.insert({ title: '김부수 미완료 할일' });
+  repos.memos.insert({ title: '김부수 메모', content: 'x' });
+  const openOnly = repos.search.query('김부수', { status: 'open' });
+  const titles = openOnly.map((h) => h.title).sort();
+  assert.ok(titles.includes('김부수 미완료 할일'));
+  assert.ok(titles.includes('김부수 메모'), '메모는 상태 필터와 무관하게 통과');
+  assert.ok(!titles.includes('김부수 완료 할일'));
+});
+
 test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㄱㅂㅅ'), true);
   assert.equal(isChosungQuery('ㄱ ㅂㅅ'), true);

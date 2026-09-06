@@ -33,10 +33,12 @@ function relatedFor(repos, direct, cap = 10) {
 
 function registerSearchIpc(ipcMain, repos) {
   ipcMain.handle('search:query', (event, arg) => {
-    // 하위호환: 예전엔 검색어 문자열만 넘겼음. 지금은 { query, types, limit, related }도 받는다.
-    const { query, types, limit, related } = typeof arg === 'string' ? { query: arg } : arg || {};
+    // 하위호환: 예전엔 검색어 문자열만 넘겼음.
+    // 지금은 { query, types, limit, dateFrom, dateTo, status, related }도 받는다.
+    const { query, types, limit, dateFrom, dateTo, status, related } =
+      typeof arg === 'string' ? { query: arg } : arg || {};
     if (!query || !String(query).trim()) return related ? { direct: [], related: [] } : [];
-    const direct = repos.search.query(query, { types, limit });
+    const direct = repos.search.query(query, { types, limit, dateFrom, dateTo, status });
     if (!related) return direct; // 기본: 예전과 동일하게 평평한 배열
     return { direct, related: relatedFor(repos, direct) };
   });
