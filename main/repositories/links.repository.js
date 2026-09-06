@@ -12,6 +12,9 @@ const PREVIEW_QUERIES = {
   inbox: `SELECT id, substr(content,1,300) AS label, NULL AS deleted_at FROM inbox_items WHERE id = ?`,
 };
 
+// item_links의 타입 → 실제 테이블. 고아 연결(상대 항목이 완전삭제됨) 판별에 쓴다.
+const LINK_TABLES = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits', inbox: 'inbox_items' };
+
 // 사용자가 입력한 검색어를 FTS5 MATCH 문법에 안전하게 넣기 위한 변환.
 // 토큰마다 큰따옴표로 감싸고 뒤에 *를 붙여 "접두어 일치"로 검색한다(예: "회의"* "준" 준 처럼 앞부분만 쳐도 걸리게).
 // 큰따옴표로 감싸두면 FTS5 예약 문자(-, :, ( 등)가 섞여 들어와도 구문 에러 없이 안전하게 리터럴로 처리된다.
@@ -80,6 +83,8 @@ module.exports = function createLinksRepository(db) {
 
     // 목록 화면에서 "이 항목에 연결이 있나 / 어떤 종류가 연결됐나"만 알고 싶을 때 —
     // 항목마다 listFor(+getPreview) N번 도는 대신, 한 방에 { id: Set(연결된 종류) } 를 만든다.
+    // 상대 항목이 완전삭제된 고아 연결은 제외한다(예: 완전삭제된 Todo에만 걸려있던 포스트잇에
+    // "Todo 연결됨" 배지가 계속 뜨던 것). listFor와 동일하게 소프트삭제(휴지통)는 남긴다.
     kindsForMany(type, ids) {
       const out = {};
       if (!Array.isArray(ids) || ids.length === 0) return out;
@@ -91,11 +96,31 @@ module.exports = function createLinksRepository(db) {
               OR (b_type = ? AND b_id IN (${placeholders}))`
         )
         .all(type, ...ids, type, ...ids);
-      for (const r of rows) {
+
+      // 상대편(type,id) 후보를 종류별로 모아 존재 여부를 종류당 한 번의 쿼리로 확인
+      const wantByType = {};
+      const pairs = rows.map((r) => {
         const isA = r.a_type === type && ids.includes(r.a_id);
         const selfId = isA ? r.a_id : r.b_id;
         const otherType = isA ? r.b_type : r.a_type;
-        (out[selfId] = out[selfId] || new Set()).add(otherType);
+        const otherId = isA ? r.b_id : r.a_id;
+        (wantByType[otherType] = wantByType[otherType] || new Set()).add(otherId);
+        return { selfId, otherType, otherId };
+      });
+      const existsByType = {};
+      for (const [ot, idSet] of Object.entries(wantByType)) {
+        const table = LINK_TABLES[ot];
+        if (!table) continue;
+        const list = [...idSet];
+        const ph = list.map(() => '?').join(',');
+        existsByType[ot] = new Set(
+          db.prepare(`SELECT id FROM ${table} WHERE id IN (${ph})`).all(...list).map((x) => x.id)
+        );
+      }
+
+      for (const p of pairs) {
+        if (!existsByType[p.otherType] || !existsByType[p.otherType].has(p.otherId)) continue; // 고아 연결
+        (out[p.selfId] = out[p.selfId] || new Set()).add(p.otherType);
       }
       return out;
     },

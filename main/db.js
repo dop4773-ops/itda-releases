@@ -7,7 +7,8 @@ const { app } = require('electron');
 // 새로 만든 DB는 곧바로 이 번호로 스탬프하고, 기존 DB는 runLightweightMigrations가
 // 여기까지 끌어올린 뒤 user_version에 이 값을 기록한다. 이미 이 값 이상이면 점검 자체를 건너뛴다.
 // ⚠ 아래 마이그레이션 단계를 새로 추가하면 이 번호를 +1 한다.
-const SCHEMA_VERSION = 1;
+//   v2: item_links 고아 연결(상대 항목이 완전삭제됨) 1회성 청소
+const SCHEMA_VERSION = 2;
 
 /**
  * 앱 최초 실행 시 userData 경로에 assistant.db를 생성하고
@@ -289,6 +290,27 @@ function applyLightweightMigrations(db) {
   if (!hasColumn('memos', 'is_locked')) {
     db.exec(`ALTER TABLE memos ADD COLUMN is_locked INTEGER NOT NULL DEFAULT 0`);
     console.log('[itda] 마이그레이션: memos.is_locked 컬럼 추가');
+  }
+
+  // item_links 고아 연결 청소 — 상대 항목이 "완전삭제"돼서 실제 행이 사라진 연결.
+  // 하드삭제 경로(trash purgeOne / inbox:delete)는 이제 deleteLinksFor로 같이 지우지만,
+  // 그 처리가 없던 예전 버전에서 쌓인 잔재가 있을 수 있어 한 번 훑는다.
+  // (소프트삭제=휴지통 항목은 행이 남아있으므로 대상 아님 — 복원하면 연결도 살아있어야 함)
+  if (hasTable('item_links')) {
+    const info = db.prepare(`
+      DELETE FROM item_links WHERE
+           (a_type='todo'   AND a_id NOT IN (SELECT id FROM todos))
+        OR (b_type='todo'   AND b_id NOT IN (SELECT id FROM todos))
+        OR (a_type='event'  AND a_id NOT IN (SELECT id FROM events))
+        OR (b_type='event'  AND b_id NOT IN (SELECT id FROM events))
+        OR (a_type='memo'   AND a_id NOT IN (SELECT id FROM memos))
+        OR (b_type='memo'   AND b_id NOT IN (SELECT id FROM memos))
+        OR (a_type='postit' AND a_id NOT IN (SELECT id FROM postits))
+        OR (b_type='postit' AND b_id NOT IN (SELECT id FROM postits))
+        OR (a_type='inbox'  AND a_id NOT IN (SELECT id FROM inbox_items))
+        OR (b_type='inbox'  AND b_id NOT IN (SELECT id FROM inbox_items))
+    `).run();
+    if (info.changes > 0) console.log(`[itda] 마이그레이션: 고아 연결 ${info.changes}건 정리`);
   }
 }
 
