@@ -95,6 +95,25 @@ test('상태 필터: status는 Todo에만 적용, 다른 타입은 통과', () =
   assert.ok(!titles.includes('김부수 완료 할일'));
 });
 
+test('recentItems: updated_at 최신순으로 타입 섞어 반환, 소프트삭제 제외', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  repos.todos.insert({ title: '먼저 만든 할일' });
+  repos.memos.insert({ title: '중간 메모', content: 'x' });
+  // updated_at을 명시적으로 올려 최신으로 만든다 (트리거는 UPDATE 시 자동 갱신)
+  const p = repos.postits.insert({ content: '가장 최근 포스트잇' });
+  // updated_at을 명시 값으로 바꾸면 트리거(WHEN old.updated_at = new.updated_at)는 안 돈다
+  db.prepare("UPDATE postits SET updated_at = '2099-01-01 00:00:00' WHERE id = ?").run(p.id);
+  const del = repos.todos.insert({ title: '삭제될 할일' });
+  repos.todos.softDelete(del.id);
+
+  const items = repos.search.recentItems(8);
+  assert.ok(items.length >= 3);
+  assert.ok(!items.some((i) => i.title === '삭제될 할일'), '소프트삭제 제외');
+  assert.equal(items[0].title, '가장 최근 포스트잇', 'updated_at 최신이 최상단');
+  assert.ok(new Set(items.map((i) => i.entity_type)).size >= 2, '타입이 섞여있음');
+});
+
 test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㄱㅂㅅ'), true);
   assert.equal(isChosungQuery('ㄱ ㅂㅅ'), true);

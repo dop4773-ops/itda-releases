@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld('itda', {
   },
   search: {
     query: (keyword) => ipcRenderer.invoke('search:query', keyword),
+    recentItems: () => ipcRenderer.invoke('search:recentItems'),
   },
   links: {
     add: (payload) => ipcRenderer.invoke('links:add', payload),

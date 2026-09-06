@@ -2,6 +2,29 @@ import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-uti
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { TYPE_EMOJI } from '../shared/links-ui.js';
 import { todayStr, dateKey, startOfWeek } from '../shared/date-utils.js';
+import { attachContextMenu } from '../shared/context-menu.js';
+
+const RECENT_KEY = 'search_recent'; // 최근 검색어 (JSON 배열, 최대 8개)
+async function getRecentQueries() {
+  try {
+    const raw = await window.itda.settings.get(RECENT_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter((s) => typeof s === 'string').slice(0, 8) : [];
+  } catch (e) {
+    return [];
+  }
+}
+async function recordRecentQuery(q) {
+  const t = q.trim();
+  if (!t) return;
+  const cur = await getRecentQueries();
+  const next = [t, ...cur.filter((s) => s.toLowerCase() !== t.toLowerCase())].slice(0, 8);
+  try {
+    await window.itda.settings.set({ key: RECENT_KEY, value: JSON.stringify(next) });
+  } catch (e) {
+    /* 저장 실패해도 검색엔 지장 없음 */
+  }
+}
 
 const SEARCH_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -76,6 +99,7 @@ export async function mount(root) {
 
   const $ = (id) => root.querySelector('#' + id);
   let debounceTimer = null;
+  let recordTimer = null; // 최근 검색어 기록 지연
   let lastKeyword = '';
   let lastResults = { direct: [], related: [] }; // 뷰 전환(목록↔보드) 시 재검색 없이 다시 그림
   let currentView = 'board'; // 결과가 많으면 목록은 스크롤이 너무 길어져서 보드를 기본값으로 (요청에 따름)
@@ -84,15 +108,74 @@ export async function mount(root) {
   // type은 클라에서 필터(재검색 X), dateFrom/dateTo/status는 서버 필터(재검색 O)
   const filters = { type: null, period: 'all', dateFrom: null, dateTo: null, status: 'all' };
 
-  function renderPrompt() {
+  // 검색어가 없을 때 뜨는 시작 화면 — 최근 검색어 + 최근 항목
+  async function renderPrompt() {
     $('s-bulkBar').style.display = 'none';
-    $('s-results').innerHTML = emptyStateBlock({
-      icon: SEARCH_ICON.replace('18', '32'),
-      title: '검색어를 입력해보세요',
-      subtitle: 'Todo·일정·메모·포스트잇·Inbox를 한 번에 찾아드려요',
+    $('s-typeTabs').hidden = true;
+    const resultsEl = $('s-results');
+    const [recentQ, recentItems] = await Promise.all([
+      getRecentQueries(),
+      window.itda.search.recentItems().catch(() => []),
+    ]);
+    if (!recentQ.length && !recentItems.length) {
+      resultsEl.innerHTML = emptyStateBlock({
+        icon: SEARCH_ICON.replace('18', '32'),
+        title: '검색어를 입력해보세요',
+        subtitle: 'Todo·일정·메모·포스트잇·Inbox를 한 번에 찾아드려요',
+      });
+      return;
+    }
+    resultsEl.innerHTML = `
+      ${recentQ.length ? `
+        <div class="search-start-block">
+          <div class="search-start-head">최근 검색 <button class="btn-link" id="s-clearRecent">지우기</button></div>
+          <div class="search-recent-chips">
+            ${recentQ.map((q) => `<button class="search-recent-chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('')}
+          </div>
+        </div>` : ''}
+      ${recentItems.length ? `
+        <div class="search-start-block">
+          <div class="search-start-head">최근 항목</div>
+          <div>${recentItems.map(renderStartItemRow).join('')}</div>
+        </div>` : ''}
+    `;
+    resultsEl.querySelectorAll('.search-recent-chip').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $('s-input').value = btn.dataset.q;
+        runSearch(btn.dataset.q);
+      });
     });
+    const clearBtn = $('s-clearRecent');
+    if (clearBtn) clearBtn.addEventListener('click', async () => {
+      try { await window.itda.settings.set({ key: RECENT_KEY, value: '[]' }); } catch (e) { /* noop */ }
+      renderPrompt();
+    });
+    wireResultRows(resultsEl);
+  }
+
+  function renderStartItemRow(r) {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    return `
+      <div class="list-row search-related-row" data-key="${key}">
+        <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
+        <a class="main" href="${TYPE_ROUTE[r.entity_type] || '#/dashboard'}">
+          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}</b>
+        </a>
+      </div>`;
   }
   renderPrompt();
+
+  // 결과/시작화면의 각 행(.list-row / .search-card)에 우클릭 메뉴(열기·연결·전환·삭제)를 붙인다.
+  function wireResultRows(container) {
+    container.querySelectorAll('[data-key]').forEach((el) => {
+      const [type, idStr] = el.dataset.key.split(':');
+      const id = Number(idStr);
+      attachContextMenu(el, () => ({ type, id }), {
+        linkOnly: type === 'inbox', // inbox는 소프트삭제/위젯이 없어 연결·전환만
+        onDeleted: () => (lastKeyword ? runSearch(lastKeyword) : renderPrompt()),
+      });
+    });
+  }
 
   function updateBulkBar(allKeys) {
     const bar = $('s-bulkBar');
@@ -220,6 +303,7 @@ export async function mount(root) {
         updateBulkBar(allKeys);
       });
     });
+    wireResultRows(resultsEl); // 각 행 우클릭 메뉴(열기·연결·전환·삭제)
   }
 
   function hasActiveFilter() {
@@ -274,6 +358,13 @@ export async function mount(root) {
     selected.clear();
     lastResults = results;
     renderResults(results);
+    // 결과가 있으면 최근 검색어로 기록 — 타이핑 중간값("김","김부")이 안 쌓이게 잠깐 뒤에
+    if ((results.direct || []).length) {
+      clearTimeout(recordTimer);
+      recordTimer = setTimeout(() => {
+        if ($('s-input').value.trim() === keyword.trim()) recordRecentQuery(keyword);
+      }, 1400);
+    }
   }
 
   root.querySelectorAll('#s-viewToggle .view-toggle-btn').forEach((btn) => {
@@ -369,6 +460,7 @@ export async function mount(root) {
 
   return () => {
     clearTimeout(debounceTimer);
+    clearTimeout(recordTimer);
     document.removeEventListener('mousedown', onFilterOutside);
   };
 }

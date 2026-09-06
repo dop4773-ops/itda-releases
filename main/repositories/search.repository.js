@@ -131,6 +131,26 @@ module.exports = function createSearchRepository(db) {
         .map((h) => ({ type: h.entity_type, id: h.entity_id, label: snippetLabel(h) }));
     },
 
+    // 검색 시작화면의 "최근 항목" — todo/event/memo/postit을 updated_at 최신순으로 섞어서.
+    recentItems(limit = 8) {
+      const per = Math.max(limit, 6);
+      const pull = (type, table, titleExpr) =>
+        db
+          .prepare(
+            `SELECT '${type}' AS entity_type, id AS entity_id, ${titleExpr} AS title, updated_at
+             FROM ${table} WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?`
+          )
+          .all(per);
+      const rows = [
+        ...pull('todo', 'todos', 'title'),
+        ...pull('event', 'events', 'title'),
+        ...pull('memo', 'memos', "coalesce(nullif(title,''), substr(content,1,120))"),
+        ...pull('postit', 'postits', "coalesce(nullif(title,''), substr(content,1,120))"),
+      ];
+      rows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+      return rows.slice(0, limit).map((r) => ({ entity_type: r.entity_type, entity_id: r.entity_id, title: r.title || '', content: '' }));
+    },
+
     // discoverRelated "비슷한 내용" — 키워드 여러 개를 넓게(OR) 훑는다.
     similarTo(keywords, excludeKeys = new Set()) {
       const toks = [...new Set((keywords || []).filter((k) => k && k.length >= 2))].slice(0, 8);

@@ -2020,6 +2020,14 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .sfp-dates .input{padding:3px 6px;font-size:11px;}
 .sfp-reset{align-self:flex-start;font-size:11px;}
 
+/* 검색 시작 화면 (최근 검색 / 최근 항목) */
+.search-start-block{margin-bottom:20px;}
+.search-start-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-soft);margin-bottom:9px;}
+.search-start-head .btn-link{font-size:11px;font-weight:500;margin-left:auto;}
+.search-recent-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.search-recent-chip{font-size:12px;padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);cursor:pointer;}
+.search-recent-chip:hover{border-color:var(--brand);color:var(--brand);}
+
 /* 종류 탭 */
 .search-type-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;}
 .search-type-tab{font-size:12px;font-weight:600;padding:5px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-soft);cursor:pointer;}

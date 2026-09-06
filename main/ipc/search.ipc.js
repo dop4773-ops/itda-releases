@@ -32,6 +32,8 @@ function relatedFor(repos, direct, cap = 10) {
 }
 
 function registerSearchIpc(ipcMain, repos) {
+  ipcMain.handle('search:recentItems', () => repos.search.recentItems(8));
+
   ipcMain.handle('search:query', (event, arg) => {
     // 하위호환: 예전엔 검색어 문자열만 넘겼음.
     // 지금은 { query, types, limit, dateFrom, dateTo, status, related }도 받는다.
