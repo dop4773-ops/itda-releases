@@ -1,5 +1,6 @@
 const { app, BrowserWindow, shell } = require('electron');
 const { fileURLToPath } = require('url');
+const { isPerfEnabled } = require('../perf');
 
 // 아이템을 바탕화면으로 드래그해서 위젯으로 열 때, "메인 윈도우 밖으로 나갔는지"를
 // renderer가 판단할 수 있도록 메인 윈도우의 현재 화면 좌표/크기를 제공한다.
@@ -9,6 +10,9 @@ module.exports = function registerAppIpc(ipcMain, getMainWindow) {
     if (!win || win.isDestroyed()) return null;
     return win.getBounds();
   });
+
+  // renderer 성능 계측(renderer/shared/perf.js)이 같은 게이트를 따르도록 — 기본 꺼짐
+  ipcMain.handle('app:perfEnabled', () => isPerfEnabled());
 
   // 윈도우 시작 시 자동 실행 — Electron 내장 API 하나로 충분해서 별도 레지스트리 조작 없음.
   // 개발 모드(패키징 안 된 실행)에서는 실행 파일 경로가 electron.exe라 의미가 없어서 항상 false로 응답.

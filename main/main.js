@@ -11,6 +11,7 @@ const { attachExternalLinkHandler } = require('./shared/external-links');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
 const { initErrorLogging } = require('./logger');
+const { initPerf, perf, now } = require('./perf');
 
 // 예상 못한 예외/거부를 콘솔 + userData/logs/error.log 에 남긴다(크래시보다 로그+복구 우선).
 // renderer 쪽 에러도 preload가 'itda:log-error'로 보내면 여기서 같은 파일에 기록.
@@ -90,6 +91,9 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    initPerf(app);
+    const tReady = now();
+    let t = now();
     try {
       db = initDb();
     } catch (err) {
@@ -105,19 +109,29 @@ if (!gotLock) {
       return;
     }
 
+    perf('initDb', t);
+    t = now();
     const { openWidgetByType, openPostitById } = registerIpcHandlers(ipcMain, db, () => mainWindow);
+    perf('registerIpcHandlers', t);
+    t = now();
     createWindow();
+    perf('createWindow(동기)', t);
+    // renderer가 로드를 끝낸 시점(= 사용자가 첫 화면을 보기 직전)까지의 총 시간
+    mainWindow.webContents.once('did-finish-load', () => perf('whenReady→renderer 로드완료', tReady));
+    t = now();
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
     const { openSpotlight } = initSpotlight(); // Spotlight식 작은 창(빠른입력/빠른찾기) — main/spotlight
     initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db), { openSpotlight }); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
     initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
+    perf('독립 모듈 초기화(updater/spotlight/shortcut/tray/backup)', t);
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).
     // 위치/크기는 여전히 기억되지만(widget_bounds:*), "다시 켜기"는 사용자가 직접 해야 함.
     // 단, 자동 업데이트로 재시작된 직후만 예외 — 재시작 직전에 열려있던 위젯을 그대로
     // 되살린다(main/widget-restore 참고). 스냅샷이 없으면(=업데이트 재시작이 아니면)
     // 아무 일도 안 일어나 위 원칙 그대로 유지된다.
     restoreOpenWidgets({ settings: createSettingsRepository(db), openBoardWidgetByType: openWidgetByType, openPostitById });
+    perf('whenReady 전체(동기 셋업)', tReady);
 
     app.on('activate', () => {
       showMainWindow();

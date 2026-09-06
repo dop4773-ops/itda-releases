@@ -9,6 +9,7 @@ import * as trashView from '../views/trash.js';
 import * as settingsView from '../views/settings.js';
 import { initShell, applyTheme, applyUiAdjusts, applyFontFamily, applyDisplayScale } from './shell.js';
 import { ensureUnlocked, lockNow } from './lock-screen.js';
+import { initPerf, perf, now } from './perf.js';
 
 // 라우트 테이블: 새 화면 추가 시 여기 한 줄만 추가하면 사이드바/URL 해시로 바로 연결됨
 const routes = {
@@ -50,7 +51,9 @@ async function navigate() {
   setActiveNav(hash);
 
   try {
+    const tMount = now();
     const result = await routes[hash].mount(root);
+    perf(`route mount ${hash}`, tMount);
     if (typeof result === 'function') unmountCurrent = result;
     window.dispatchEvent(new CustomEvent('itda:route-mounted', { detail: { hash } })); // 커맨드 팔레트가 "화면 이동 후 후속 동작"을 걸 수 있게(예: 새 투두 입력창 포커스)
   } catch (e) {
@@ -61,14 +64,23 @@ async function navigate() {
 
 window.addEventListener('hashchange', navigate);
 window.addEventListener('DOMContentLoaded', async () => {
+  const tDom = now();
+  await initPerf();
   // 잠금화면에도 테마/글꼴/배율이 적용되도록, 잠금 해제 전에 스타일부터 맞춘다.
   // (설정 읽기 IPC는 잠금과 무관하게 동작한다. initShell이 잠금 해제 후 멱등하게 다시 적용한다.)
+  let t = now();
   await Promise.allSettled([applyTheme(), applyUiAdjusts(), applyFontFamily(), applyDisplayScale()]);
+  perf('스타일 적용(theme/ui/font/scale)', t);
   // 비밀번호 잠금이 켜져 있으면 여기서 대기 — 풀리기 전까지 사이드바/대시보드 등
   // 어떤 실제 데이터도 그려지지 않는다. 잠금이 꺼져 있으면 즉시 통과.
+  t = now();
   await ensureUnlocked();
+  perf('ensureUnlocked', t);
+  t = now();
   initShell();
+  perf('initShell', t);
   navigate();
+  perf('DOMContentLoaded→navigate 호출까지', tDom);
   // 위젯 창(별도 BrowserWindow)의 "전체 OO 보기" 클릭 시 메인 창이 여기로 이동
   window.itda.onNavigate((route) => {
     location.hash = route;

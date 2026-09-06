@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld('itda', {
     getAutoLaunch: () => ipcRenderer.invoke('app:getAutoLaunch'),
     setAutoLaunch: (enabled) => ipcRenderer.invoke('app:setAutoLaunch', enabled),
     openPath: (path) => ipcRenderer.invoke('app:openPath', path), // 메모/포스트잇 본문의 로컬 경로 링크 클릭 시
+    perfEnabled: () => ipcRenderer.invoke('app:perfEnabled'), // 성능 계측 켜짐 여부(개발 모드 or ITDA_PERF=1)
   },
   widgetWindow: {
     fitToContent: (payload) => ipcRenderer.invoke('widgetWindow:fitToContent', payload),
