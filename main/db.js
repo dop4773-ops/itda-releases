@@ -3,10 +3,16 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { app } = require('electron');
 
+// 경량 마이그레이션 "세대" 번호. schema/itda_schema_v1.sql은 항상 최신 상태로 관리되므로
+// 새로 만든 DB는 곧바로 이 번호로 스탬프하고, 기존 DB는 runLightweightMigrations가
+// 여기까지 끌어올린 뒤 user_version에 이 값을 기록한다. 이미 이 값 이상이면 점검 자체를 건너뛴다.
+// ⚠ 아래 마이그레이션 단계를 새로 추가하면 이 번호를 +1 한다.
+const SCHEMA_VERSION = 1;
+
 /**
  * 앱 최초 실행 시 userData 경로에 assistant.db를 생성하고
  * schema/itda_schema_v1.sql 을 적용한다.
- * 이미 DB가 있으면 그대로 연결만 한다 (마이그레이션은 별도 처리 예정).
+ * 이미 DB가 있으면 연결 후 runLightweightMigrations로 스키마를 최신 세대까지 끌어올린다.
  */
 function initDb() {
   const userDataPath = app.getPath('userData');
@@ -28,6 +34,7 @@ function initDb() {
     const schemaPath = path.join(__dirname, '..', 'schema', 'itda_schema_v1.sql');
     const schema = fs.readFileSync(schemaPath, 'utf-8');
     db.exec(schema);
+    db.pragma(`user_version = ${SCHEMA_VERSION}`); // 최신 스키마로 만들었으니 마이그레이션 점검 불필요
     console.log('[itda] 새 데이터베이스 생성:', dbPath);
   } else {
     console.log('[itda] 기존 데이터베이스 연결:', dbPath);
@@ -61,8 +68,25 @@ function closeDb(db) {
  * PRAGMA table_info로 컬럼 존재 여부를 확인한 뒤, 없으면 ALTER TABLE로 추가한다.
  * (SQLite는 컬럼 존재 여부를 사전에 확인해야 안전 — "ADD COLUMN IF NOT EXISTS" 문법이
  *  버전에 따라 다르게 지원되므로 여기서는 직접 체크하는 방식을 쓴다.)
+ *
+ * 안전장치 2가지:
+ *   1) user_version 게이트 — 이미 최신 세대면 아래 점검을 통째로 건너뛴다(매 실행 반복 방지).
+ *   2) 단일 트랜잭션 — 모든 단계 + user_version 기록을 한 트랜잭션에서 처리한다. 도중에
+ *      전원이 나가거나 한 단계가 throw하면 통째로 롤백되어 "반쪽만 적용된 스키마"가 남지 않는다.
+ *      (SQLite는 DDL도, PRAGMA user_version도 트랜잭션에 함께 커밋/롤백된다.)
+ *   개별 단계는 여전히 전부 멱등(if !hasColumn / if !hasTable)이라, 어떤 중간 상태의 DB에서
+ *   시작해도 안전하게 최신으로 수렴한다.
  */
 function runLightweightMigrations(db) {
+  if (db.pragma('user_version', { simple: true }) >= SCHEMA_VERSION) return;
+  db.transaction(() => {
+    applyLightweightMigrations(db);
+    db.pragma(`user_version = ${SCHEMA_VERSION}`);
+    console.log(`[itda] 마이그레이션 점검 완료 — user_version=${SCHEMA_VERSION}`);
+  })();
+}
+
+function applyLightweightMigrations(db) {
   const hasColumn = (table, column) =>
     db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
 
@@ -268,4 +292,4 @@ function runLightweightMigrations(db) {
   }
 }
 
-module.exports = { initDb, runLightweightMigrations, closeDb };
+module.exports = { initDb, runLightweightMigrations, closeDb, SCHEMA_VERSION };
