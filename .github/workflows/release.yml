@@ -31,6 +31,8 @@ jobs:
       # 문법/참조 오류(no-undef, no-dupe-keys 등)로 "앱이 아예 안 뜨는" 빌드가 배포되는 걸 막는 게이트.
       # 에러가 하나라도 있으면 여기서 워크플로가 실패하고 릴리스가 안 올라간다.
       - run: npm run lint
+      # 마이그레이션 원자성 / 연결 정규화 / 반복 전개 회귀 테스트 — 실패 시 릴리스 중단.
+      - run: npm test
       - run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -11,9 +11,9 @@ module.exports = [
 
   js.configs.recommended,
 
-  // main 프로세스 + 빌드 스크립트 — CommonJS, Node 전역
+  // main 프로세스 + 빌드 스크립트 + 테스트 — CommonJS, Node 전역
   {
-    files: ['main/**/*.js', 'scripts/**/*.js', 'eslint.config.js'],
+    files: ['main/**/*.js', 'scripts/**/*.js', 'test/**/*.js', 'eslint.config.js'],
     languageOptions: {
       sourceType: 'commonjs',
       ecmaVersion: 'latest',

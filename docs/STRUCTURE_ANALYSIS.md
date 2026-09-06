@@ -338,9 +338,9 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 
 | # | 파트 | 범위 | 위험 |
 |---|---|---|---|
-| **1** | **STEP 1 분석 (본 문서)** | 읽기 전용 | 없음 |
-| 2 | 마이그레이션 안정화: `user_version` 게이트 + `runLightweightMigrations` 단일 트랜잭션 | `main/db.js` | 낮음 |
-| 3 | 최소 회귀 테스트(`node:test`): 마이그레이션 멱등성 / `canonicalizeLink` / 반복 전개 / FTS 빌더 | 신규 `test/`, `package.json` | 없음 |
+| **1** ✅ | STEP 1 분석 (본 문서) — v2.58.26 | 읽기 전용 | 없음 |
+| **2** ✅ | 마이그레이션 안정화: `user_version` 게이트 + `runLightweightMigrations` 단일 트랜잭션 — v2.58.26 | `main/db.js` | 낮음 |
+| **3** ✅ | 회귀 테스트(`node:test`): 마이그레이션 원자성·게이트·백필 / `canonicalizeLink` / 반복 전개. `npm test` + CI 게이트. FTS 빌더는 제외(검색 개편 예정) | `test/`, `scripts/run-tests.js`, CI | 없음 |
 | 4 | 교차 엔티티 원자성: 전환/캡처 경로에 "연결까지 한 트랜잭션" repo 메서드 | repos + 해당 ipc | 중간 |
 | 5 | 고아 연결 정리: `kindsForMany` 상대 존재 필터 + 하드삭제 sweep | `links.repository.js` | 낮음 |
 | 6 | 시작/라우트 타이밍 계측(dev 플래그) | `main.js`, `router.js` | 낮음 |

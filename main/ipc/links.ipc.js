@@ -86,3 +86,6 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
 
   return { deleteLinksFor };
 };
+
+// 순수 함수 — registerLinksIpc와 무관하게 단독 검증할 수 있게 노출(test/links.test.js)
+module.exports.canonicalizeLink = canonicalizeLink;

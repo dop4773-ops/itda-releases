@@ -1,6 +1,6 @@
 {
   "name": "itda",
-  "version": "2.58.26",
+  "version": "2.58.27",
   "description": "잇다 - 병원 업무자를 위한 개인 업무 관리 데스크톱 Workspace",
   "main": "main/main.js",
   "author": "",
@@ -11,7 +11,8 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "postinstall": "electron-rebuild -f -w better-sqlite3 && node scripts/postinstall-electron-fix.js",
     "build:win": "electron-builder --win nsis",
-    "release:win": "electron-builder --win nsis --publish always"
+    "release:win": "electron-builder --win nsis --publish always",
+    "test": "node scripts/run-tests.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
