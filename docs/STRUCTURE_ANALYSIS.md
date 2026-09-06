@@ -365,3 +365,8 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 | S5 | 커맨드팔레트를 같은 엔진 위로 + "새로 만들기" 명령 | 없음 | |
 
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
+
+## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)
+- **세부항목 검색**: SCREEN_COMMANDS에 설정 세부 탭 10개(`#/settings/<탭>`) + 카테고리 태그(`window.itda.categories.list`) 추가. router.js가 `#/base/sub` 파싱 → `mount(root, sub)`, settings.js가 `initialTab`으로 그 탭을 바로 연다.
+- **정렬**: (0) 정확히 일치(라벨 단어/키워드 토큰/항목 제목이 검색어와 정확히 같음) → (1) 큰 카테고리(부분 일치) → (2) 개별 항목. 같은 rank는 삽입순(카테고리 먼저). `test/spotlight-rank.test.js`.
+- 미확인: 실제 Spotlight 창을 mac에서 CDP로 못 띄움(전역 단축키 = OS 레벨, 접근성 권한 필요) → 창 자체 동작은 사용자 실기 확인 필요.

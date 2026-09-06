@@ -35,7 +35,7 @@ export const TABS = [
   { id: 'update', label: '업데이트', icon: UPDATE_ICON, tone: 'pink' },
 ];
 
-export async function mount(root) {
+export async function mount(root, initialTab) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
@@ -545,6 +545,10 @@ export async function mount(root) {
       root.querySelectorAll('.settings-panel').forEach((p) => p.classList.toggle('active', p.dataset.panel === tab.dataset.tab));
     });
   });
+  // 빠른찾기/커맨드팔레트에서 '#/settings/<탭>' 으로 들어오면 그 탭을 바로 연다
+  if (initialTab && TABS.some((t) => t.id === initialTab)) {
+    root.querySelector(`.settings-tab[data-tab="${initialTab}"]`)?.click();
+  }
 
   // ================= 사용자 정보 =================
   async function initUserPanel() {

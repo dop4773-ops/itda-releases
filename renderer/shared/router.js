@@ -35,9 +35,13 @@ function setActiveNav(hash) {
 }
 
 async function navigate() {
-  const requested = location.hash;
-  const hash = routes[requested] ? requested : '#/dashboard';
-  if (hash !== requested) {
+  const requested = location.hash || '#/dashboard';
+  // '#/settings/update' 처럼 화면 뒤에 세부 대상을 붙일 수 있다 — base로 라우팅하고 sub는 mount에 넘긴다.
+  const secondSlash = requested.indexOf('/', 2);
+  const base = secondSlash > 0 ? requested.slice(0, secondSlash) : requested;
+  const sub = secondSlash > 0 ? requested.slice(secondSlash + 1) : null;
+  const hash = routes[base] ? base : '#/dashboard';
+  if (!routes[base]) {
     location.hash = hash; // 잘못된 해시면 대시보드로 정정 (hashchange가 다시 navigate 호출)
     return;
   }
@@ -52,7 +56,7 @@ async function navigate() {
 
   try {
     const tMount = now();
-    const result = await routes[hash].mount(root);
+    const result = await routes[hash].mount(root, sub);
     perf(`route mount ${hash}`, tMount);
     if (typeof result === 'function') unmountCurrent = result;
     window.dispatchEvent(new CustomEvent('itda:route-mounted', { detail: { hash } })); // 커맨드 팔레트가 "화면 이동 후 후속 동작"을 걸 수 있게(예: 새 투두 입력창 포커스)

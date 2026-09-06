@@ -25,6 +25,7 @@ let resultsEl = null;
 let items = []; // { icon, label, run }
 let active = 0;
 
+// "큰 카테고리" — 화면 + 설정 세부 탭. route에 '#/settings/<탭>'을 주면 본체가 그 탭을 바로 연다(router.js).
 const SCREEN_COMMANDS = [
   { icon: '🏠', label: '대시보드', kw: '대시보드 홈 dashboard', route: '#/dashboard' },
   { icon: '📥', label: 'Inbox (빠른 입력함)', kw: 'inbox 인박스', route: '#/inbox' },
@@ -34,8 +35,20 @@ const SCREEN_COMMANDS = [
   { icon: '📌', label: '포스트잇', kw: 'postit 포스트잇', route: '#/postit' },
   { icon: '🔍', label: '전체 검색', kw: 'search 검색', route: '#/search' },
   { icon: '⚙️', label: '설정', kw: 'settings 설정 환경설정', route: '#/settings' },
+  // 설정 세부 탭 (settings.js TABS와 같은 id — 탭 추가 시 여기도 한 줄)
+  { icon: '🎨', label: '설정 · 화면', kw: '설정 화면 배율 다크모드 테마 글꼴 폰트 글자색', route: '#/settings/display' },
+  { icon: '📊', label: '설정 · 대시보드', kw: '설정 대시보드 위젯배치 레이아웃', route: '#/settings/dashboard' },
+  { icon: '🏷️', label: '설정 · 태그', kw: '설정 태그 카테고리', route: '#/settings/tags' },
+  { icon: '🧩', label: '설정 · 위젯', kw: '설정 위젯', route: '#/settings/widgets' },
+  { icon: '⌨️', label: '설정 · 단축키', kw: '설정 단축키 키보드', route: '#/settings/shortcuts' },
+  { icon: '🔒', label: '설정 · 보안', kw: '설정 보안 잠금 비밀번호 pin', route: '#/settings/security' },
+  { icon: '🎛️', label: '설정 · 편의 기능', kw: '설정 편의기능 자동추천 자동실행 시작프로그램 관련항목', route: '#/settings/convenience' },
+  { icon: '📆', label: '설정 · Google Calendar', kw: '설정 구글 캘린더 google calendar 동기화', route: '#/settings/gcal' },
+  { icon: '💾', label: '설정 · 데이터 & 백업', kw: '설정 데이터 백업 복원 내보내기 가져오기', route: '#/settings/data' },
+  { icon: '🔄', label: '설정 · 업데이트', kw: '설정 업데이트 버전 최신', route: '#/settings/update' },
 ];
 const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
+let tagCommands = []; // 카테고리 태그 → '#/settings/tags'
 
 function close() {
   window.itda.spotlight.close();
@@ -118,9 +131,30 @@ function onInput() {
   if (mode === 'find') refreshFind(inputEl.value);
 }
 
-let screenItems = []; // 이번 검색어에 걸린 "큰 카테고리"(화면) — 항상 결과 맨 위에 온다
+// 이번 검색어에 걸린 "큰 카테고리"(화면·설정탭·태그). _rank 0 = 정확히 일치, 1 = 부분 일치.
+let categoryEntries = [];
+
+// 정렬 규칙: (0) 정확히 일치 → (1) 큰 카테고리(부분 일치) → (2) 개별 항목.
+// 같은 rank 안에서는 들어온 순서 유지(카테고리 먼저 넣으므로 "큰 카테고리부터").
+function rebuildItems(itemEntries) {
+  items = [...categoryEntries, ...itemEntries].map((e, i) => ({ ...e, _i: i })).sort((a, b) => a._rank - b._rank || a._i - b._i);
+  active = 0;
+  renderResults();
+}
+
+// 카테고리(화면/설정탭/태그) 항목의 rank 계산. k에 안 걸리면 null(제외).
+function categoryRank(c, k) {
+  if (!k) return 1;
+  const label = c.label.toLowerCase();
+  const kwTokens = (c.kw || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const labelWords = label.split(/[·・\s()]+/).filter(Boolean);
+  if (label === k || labelWords.includes(k) || kwTokens.includes(k)) return 0; // 정확히 일치
+  if (label.includes(k) || kwTokens.some((t) => t.includes(k))) return 1; // 부분 일치
+  return null;
+}
 
 const debouncedItemSearch = debounce(async (kw) => {
+  const k = kw.trim().toLowerCase();
   let rows = [];
   try {
     rows = await window.itda.search.query(kw);
@@ -128,28 +162,25 @@ const debouncedItemSearch = debounce(async (kw) => {
     rows = [];
   }
   if (inputEl.value.trim() !== kw.trim()) return;
-  const itemMatches = rows.slice(0, 8).map((row) => ({
-    icon: TYPE_EMOJI[row.entity_type] || '•',
-    // 메모/포스트잇 content는 HTML이라 태그를 벗겨서 순수 텍스트로.
-    label: stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 70) || '(제목 없음)',
-    run: () => openItem(row),
-  }));
-  // 큰 카테고리(화면) 먼저, 그 다음 개별 항목
-  items = [...screenItems, ...itemMatches];
-  active = 0;
-  renderResults();
+  const itemEntries = rows.slice(0, 8).map((row) => {
+    const label = stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 70) || '(제목 없음)';
+    return {
+      icon: TYPE_EMOJI[row.entity_type] || '•',
+      label,
+      _rank: label.toLowerCase() === k ? 0 : 2, // 제목이 검색어와 정확히 같으면 최상단
+      run: () => openItem(row),
+    };
+  });
+  rebuildItems(itemEntries);
 }, 160);
 
 function refreshFind(kw) {
   const k = kw.trim().toLowerCase();
-  screenItems = SCREEN_COMMANDS.filter((c) => !k || c.kw.includes(k) || c.label.toLowerCase().includes(k)).map((c) => ({
-    icon: c.icon,
-    label: c.label,
-    run: () => openRoute(c.route),
-  }));
-  items = screenItems;
-  active = 0;
-  renderResults();
+  categoryEntries = [...SCREEN_COMMANDS, ...tagCommands]
+    .map((c) => ({ c, _rank: categoryRank(c, k) }))
+    .filter((x) => x._rank !== null)
+    .map(({ c, _rank }) => ({ icon: c.icon, label: c.label, _rank, run: () => openRoute(c.route) }));
+  rebuildItems([]);
   if (k) debouncedItemSearch(kw);
 }
 
@@ -202,9 +233,26 @@ window.itda.spotlight.onSetMode?.((m) => {
   mode = m === 'find' ? 'find' : 'capture';
   items = [];
   render();
+  if (mode === 'find') loadTagCommands();
 });
+
+// 카테고리 태그를 "큰 카테고리"처럼 검색 가능하게 — '#/settings/tags'로 이동.
+async function loadTagCommands() {
+  try {
+    const cats = await window.itda.categories.list();
+    tagCommands = (cats || []).map((c) => ({
+      icon: '🏷️',
+      label: `태그 · ${c.name}`,
+      kw: `태그 카테고리 ${c.name}`,
+      route: '#/settings/tags',
+    }));
+  } catch (e) {
+    tagCommands = [];
+  }
+}
 
 (async () => {
   await applyMinimalTheme();
   render();
+  if (mode === 'find') loadTagCommands();
 })();
