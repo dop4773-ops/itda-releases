@@ -234,3 +234,121 @@ itda/
 - renderer 쪽은 IPC 채널 이름이 하나도 안 바뀌어서 전혀 손대지 않음.
 
 이걸로 6장 제안 구조가 완전히 실현됨.
+
+---
+
+# STEP 1 재분석 — 종합 개선 프롬프트 대응 (2026-09-06, v2.58.25 기준)
+
+사용자가 "안정성 → 성능 → 검색 → 연결" 종합 개선 프롬프트를 줌. 이 섹션은 그 STEP 1
+("현재 구조 분석 + 문제점 보고")이다. **읽기 전용 — 코드 변경 없음.**
+
+전제(사용자 확정):
+- **검색 구조 개편은 사용자가 추후 직접** → 이번 로드맵에서 검색 랭킹/초성/정규화/필터/일치이유는 제외.
+- 빠른 찾기 전역 단축키는 현행 `Ctrl/Cmd+Shift+Space` 유지.
+- 중복 단축키/기능은 이번엔 "파악만", 정리는 추후.
+- 지금까지 릴리스(~v2.58.25)는 윈도우 실기에서 정상 작동 확인됨 → 실기 검증 백로그 해소.
+
+## A. 현재 구조 (실측)
+
+| 계층 | 파일 수 | 요지 |
+|---|---|---|
+| main 진입 | `main/main.js` 134줄 | 단일 인스턴스 락, 트레이 상주(창 X→hide), `whenReady`에서 `initDb`→IPC 등록→창→updater/spotlight/globalShortcut/tray/autoBackup/widgetRestore |
+| DB | `main/db.js` 271줄 | `initDb`(PRAGMA 7종 + 신규시 schema.sql / 기존시 `runLightweightMigrations`) + `closeDb`(optimize + `wal_checkpoint(TRUNCATE)`) |
+| IPC | `main/ipc/*.ipc.js` 24개 + `index.js` | 도메인별. 검증 + "어떤 repo 메서드 부를지"만. `db.prepare` 없음 |
+| Repository | `main/repositories/*.repository.js` 24개 | 순수 SQL 전담 |
+| 독립 모듈 | updater / global-shortcut / spotlight / tray / auto-backup / trash-cleanup / widget-restore / link-sync / logger | main.js가 각 `init*()` 한 줄로만 물림 |
+| preload | `preload.js` | frozen `contextBridge` `window.itda.*` |
+| renderer | `renderer/views/*` 12개 + `renderer/shared/*` 40여개 | hash 라우터, `mount(root)`→cleanup |
+
+- **IPC 채널 ~115개, 진짜 중복 없음.** `updater:checkNow`/`updater:quitAndInstall`만 2회 등록으로 잡히지만 `if (!app.isPackaged) { ... return; }` 분기라 실제로는 택일.
+- **계층 규율 지켜짐**: renderer가 DB 직접 접근 안 함. ipc가 SQL 안 함.
+- **SQLite PRAGMA (v2.58.25)**: WAL / synchronous=NORMAL / foreign_keys=ON / busy_timeout=5000 / cache_size=-16000 / temp_store=MEMORY / mmap=64MB, 연결 시 `optimize`, 종료 시 `optimize`+`wal_checkpoint(TRUNCATE)`. **양호.**
+- **에러 로깅**: `logger.js`가 main `uncaughtException`/`unhandledRejection` → `userData/logs/error.log`. renderer는 preload `itda:log-error` + `shell.js` `unhandledrejection` 안전망. `initDb` 실패 시 `dialog.showErrorBox` 후 종료. **양호.**
+- **트랜잭션 사용처**: 반복 todo/event 생성, 구글 캐시 upsert, 메모폴더 reorder, 백업/복원(`data.ipc.js`). 단건 쓰기는 미사용(정상).
+- **삭제 규율**: todo/event/memo/postit = soft delete(`deleted_at`), inbox = hard delete. 완전삭제는 `trash:permanentlyDelete`에서만. 하드 삭제 경로는 `deleteLinksFor`로 연결 정리.
+- **연결(link)**: `item_links` 무방향 + 정규화(`canonicalizeLink`: 타입 랭크→id 순으로 a/b 고정) + `UNIQUE` 중복 방지 + 자기연결 금지. `discoverRelated`가 같은 카테고리/FTS 유사도로 추천(AI 없음). v2.58.25에서 위젯 종류별 그룹+컬러 이모지.
+
+## B. 문제점 (우선순위)
+
+### 🔴 P1 — 마이그레이션이 원자적이지 않음
+`runLightweightMigrations(db)`가 `ALTER TABLE`/`CREATE TABLE`/`CREATE TRIGGER`/데이터 백필을
+**트랜잭션 없이 순차 실행**. 실행 중 앱이 죽거나 한 문장이 throw하면 절반만 반영된 스키마가 남음.
+대부분은 `if (!hasColumn(...))` 가드라 다음 실행에 자가치유되지만, **데이터 변형 블록 2개**
+(`todos.status` 백필, 포스트잇 기본크기 보정)는 부분 적용/재적용 위험. 또 매 실행마다 모든
+마이그레이션의 PRAGMA 체크가 다시 돎(싸지만 무한 누적).
+→ **수정**: 본문 전체를 `db.transaction()`으로 감싸고, `PRAGMA user_version` 게이트로 최신이면
+블록 자체를 건너뛴다. `main/db.js` 한 파일, 소규모, 위험 낮음.
+
+### 🔴 P2 — 교차 엔티티 쓰기가 원자적이지 않음
+"항목 생성 + 연결 생성"이 별도 IPC 2회(`todos:add` 후 `links:add`). 두 번째 실패 시 연결 없는
+고아 항목(또는 그 반대)이 남음. 해당 경로: 포스트잇→Todo/일정 전환, Inbox→Todo/메모 전환 등.
+`link-sync.js` 내용 전파도 `*:update` 직후 자체 디바운스로 도는 사이드이펙트라 원 쓰기 트랜잭션 밖.
+→ **수정**: 전환/캡처 경로에 한해 repo에 "연결까지 한 트랜잭션" 메서드 추가. 중간 규모.
+
+### 🟡 P3 — 하드 삭제 상대의 고아 연결
+소프트 삭제는 연결 유지(복원 대비) — 의도됨. 하지만 하드 삭제된 상대의 `item_links` 행은
+`listFor`가 읽는 시점에 `getPreview===null`로 걸러질 뿐(지연 청소) DB엔 남음. **문제**: v2.58.25에
+추가한 `kindsForMany`(배지 일괄 조회)는 상대 존재 여부를 안 봄 → 하드 삭제된 Todo에만 연결됐던
+포스트잇이 "Todo 연결됨" 배지를 계속 표시.
+→ **수정**: `kindsForMany`에 상대 존재 필터 + 하드 삭제 시 `deleteLinksFor` 확인. 위험 낮음.
+
+### 🟡 P4 — IPC 핸들러 대부분 try/catch 없음 (24개 중 ~7개만 보유)
+Electron 설계상 throw는 renderer `invoke()` 프라미스를 reject → 대부분 호출부가
+`errorToast(e, ...)`로 처리하므로 **대체로 허용 가능**. 단 일부 renderer의 await/catch 없는
+fire-and-forget 호출은 `unhandledrejection`이 됨. main이 아니라 **renderer 호출부** 감사 대상. 낮음.
+
+### 🟡 P5 — 단축키 이원화 (이번엔 파악만)
+1. `shortcuts.js` `SHORTCUTS[]` — 재바인딩 가능 8개, `findConflict()` 있음:
+   `quickCapture ⌘K` · `globalQuickCapture ⌘⌥I` · `globalQuickFind ⌘⇧Space`(✅현행 유지) ·
+   `commandPalette ⌘⇧P` · `toggleSidebar ⌘\` · `toggleNotifications ⌘⇧N` ·
+   `toggleTopbar ⌘⇧H` · `lockNow ⌘⌥L`.
+2. **레지스트리 밖 하드코딩** 뷰별 keydown (findConflict 안 봄):
+   - `shell.js`: `Ctrl/Cmd+1~9` 사이드바 이동 (v2.58.24)
+   - `memo.js`: `⌘N`·`⌘F`, 맨키 `+` `f` `/` `a` `Delete`
+   - `todo.js`: 맨키 `+`  · `postit.js`: `⌘N`
+   - `calendar.js`: 맨키 `+ Tab m w d t f g ← →`
+   - `dashboard.js`: 맨키 `n w e s t ← → Esc`
+   런타임 충돌은 없음(뷰 스코프, `isUserTyping()` 가드). 다만 단일 소스가 없고 `f`=메모 폴더토글
+   vs 캘린더 검색포커스, `w`=캘린더 주간뷰 vs 대시보드 위젯추가처럼 의미 불일치.
+   → **추후**: 스크린 단축키 레지스트리를 만들어 `findConflict`에 합류. 이번엔 손대지 않음.
+
+### 🟡 P6 — 저장소에 자동화 테스트 없음
+`SMOKE_TEST.md`(수동) + CDP 스크립트(비커밋, 휘발) + eslint뿐. 프롬프트가 마이그레이션/IPC
+변경 전 회귀 테스트 확보를 요구.
+→ **수정**: `node:test`(빌트인, 프레임워크 없음)로 순수/핵심만 — 마이그레이션 멱등성,
+`canonicalizeLink`, 반복 전개(`recurrence.js`), FTS 쿼리 빌더.
+
+### 🟡 P7 — 시작/전환 성능 미계측
+`initDb`(마이그레이션+optimize)는 창 표시 전 동기 — 빠름. 대시보드 mount가 설정 ~15개 +
+todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드. **측정된 수치 없음.**
+→ **수정**: dev 플래그 뒤 시작/라우트 ms 로그부터. 그 다음 최적화.
+
+### 🟢 양호
+계층 규율 · PRAGMA · `closeDb` 생명주기 · soft/hard delete 규율 · 링크 정규화/중복방지 ·
+에러 로거 · 디자인 토큰 · AI 흔적 없음.
+
+### 참고: 기존 KNOWN_ISSUES 연계
+- **Google OAuth 7일 토큰 만료**(2티어, 2회 재발): 동의화면 "테스트" 모드의 refresh token
+  7일 제한이 근본 원인. 공용 OAuth 클라이언트 번들 + 동의화면 프로덕션 게시로 함께 해결 —
+  단 Google Cloud Console 작업이라 **사용자 계정 필요**, 별도 처리(사용자가 "추후").
+- **debounce load() null 참조**(3티어, 부분해결): `memo.js`/`inbox.js`/`tags.js` 3곳 가드 미비 —
+  P6 테스트와 같이 스윕하면 자연스러움.
+
+## C. 순차 진행 계획 (검색 제외)
+
+| # | 파트 | 범위 | 위험 |
+|---|---|---|---|
+| **1** | **STEP 1 분석 (본 문서)** | 읽기 전용 | 없음 |
+| 2 | 마이그레이션 안정화: `user_version` 게이트 + `runLightweightMigrations` 단일 트랜잭션 | `main/db.js` | 낮음 |
+| 3 | 최소 회귀 테스트(`node:test`): 마이그레이션 멱등성 / `canonicalizeLink` / 반복 전개 / FTS 빌더 | 신규 `test/`, `package.json` | 없음 |
+| 4 | 교차 엔티티 원자성: 전환/캡처 경로에 "연결까지 한 트랜잭션" repo 메서드 | repos + 해당 ipc | 중간 |
+| 5 | 고아 연결 정리: `kindsForMany` 상대 존재 필터 + 하드삭제 sweep | `links.repository.js` | 낮음 |
+| 6 | 시작/라우트 타이밍 계측(dev 플래그) | `main.js`, `router.js` | 낮음 |
+| 7 | 위젯 오류 격리 감사: 위젯 1개 throw ≠ 대시보드 사망 (`Promise.allSettled` 전수 + 위젯별 try) | `dashboard.js`, `widget-loader.js` | 낮음 |
+| 8 | debounce load() null 가드 스윕 (memo/inbox/tags) | 3개 뷰 | 낮음 |
+| — | (사용자가 추후) 검색 랭킹/초성/정규화/필터/일치이유 | — | — |
+| — | (추후) 단축키 통합 레지스트리 (P5) | — | — |
+| — | (사용자 계정 필요) 공용 OAuth 클라이언트 + 동의화면 게시 | — | — |
+
+각 파트는 CLAUDE.md "세션당 한 작업 티어" 원칙에 따라 세션 단위로 진행하고, 끝날 때마다
+변경 파일 / 내용 / 이유 / 테스트 결과 / 남은 문제를 요약한다.
