@@ -61,6 +61,22 @@ module.exports = function createLinksRepository(db, search) {
       return db.prepare(query).get(id);
     },
 
+    // (type,id)에 연결된 "상대방" 목록을 미리보기와 함께. links:listFor IPC와 검색 "관련 항목"이 공유.
+    // opts.includeTrashed=false(기본)면 소프트삭제(휴지통)된 상대는 제외. 완전삭제(고아)는 항상 제외.
+    listForWithPreview(type, id, { includeTrashed = false } = {}) {
+      return this.listRawFor(type, id)
+        .map((r) => {
+          const isA = r.a_type === type && r.a_id === id;
+          const otherType = isA ? r.b_type : r.a_type;
+          const otherId = isA ? r.b_id : r.a_id;
+          const preview = this.getPreview(otherType, otherId);
+          if (!preview) return null; // 완전삭제된 상대 — 고아 연결
+          if (!includeTrashed && preview.deleted_at) return null; // 휴지통에 있는 상대
+          return { type: otherType, ...preview };
+        })
+        .filter(Boolean);
+    },
+
     // 목록 화면에서 "이 항목에 연결이 있나 / 어떤 종류가 연결됐나"만 알고 싶을 때 —
     // 항목마다 listFor(+getPreview) N번 도는 대신, 한 방에 { id: Set(연결된 종류) } 를 만든다.
     // 상대 항목이 완전삭제된 고아 연결은 제외한다(예: 완전삭제된 Todo에만 걸려있던 포스트잇에

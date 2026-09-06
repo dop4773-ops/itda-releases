@@ -22,20 +22,10 @@ module.exports = function registerLinksIpc(ipcMain, repos) {
   });
 
   // type/id를 가진 항목 기준으로, 연결된 "상대방" 목록을 미리보기 정보와 함께 반환한다.
+  // (휴지통에 간 상대도 그대로 보여준다 — 링크 위젯의 기존 동작 유지. 완전삭제된 고아만 제외)
   ipcMain.handle('links:listFor', (event, { type, id }) => {
     assertLinkType(type);
-    const rows = links.listRawFor(type, id);
-
-    return rows
-      .map((r) => {
-        const isA = r.a_type === type && r.a_id === id;
-        const otherType = isA ? r.b_type : r.a_type;
-        const otherId = isA ? r.b_id : r.a_id;
-        const preview = links.getPreview(otherType, otherId);
-        if (!preview) return null; // 상대 항목이 아예 삭제(완전삭제)된 경우 — 고아 연결이므로 목록에서 제외
-        return { type: otherType, ...preview };
-      })
-      .filter(Boolean);
+    return links.listForWithPreview(type, id, { includeTrashed: true });
   });
 
   // 목록 화면 배지용 — 여러 항목의 "연결된 종류"를 한 번의 IPC/쿼리로. { id: ['todo','event'] }

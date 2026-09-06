@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
+import { TYPE_EMOJI } from '../shared/links-ui.js';
 
 const SEARCH_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -47,7 +48,7 @@ export async function mount(root) {
   const $ = (id) => root.querySelector('#' + id);
   let debounceTimer = null;
   let lastKeyword = '';
-  let lastResults = []; // 뷰 전환(목록↔보드) 시 재검색 없이 다시 그리기 위해 마지막 결과를 들고 있는다
+  let lastResults = { direct: [], related: [] }; // 뷰 전환(목록↔보드) 시 재검색 없이 다시 그림
   let currentView = 'board'; // 결과가 많으면 목록은 스크롤이 너무 길어져서 보드를 기본값으로 (요청에 따름)
   let selected = new Set(); // "type:id" 키 집합
   let currentAllKeys = []; // 마지막 검색 결과의 전체 키 목록 (전체선택 체크박스가 참조)
@@ -99,9 +100,24 @@ export async function mount(root) {
       </div>`;
   }
 
-  function renderResults(results) {
+  function renderRelatedRow(r) {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    const reason = r.relatedReason === 'tag' ? `같은 태그${r.tagName ? ` · ${r.tagName}` : ''}` : '연결된 항목';
+    return `
+      <div class="list-row search-related-row" data-key="${key}">
+        <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
+        <a class="main" href="${TYPE_ROUTE[r.entity_type] || '#/dashboard'}">
+          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}<span class="search-match-badge" data-match="related">${reason}</span></b>
+        </a>
+      </div>`;
+  }
+
+  function renderResults(payload) {
+    // payload: { direct, related }  (구버전 배열도 방어적으로 허용)
+    const direct = Array.isArray(payload) ? payload : payload.direct || [];
+    const related = Array.isArray(payload) ? [] : payload.related || [];
     const resultsEl = $('s-results');
-    if (results.length === 0) {
+    if (direct.length === 0) {
       resultsEl.innerHTML = emptyStateBlock({
         icon: SEARCH_ICON.replace('18', '32'),
         title: `"${escapeHtml(lastKeyword)}"에 대한 결과가 없어요`,
@@ -112,16 +128,16 @@ export async function mount(root) {
     }
 
     const grouped = {};
-    results.forEach((r) => {
+    direct.forEach((r) => {
       grouped[r.entity_type] = grouped[r.entity_type] || [];
       grouped[r.entity_type].push(r);
     });
 
-    const allKeys = results.map((r) => `${r.entity_type}:${r.entity_id}`);
+    const allKeys = direct.map((r) => `${r.entity_type}:${r.entity_id}`);
     currentAllKeys = allKeys;
 
     const listClass = currentView === 'board' ? 'search-board-grid' : '';
-    resultsEl.innerHTML = Object.entries(grouped)
+    const directHtml = Object.entries(grouped)
       .map(
         ([type, items]) => `
         <div class="search-group">
@@ -132,6 +148,13 @@ export async function mount(root) {
         </div>`
       )
       .join('');
+    const relatedHtml = related.length
+      ? `<div class="search-group search-related-group">
+           <h4>🔗 관련 항목 (${related.length})</h4>
+           <div>${related.map(renderRelatedRow).join('')}</div>
+         </div>`
+      : '';
+    resultsEl.innerHTML = directHtml + relatedHtml;
 
     updateBulkBar(allKeys);
 
@@ -149,13 +172,13 @@ export async function mount(root) {
     const resultsEl = $('s-results');
     if (!keyword.trim()) {
       selected.clear();
-      lastResults = [];
+      lastResults = { direct: [], related: [] };
       renderPrompt();
       return;
     }
     let results;
     try {
-      results = await window.itda.search.query(keyword);
+      results = await window.itda.search.query({ query: keyword, related: true });
     } catch (e) {
       errorToast(e, '검색하지 못했어요');
       resultsEl.innerHTML = emptyStateBlock({ title: '검색 중 오류가 발생했어요', subtitle: '잠시 후 다시 시도해주세요' });
@@ -174,7 +197,7 @@ export async function mount(root) {
       root.querySelectorAll('#s-viewToggle .view-toggle-btn').forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
       currentView = btn.dataset.view;
-      if (lastResults.length) renderResults(lastResults); // 재검색 없이 같은 결과를 다른 모양으로만 다시 그림
+      if (lastResults.direct?.length) renderResults(lastResults); // 재검색 없이 같은 결과를 다른 모양으로만 다시 그림
     });
   });
 

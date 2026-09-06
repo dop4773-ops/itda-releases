@@ -2018,6 +2018,12 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .search-match-badge{display:inline-block;margin-left:6px;padding:1px 6px;font-size:9.5px;font-weight:600;line-height:1.5;color:var(--text-faint);background:var(--bg);border:1px solid var(--border);border-radius:999px;vertical-align:middle;white-space:nowrap;}
 .search-match-badge[data-match="title"]{color:var(--brand);}
 .search-match-badge[data-match="chosung"]{color:#8A6FBF;}
+.search-match-badge[data-match="related"]{color:var(--text-faint);}
+/* "관련 항목" — 직접 일치 아래, 연결/같은태그로 이어진 항목 */
+.search-related-group h4{color:var(--text-soft);}
+.search-related-row{gap:9px;align-items:center;}
+.search-related-icon{flex-shrink:0;width:18px;text-align:center;font-size:13px;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",var(--app-font-family);}
+.search-related-row .main b{font-weight:500;}
 
 .search-bulk-bar{display:flex;align-items:center;gap:14px;margin-top:12px;padding:8px 12px;background:var(--bg);border-radius:var(--radius-md);}
 

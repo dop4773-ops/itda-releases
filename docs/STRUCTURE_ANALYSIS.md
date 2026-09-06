@@ -359,7 +359,7 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 | # | 내용 | 스키마 | 상태 |
 |---|---|---|---|
 | **S1** ✅ | **엔진 코어**: `search_index`를 FTS5 → 일반 테이블(LIKE 스캔) + `chosung` 컬럼으로 재구축(마이그레이션 v3). `search.repository.query()` = 정규화(공백/꼬리말) → 랭킹(제목정확>시작>포함>초성>본문) + `matchedIn`(일치이유). 한글 부분일치("부수"→"김부수")·띄어쓰기무관("김 부수"=="김부수")·초성("ㄱㅂㅅ") 지원. `chosung()`는 SQLite 커스텀 함수로 트리거에서도 사용. `links.searchCandidates`/`discoverRelated 비슷한내용`도 같은 엔진 사용(FTS MATCH 제거). `#/search`에 "제목/초성/본문 일치" 배지. — v2.58.33 | **마이그레이션 v3** | 완료 |
-| S2 | "관련 항목" 섹션 (상위 매치의 links/태그) — `{direct, related}` | 없음 | |
+| **S2** ✅ | **"관련 항목" 섹션**: `search:query`에 `related:true` 주면 `{direct, related}` 반환(기본은 평평한 배열 — 하위호환). `related` = 상위 6개 직접일치의 ① `item_links` 상대(휴지통·고아 제외) ② 같은 카테고리 항목. 직접일치·중복 제외, 최대 10건. `links.listForWithPreview()`로 통일(`links:listFor` IPC도 이걸 씀). `#/search`에 "🔗 관련 항목" 그룹(연결된 항목 / 같은 태그 배지). — v2.58.34 | 없음 | 완료 |
 | S3 | 필터 popover (기간/상태, 클라 필터) + 종류 탭 | 없음 | |
 | S4 | 최근 검색/최근 항목 시작화면 + 결과 바로가기 액션(convertItem 재사용) | `app_settings` JSON | |
 | S5 | 커맨드팔레트를 같은 엔진 위로 + "새로 만들기" 명령 | 없음 | |
