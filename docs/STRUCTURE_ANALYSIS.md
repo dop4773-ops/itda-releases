@@ -388,6 +388,16 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 - 근거 배지(🏷 태그 / 📅 같은 날짜 / 🔎 키워드 / 🕐 같이 만듦), 링크·관련 행 클릭도 딥링크(#/type/id).
 - `search.ipc.relatedFor`도 `disc.related` 기준으로 갱신(태그 근거 있으면 'tag', 아니면 'related' 배지).
 
+## 아이콘 교체 + 우클릭/팝오버 디자인 통일 (v2.59.1)
+- **아이콘**: `build/icon-source.png`(1024) → `scripts/make-icons.js`(의존성 없음, sips + 직접 ICO 조립)가
+  `build/icon.ico`(7사이즈)·`build/icon.png`(512)·`build/icons/app-icon.png`(256) 생성. 트레이는 16px에서
+  뭉개져 손 안 댐. `main.js` BrowserWindow `icon:` 추가(dev·Linux용).
+- **팝오버 통일**: `--pop-shadow` 토큰(라이트/다크) 신설. 우클릭 메뉴·연결 팝오버·색 선택기·
+  배경 설정·시리즈 삭제·텍스트 입력·멘션 등 10여 개 팝오버가 전부 `border-radius:var(--radius-lg)` +
+  `box-shadow:var(--pop-shadow)` + `@keyframes popIn` 등장 애니메이션으로 통일(하드코딩 그림자 제거).
+- **배경 이미지 버튼**: OS 기본 회색 `<input type=file>` → `.btn-secondary` 스타일 버튼 + 파일명 표시.
+  배경 종류 드롭다운 순서 재배치(없음 → 이미지 → 단색 → 패턴들), 이미지 관련 행을 위로.
+
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
 
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)

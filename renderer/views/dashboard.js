@@ -492,21 +492,25 @@ export async function mount(root) {
         <label class="cfg-row">종류
           <select class="select" id="bg-type">
             <option value="none">없음</option>
+            <option value="image">이미지</option>
             <option value="color">단색</option>
             <option value="dot">도트 패턴</option>
             <option value="grid">격자 패턴</option>
             <option value="paper">노트(가로줄)</option>
-            <option value="image">이미지</option>
           </select>
         </label>
-        <label class="cfg-row" id="bg-colorRow">색상<input type="color" id="bg-color" value="${bg.color || '#f0e6d6'}" /></label>
-        <label class="cfg-row" id="bg-imageRow">이미지 파일<input type="file" accept="image/*" id="bg-file" /></label>
+        <div class="cfg-row" id="bg-imageRow">이미지
+          <button type="button" class="btn-secondary cfg-file-btn" id="bg-fileBtn">이미지 선택…</button>
+          <span class="cfg-file-name" id="bg-fileName">${bg.imageFile || bg.dataUrl ? '현재 이미지 사용 중' : '선택된 이미지 없음'}</span>
+          <input type="file" accept="image/*" id="bg-file" hidden />
+        </div>
         <label class="cfg-row" id="bg-fitRow">채우기
           <select class="select" id="bg-fit">
             <option value="cover">꽉 채움 (잘릴 수 있음)</option>
             <option value="contain">전체 보이게 (여백)</option>
           </select>
         </label>
+        <label class="cfg-row" id="bg-colorRow">색상<input type="color" id="bg-color" value="${bg.color || '#f0e6d6'}" /></label>
         <p class="cfg-note">배경은 이 대시보드 화면에만 적용돼요. 패턴은 아주 옅게 들어가요.</p>`;
       document.body.appendChild(pop);
       bgPop = pop;
@@ -524,6 +528,8 @@ export async function mount(root) {
       };
       pop.querySelector('#bg-fit').value = bg.fit || 'cover';
       sync();
+      // 회색 OS 기본 파일버튼 대신 앱 스타일 버튼으로 대체
+      pop.querySelector('#bg-fileBtn').addEventListener('click', () => pop.querySelector('#bg-file').click());
       const commit = () => {
         applyBg();
         window.itda.settings.set({ key: 'dashboard_bg', value: JSON.stringify(bg) }).catch(() => {});
@@ -565,6 +571,8 @@ export async function mount(root) {
           }
           bg.type = 'image';
           typeSel.value = 'image';
+          const nameEl = pop.querySelector('#bg-fileName');
+          if (nameEl) nameEl.textContent = f.name;
           sync();
           commit();
         } catch (err) {

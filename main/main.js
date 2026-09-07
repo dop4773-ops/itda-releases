@@ -32,6 +32,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     backgroundColor: '#F5F6F8',
+    icon: path.join(__dirname, '..', 'build', 'icons', 'app-icon.png'), // dev·Linux용(패키지 Windows는 exe에 박힌 .ico 사용)
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true, // renderer는 절대 Node API에 직접 접근하지 않음

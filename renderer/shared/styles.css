@@ -45,6 +45,8 @@
   --radius-pill:999px; /* 탭, 필 배지 */
 
   --shadow:0 2px 6px rgba(108,140,245,.08),0 8px 20px rgba(108,140,245,.06);
+  /* 떠 있는 메뉴/팝오버 공통 그림자 — 우클릭 메뉴·배경 설정·색 선택기 등이 전부 이걸 쓴다 */
+  --pop-shadow:0 10px 34px rgba(16,24,40,.14),0 3px 10px rgba(16,24,40,.07);
 
   /* ---- 타이포 스케일 ---- */
   --fs-page-title:20px;   /* 화면 최상단 제목 (대시보드 인사말 포함, 전부 동일) */
@@ -78,6 +80,7 @@ html[data-theme="dark"]{
   --danger-border:#5A2E32;
 
   --shadow:0 2px 6px rgba(0,0,0,.25),0 8px 20px rgba(0,0,0,.18);
+  --pop-shadow:0 14px 40px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
 
   --tone-purple-bg:linear-gradient(135deg,#2A2447,#241F3D);
   --tone-purple-fg:#B4A3FF;
@@ -348,7 +351,7 @@ body.topbar-hidden .global-topbar{display:none;}
 .notif-dropdown{
   position:absolute;top:calc(100% + 8px);right:0;width:320px;max-height:400px;overflow-y:auto;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:0 12px 32px rgba(16,24,40,.16);z-index:20;
+  box-shadow:var(--pop-shadow);z-index:20;
   display:none;flex-direction:column;
 }
 .bell-wrap.open .notif-dropdown{display:flex;}
@@ -1078,25 +1081,29 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 .links-popover{
   position:absolute;top:calc(100% + 8px);right:0;width:280px;max-height:340px;overflow-y:auto;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:0 12px 32px rgba(16,24,40,.16);z-index:20;padding:10px 12px;
+  box-shadow:var(--pop-shadow);z-index:20;padding:10px 12px;
   display:none;flex-direction:column;gap:8px;
 }
 .links-popover-wrap.open .links-popover{display:flex;}
 .links-popover-head{font-size:12px;font-weight:600;color:var(--text-faint);}
 
 /* ================= 우클릭 컨텍스트 메뉴 (삭제/연결/위젯으로 보기) ================= */
+/* 떠 있는 메뉴/팝오버는 전부 같은 형태 — radius-lg + --pop-shadow + 살짝 뜨는 등장 */
+@keyframes popIn{from{opacity:0;transform:translateY(-4px) scale(.98);}to{opacity:1;transform:none;}}
 .ctx-menu{
-  position:fixed;z-index:200;min-width:160px;max-width:280px;max-height:80vh;overflow-y:auto;padding:6px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);display:flex;flex-direction:column;gap:2px;
+  position:fixed;z-index:200;min-width:168px;max-width:280px;max-height:80vh;overflow-y:auto;padding:5px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--pop-shadow);display:flex;flex-direction:column;gap:1px;
+  animation:popIn .11s ease both;transform-origin:top left;
 }
 .ctx-menu-item{
-  display:flex;align-items:center;gap:8px;text-align:left;border:none;background:none;
-  padding:8px 10px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text);cursor:pointer;
+  display:flex;align-items:center;gap:9px;text-align:left;border:none;background:none;
+  padding:8px 10px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text);cursor:pointer;line-height:1.3;
 }
 .ctx-menu-item:hover{background:var(--brand-soft);color:var(--brand);}
+.ctx-menu-item.ctx-menu-danger{color:var(--danger);}
 .ctx-menu-item.ctx-menu-danger:hover{background:var(--danger-soft);color:var(--danger);}
-.ctx-menu-divider{height:1px;background:var(--divider);margin:4px 2px;}
+.ctx-menu-divider{height:1px;background:var(--divider);margin:4px 6px;}
 .ctx-menu-item .ctx-menu-x{margin-left:auto;color:var(--text-faint);font-size:11px;padding:0 3px;border-radius:4px;}
 .ctx-menu-item .ctx-menu-x:hover{background:var(--danger-soft);color:var(--danger);}
 .ctx-menu-empty{padding:8px 10px;font-size:12px;color:var(--text-faint);}
@@ -1113,14 +1120,16 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 .ctx-link-popover{
   position:fixed;z-index:200;width:280px;max-height:340px;overflow-y:auto;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+  box-shadow:var(--pop-shadow);padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+  animation:popIn .11s ease both;transform-origin:top left;
 }
 
 /* ================= 메모/포스트잇 글자색 선택기 (엑셀/한글 스타일 프리셋 그리드 + 사용자 지정) ================= */
 .color-picker-pop{
   position:fixed;z-index:200;width:148px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--pop-shadow);padding:10px;display:flex;flex-direction:column;gap:8px;
+  animation:popIn .11s ease both;transform-origin:top left;
 }
 .color-picker-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
 .color-picker-swatch{width:26px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.12);cursor:pointer;padding:0;}
@@ -1136,8 +1145,8 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 /* ================= 반복 항목 삭제 시 "이 항목만 / 이후 전부" 선택 팝오버 ================= */
 .series-scope-pop{
   position:fixed;z-index:200;width:200px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--pop-shadow);padding:10px;display:flex;flex-direction:column;gap:6px;
 }
 .series-scope-title{font-size:11.5px;color:var(--text-faint);margin-bottom:2px;}
 .series-scope-pop button{width:100%;text-align:center;}
@@ -1145,8 +1154,8 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 /* ================= 텍스트 한 줄 입력 팝오버 (프리셋 이름 저장 등) ================= */
 .text-prompt-pop{
   position:fixed;z-index:200;width:220px;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:10px;display:flex;flex-direction:column;gap:8px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--pop-shadow);padding:10px;display:flex;flex-direction:column;gap:8px;
 }
 .text-prompt-title{font-size:11.5px;color:var(--text-faint);}
 .text-prompt-actions{display:flex;gap:6px;justify-content:flex-end;}
@@ -1156,7 +1165,7 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 .preset-preview-pop{
   position:fixed;z-index:200;padding:6px;pointer-events:none;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);
+  box-shadow:var(--pop-shadow);
 }
 .preset-preview-canvas{position:relative;background:var(--bg);border-radius:var(--radius-sm);overflow:hidden;}
 .preset-preview-box{position:absolute;background:var(--brand-soft);border:1px solid var(--brand);border-radius:2px;}
@@ -1167,8 +1176,8 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 /* ================= "@검색" 빠른 연결 — 메모/포스트잇 본문에서 @입력시 뜨는 팝업 + 삽입된 연결 칩 ================= */
 .mention-popup{
   position:absolute;z-index:200;min-width:220px;max-width:320px;max-height:260px;overflow-y:auto;
-  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);
-  box-shadow:0 12px 32px rgba(16,24,40,.18);padding:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  box-shadow:var(--pop-shadow);padding:6px;
 }
 .mention-popup-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--radius-sm);font-size:12.5px;cursor:pointer;}
 .mention-popup-item.active,.mention-popup-item:hover{background:var(--brand-soft);color:var(--brand);}
@@ -1570,8 +1579,10 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-block-empty,.image-block-empty{font-size:11.5px;color:var(--text-faint);padding:10px;text-align:center;}
 
 /* 설정 팝오버 */
-.dash-block-config{position:fixed;z-index:210;width:260px;max-height:70vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:0 12px 32px rgba(16,24,40,.2);padding:12px;display:flex;flex-direction:column;gap:8px;}
-.dash-block-config .cfg-row{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-soft);}
+.dash-block-config{position:fixed;z-index:210;width:264px;max-height:70vh;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--pop-shadow);padding:12px;display:flex;flex-direction:column;gap:9px;animation:popIn .11s ease both;transform-origin:top left;}
+.dash-block-config .cfg-row{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--text-soft);}
+.dash-block-config .cfg-file-btn{width:100%;justify-content:center;font-weight:600;}
+.dash-block-config .cfg-file-name{font-size:10.5px;font-weight:400;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .dash-block-config .cfg-row select,.dash-block-config .cfg-row input[type="text"],.dash-block-config .cfg-row .input,.dash-block-config .cfg-row textarea{width:100%;}
 .dash-block-config .cfg-row input[type="checkbox"]{width:auto;}
 .dash-block-config .cfg-note{font-size:10.5px;color:var(--text-faint);margin:0;line-height:1.5;}
