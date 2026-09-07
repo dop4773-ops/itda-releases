@@ -24,8 +24,12 @@ function subtitleFor(item) {
 }
 
 // 각 타입의 후보 목록을 가져온다 (연결 대상 선택용). 소프트 삭제된 항목은 각 list API가 이미 제외하고 반환한다.
-async function fetchCandidates(type) {
-  if (type === 'todo') return (await window.itda.todos.list({})).map((t) => ({ id: t.id, label: t.title }));
+async function fetchCandidates(type, hideDoneTodos) {
+  if (type === 'todo') {
+    let todos = await window.itda.todos.list({});
+    if (hideDoneTodos) todos = todos.filter((t) => !t.is_done);
+    return todos.map((t) => ({ id: t.id, label: t.title }));
+  }
   if (type === 'event') {
     const today = new Date().toISOString().slice(0, 10);
     const from = { fromDate: '2000-01-01', toDate: '2100-01-01' }; // 연결 후보는 기간 제한 없이 전부 보여준다
@@ -49,19 +53,25 @@ export async function mountLinksWidget(container, self) {
   let discovered = { sameCategory: [], similar: [] };
   let pickerOpen = false;
   let pickerType = 'todo';
+  let hideDoneTodos = false; // 설정 > 편의 기능: 완료한 Todo는 연결 목록에서 숨기기
 
   async function load() {
     if (!container.isConnected) return; // 위젯이 이미 DOM에서 떨어졌으면(다른 항목 선택 등) 조회 자체를 생략
     try {
       // 설정 → 편의 기능에서 끌 수 있음 — 꺼져있으면 아예 요청하지 않는다(불필요한 조회 생략)
-      const autoSuggestOn = (await window.itda.settings.get('links_auto_suggest')) !== '0';
+      const [autoSuggestRaw, hideDoneRaw] = await Promise.all([
+        window.itda.settings.get('links_auto_suggest'),
+        window.itda.settings.get('links_hide_done_todos'),
+      ]);
+      const autoSuggestOn = autoSuggestRaw !== '0';
+      hideDoneTodos = hideDoneRaw === '1';
       const [linksResult, discoverResult] = await Promise.all([
         window.itda.links.listFor({ type: self.type, id: self.id }),
         autoSuggestOn
           ? window.itda.links.discover({ type: self.type, id: self.id }).catch(() => ({ sameCategory: [], similar: [] })) // 자동추천은 실패해도 직접연결 목록은 살아있어야 하니 별도로 방어
           : Promise.resolve({ sameCategory: [], similar: [] }),
       ]);
-      links = linksResult;
+      links = hideDoneTodos ? linksResult.filter((l) => !(l.type === 'todo' && l.is_done)) : linksResult;
       discovered = discoverResult || { sameCategory: [], similar: [] };
     } catch (e) {
       errorToast(e, '연결된 항목을 불러오지 못했어요');
@@ -164,7 +174,7 @@ export async function mountLinksWidget(container, self) {
     select.innerHTML = `<option value="">불러오는 중…</option>`;
     let candidates = [];
     try {
-      candidates = await fetchCandidates(pickerType);
+      candidates = await fetchCandidates(pickerType, hideDoneTodos);
     } catch (e) {
       errorToast(e, '목록을 불러오지 못했어요');
     }

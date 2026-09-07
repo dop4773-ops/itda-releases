@@ -339,6 +339,16 @@ export async function mount(root, initialTab) {
                 <span class="switch-track"><span class="switch-thumb"></span></span>
               </label>
             </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div class="settings-row-title">완료한 Todo는 연결 목록에서 숨기기</div>
+                <div class="settings-row-desc">"🔗 연결된 항목"과 직접 연결할 항목 고르는 목록에서 이미 완료한 Todo를 감춰요. 연결 자체는 유지돼요(다시 켜면 보임).</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conv-hideDoneTodoToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
             <div class="update-row" style="margin-top:12px;display:block;">
               <div class="settings-row-title">연결된 항목 내용 동기화</div>
               <div class="settings-row-desc">연결된 두 항목 중 하나의 제목·본문을 고치면 다른 쪽도 같이 맞춰줘요. 메모↔포스트잇끼리는 체크박스·서식·사진까지 그대로 옮겨져요. 날짜·완료 여부처럼 타입마다 다른 값은 건드리지 않아요.</div>
@@ -1028,6 +1038,17 @@ export async function mount(root, initialTab) {
       } catch (e) {
         errorToast(e, '저장하지 못했어요');
         autoSuggestToggle.checked = !autoSuggestToggle.checked;
+      }
+    });
+
+    const hideDoneTodoToggle = $('conv-hideDoneTodoToggle');
+    hideDoneTodoToggle.checked = (await window.itda.settings.get('links_hide_done_todos')) === '1';
+    hideDoneTodoToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'links_hide_done_todos', value: hideDoneTodoToggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        hideDoneTodoToggle.checked = !hideDoneTodoToggle.checked;
       }
     });
 

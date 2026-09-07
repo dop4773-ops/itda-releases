@@ -375,6 +375,10 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 빠른찾기 `openItem` / 커맨드팔레트 `buildItemCommand` / `#/search` 링크가 전부 이 딥링크 사용
 (빠른찾기·팔레트는 예전엔 낱개 위젯을 띄웠음 — 이제 본체에서 그 항목을 연다).
 
+## 연결: 완료한 Todo 숨기기 설정 (v2.58.40)
+설정 > 편의 기능 `links_hide_done_todos`(기본 off). 켜면 `links-ui.js`의 "연결된 항목" 목록과
+직접 연결 후보 목록에서 `is_done` Todo를 감춘다(연결 자체는 유지). discover 추천은 별도(auto-suggest 토글).
+
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
 
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)
