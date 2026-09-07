@@ -14,18 +14,26 @@ function relatedFor(repos, direct, cap = 10) {
       seen.add(key);
       out.push({ entity_type: l.type, entity_id: l.id, title: l.label || '', content: '', relatedReason: 'link', via: h.title || '' });
     }
-    // 2) 같은 카테고리(태그) 항목
+    // 2) 관련 항목(같은 태그·날짜·키워드로 이어진 것)
     let disc;
     try {
       disc = repos.links.discoverRelated(h.entity_type, h.entity_id);
     } catch (e) {
-      disc = { sameCategory: [] };
+      disc = { related: [] };
     }
-    for (const sc of disc.sameCategory || []) {
-      const key = `${sc.type}:${sc.id}`;
+    for (const rel of disc.related || []) {
+      const key = `${rel.type}:${rel.id}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ entity_type: sc.type, entity_id: sc.id, title: sc.label || '', content: '', relatedReason: 'tag', tagName: sc.tagName || '' });
+      const tagReason = (rel.reasons || []).find((r) => r.kind === 'tag');
+      out.push({
+        entity_type: rel.type,
+        entity_id: rel.id,
+        title: rel.label || '',
+        content: '',
+        relatedReason: tagReason ? 'tag' : 'related',
+        tagName: tagReason ? tagReason.tagName : '',
+      });
     }
   }
   return out.slice(0, cap);

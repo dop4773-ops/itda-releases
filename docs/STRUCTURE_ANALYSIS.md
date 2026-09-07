@@ -379,6 +379,15 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 설정 > 편의 기능 `links_hide_done_todos`(기본 off). 켜면 `links-ui.js`의 "연결된 항목" 목록과
 직접 연결 후보 목록에서 `is_done` Todo를 감춘다(연결 자체는 유지). discover 추천은 별도(auto-suggest 토글).
 
+## 관련 항목 점수화 (A+B+C, v2.59.0)
+- **A. 근거 + 점수화**: `discoverRelated`가 `{sameCategory, similar}` → `{related: [{type,id,label,score,reasons}]}`.
+  점수: 같은 태그 +3 / 같은 날짜 ±1일 +2(todo=마감일, event=시작일, memo·postit=만든날) /
+  공유 키워드 개당 +1(최대 3) / **같이 만든 항목 ±10분 +2**. 점수 2 미만은 노이즈로 버림, 최대 6.
+- **B. 같이 만든 항목**: created_at ±10분 후보를 풀에 포함, `coCreated` 근거.
+- **C. 한 번에 연결**: links-ui.js 관련 항목 행에 체크박스 + "선택 N개 연결" 버튼(`Promise.all` links.add).
+- 근거 배지(🏷 태그 / 📅 같은 날짜 / 🔎 키워드 / 🕐 같이 만듦), 링크·관련 행 클릭도 딥링크(#/type/id).
+- `search.ipc.relatedFor`도 `disc.related` 기준으로 갱신(태그 근거 있으면 'tag', 아니면 'related' 배지).
+
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
 
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)

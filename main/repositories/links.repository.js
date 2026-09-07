@@ -15,8 +15,24 @@ const PREVIEW_QUERIES = {
 // item_links의 타입 → 실제 테이블. 고아 연결(상대 항목이 완전삭제됨) 판별에 쓴다.
 const LINK_TABLES = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits', inbox: 'inbox_items' };
 
-// 자동 관련 항목 발견 — 카테고리(태그)가 있는 4개 타입 전부(포스트잇도 category_id가 생겼음)
-const CATEGORY_TABLES = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits' };
+// 관련 항목 후보로 볼 타입 (inbox 제외 — 정리 전 임시 수집함이라 "관련" 개념이 약함)
+const DISCOVER_TYPES = ['todo', 'event', 'memo', 'postit'];
+
+// 관련 항목 점수/근거를 계산할 때 후보 항목에서 뽑아오는 필드.
+// refDate = "이 항목의 대표 날짜"(todo=마감일, event=시작일, memo/postit=만든 날) — "같은 날짜" 근거용.
+const DISCOVER_SELECT = {
+  todo: `SELECT id, title, coalesce(memo,'') AS content, category_id, created_at, due_date AS refDate FROM todos`,
+  event: `SELECT id, title, coalesce(memo,'') AS content, category_id, created_at, substr(start_at,1,10) AS refDate FROM events`,
+  memo: `SELECT id, coalesce(title,'') AS title, content, category_id, created_at, substr(created_at,1,10) AS refDate FROM memos`,
+  postit: `SELECT id, coalesce(title,'') AS title, content, category_id, created_at, substr(created_at,1,10) AS refDate FROM postits`,
+};
+
+const plain = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+const keywordsOf = (title, content) =>
+  [...new Set(`${plain(title)} ${plain(content)}`.split(' ').filter((t) => t.length >= 2))].slice(0, 10);
+const daysBetween = (a, b) => Math.abs((new Date(a + 'T00:00') - new Date(b + 'T00:00')) / 86400000);
+const minutesBetween = (a, b) =>
+  Math.abs((new Date(String(a).replace(' ', 'T')) - new Date(String(b).replace(' ', 'T'))) / 60000);
 
 // search: search.repository — "@검색"과 "비슷한 내용" 추천이 통합검색과 같은 매칭을 쓰게 한다.
 module.exports = function createLinksRepository(db, search) {
@@ -130,75 +146,79 @@ module.exports = function createLinksRepository(db, search) {
       return search.candidates(keyword, excludeType, excludeId);
     },
 
-    // "연결을 관리하는 프로그램이 아니라 연결을 발견하게 해주는 프로그램" — 사용자가 직접 연결하지 않아도
-    // 카테고리(태그)가 같거나 제목/내용이 비슷한 항목을 자동으로 찾아 추천한다.
-    // 오탐 우려 때문에(문서 6번 요구사항) 직접 연결(item_links)과는 항상 분리해서 반환하고,
-    // 이미 직접 연결된 항목/자기 자신은 추천 후보에서 제외한다.
+    // 관련 항목 발견 — 직접 연결하지 않아도 "관련 있어 보이는" 항목을 근거와 함께 점수순으로 추천.
+    // 근거: 같은 태그(+3) / 같은 날짜 ±1일(+2) / 공유 키워드(개당 +1, 최대 3) / 같이 만든 항목 ±15분(+2).
+    // 점수 2점 미만은 노이즈로 보고 버린다(키워드 1개만 겹치는 정도는 안 보임). 최대 6개.
+    // 반환: { related: [{ type, id, label, score, reasons: [{kind,...}] }] }  (직접 연결/자기 자신 제외)
     discoverRelated(type, id) {
-      const preview = this.getPreview(type, id);
-      if (!preview) return { sameCategory: [], similar: [] };
+      const self = db.prepare(`${DISCOVER_SELECT[type] || DISCOVER_SELECT.memo} WHERE id = ?`).get(id);
+      if (!self) return { related: [] };
 
-      const alreadyLinked = new Set([`${type}:${id}`]);
+      const excluded = new Set([`${type}:${id}`]);
       this.listRawFor(type, id).forEach((r) => {
         const isA = r.a_type === type && r.a_id === id;
-        alreadyLinked.add(isA ? `${r.b_type}:${r.b_id}` : `${r.a_type}:${r.a_id}`);
+        excluded.add(isA ? `${r.b_type}:${r.b_id}` : `${r.a_type}:${r.a_id}`);
       });
 
-      // 1) 같은 카테고리(태그) — todo/event/memo만 category_id를 가짐 (postit엔 없음)
-      let sameCategory = [];
-      const selfTable = CATEGORY_TABLES[type];
-      let categoryInfo = null;
-      if (selfTable) {
-        const row = db.prepare(`SELECT category_id FROM ${selfTable} WHERE id = ?`).get(id);
-        if (row?.category_id) {
-          categoryInfo = db.prepare(`SELECT id, name, color_hex FROM categories WHERE id = ?`).get(row.category_id);
-          if (categoryInfo) {
-            const rows = [
-              ...db
-                .prepare(`SELECT id, title AS label FROM todos WHERE category_id = ? AND deleted_at IS NULL`)
-                .all(categoryInfo.id)
-                .map((r) => ({ type: 'todo', ...r })),
-              ...db
-                .prepare(`SELECT id, title AS label FROM events WHERE category_id = ? AND deleted_at IS NULL`)
-                .all(categoryInfo.id)
-                .map((r) => ({ type: 'event', ...r })),
-              ...db
-                .prepare(`SELECT id, coalesce(title, substr(content,1,300)) AS label FROM memos WHERE category_id = ? AND deleted_at IS NULL`)
-                .all(categoryInfo.id)
-                .map((r) => ({ type: 'memo', ...r })),
-              ...db
-                .prepare(`SELECT id, coalesce(title, substr(content,1,300)) AS label FROM postits WHERE category_id = ? AND deleted_at IS NULL`)
-                .all(categoryInfo.id)
-                .map((r) => ({ type: 'postit', ...r })),
-            ];
-            sameCategory = rows
-              .filter((r) => !alreadyLinked.has(`${r.type}:${r.id}`))
-              .slice(0, 6)
-              .map((r) => ({
-                type: r.type,
-                id: r.id,
-                label: (r.label || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '(제목 없음)',
-                tagName: categoryInfo.name,
-                tagColor: categoryInfo.color_hex,
-              }));
-          }
+      const selfKw = keywordsOf(self.title, self.content);
+      const category = self.category_id
+        ? db.prepare('SELECT id, name, color_hex FROM categories WHERE id = ?').get(self.category_id)
+        : null;
+
+      // 후보 풀 — 같은 카테고리(전체 기간) + 비슷한 시각(±20분) 생성 + 키워드 매칭
+      const pool = new Map();
+      const add = (c) => {
+        const key = `${c.type}:${c.id}`;
+        if (!excluded.has(key) && !pool.has(key)) pool.set(key, c);
+      };
+      for (const t of DISCOVER_TYPES) {
+        const stmt = db.prepare(
+          `${DISCOVER_SELECT[t]} WHERE deleted_at IS NULL
+           AND (category_id = @cat OR created_at BETWEEN datetime(@ts,'-10 minutes') AND datetime(@ts,'+10 minutes'))
+           LIMIT 60`
+        );
+        stmt.all({ cat: category ? category.id : -1, ts: self.created_at || '9999-01-01' }).forEach((r) => add({ type: t, ...r }));
+      }
+      search.similarTo(selfKw, excluded).forEach((r) => {
+        if (pool.has(`${r.type}:${r.id}`)) return;
+        const full = db.prepare(`${DISCOVER_SELECT[r.type]} WHERE id = ?`).get(r.id);
+        if (full) add({ type: r.type, ...full });
+      });
+
+      const scored = [];
+      for (const c of pool.values()) {
+        let score = 0;
+        const reasons = [];
+        if (category && c.category_id === category.id) {
+          score += 3;
+          reasons.push({ kind: 'tag', tagName: category.name, tagColor: category.color_hex });
+        }
+        if (self.refDate && c.refDate && daysBetween(self.refDate, c.refDate) <= 1) {
+          score += 2;
+          reasons.push({ kind: 'date', date: c.refDate });
+        }
+        const cKw = keywordsOf(c.title, c.content);
+        const shared = selfKw.filter((w) => cKw.includes(w));
+        if (shared.length) {
+          score += Math.min(shared.length, 3);
+          reasons.push({ kind: 'keyword', words: shared.slice(0, 3) });
+        }
+        if (self.created_at && c.created_at && minutesBetween(self.created_at, c.created_at) <= 10) {
+          score += 2;
+          reasons.push({ kind: 'coCreated' });
+        }
+        if (score >= 2) {
+          scored.push({
+            type: c.type,
+            id: c.id,
+            label: plain(c.title) || plain(c.content).slice(0, 60) || '(제목 없음)',
+            score,
+            reasons,
+          });
         }
       }
-
-      // 2) 비슷한 내용 — 제목(또는 본문 대체 텍스트)에서 뽑은 키워드로 넓게(OR) 훑는다.
-      const plainText = (preview.label || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      const tokens = [...new Set(plainText.split(' ').filter((t) => t.length >= 2))].slice(0, 8);
-      const excludeKeys = new Set([...alreadyLinked, ...sameCategory.map((sc) => `${sc.type}:${sc.id}`)]);
-      const similar = search
-        .similarTo(tokens, excludeKeys)
-        .slice(0, 6)
-        .map((r) => ({
-          type: r.type,
-          id: r.id,
-          label: (r.title || '').trim() || (r.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || '(제목 없음)',
-        }));
-
-      return { sameCategory, similar };
+      scored.sort((a, b) => b.score - a.score || String(a.label).length - String(b.label).length);
+      return { related: scored.slice(0, 6) };
     },
   };
 };

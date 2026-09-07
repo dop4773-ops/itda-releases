@@ -31,7 +31,6 @@ async function fetchCandidates(type, hideDoneTodos) {
     return todos.map((t) => ({ id: t.id, label: t.title }));
   }
   if (type === 'event') {
-    const today = new Date().toISOString().slice(0, 10);
     const from = { fromDate: '2000-01-01', toDate: '2100-01-01' }; // 연결 후보는 기간 제한 없이 전부 보여준다
     const events = await window.itda.events.range(from);
     return events.map((e) => ({ id: e.id, label: `${e.title} · ${(e.start_at || '').slice(0, 16)}` }));
@@ -48,12 +47,23 @@ async function fetchCandidates(type, hideDoneTodos) {
  * @param {HTMLElement} container - 위젯을 그릴 빈 컨테이너
  * @param {{type: 'todo'|'event'|'memo'|'postit', id: number}} self - 현재 보고 있는 항목
  */
+// 관련 항목 추천 근거(discoverRelated의 reasons) → 배지 텍스트
+const REASON_ICON = { tag: '🏷', date: '📅', keyword: '🔎', coCreated: '🕐' };
+function reasonText(r) {
+  if (r.kind === 'tag') return r.tagName || '같은 태그';
+  if (r.kind === 'date') return '같은 날짜';
+  if (r.kind === 'keyword') return (r.words || []).join(', ');
+  if (r.kind === 'coCreated') return '같이 만듦';
+  return '';
+}
+
 export async function mountLinksWidget(container, self) {
   let links = [];
-  let discovered = { sameCategory: [], similar: [] };
+  let discovered = { related: [] };
   let pickerOpen = false;
   let pickerType = 'todo';
   let hideDoneTodos = false; // 설정 > 편의 기능: 완료한 Todo는 연결 목록에서 숨기기
+  const selectedDiscover = new Set(); // "type:id" — 관련 항목에서 체크한 것들(한 번에 연결)
 
   async function load() {
     if (!container.isConnected) return; // 위젯이 이미 DOM에서 떨어졌으면(다른 항목 선택 등) 조회 자체를 생략
@@ -69,10 +79,13 @@ export async function mountLinksWidget(container, self) {
         window.itda.links.listFor({ type: self.type, id: self.id }),
         autoSuggestOn
           ? window.itda.links.discover({ type: self.type, id: self.id }).catch(() => ({ sameCategory: [], similar: [] })) // 자동추천은 실패해도 직접연결 목록은 살아있어야 하니 별도로 방어
-          : Promise.resolve({ sameCategory: [], similar: [] }),
+          : Promise.resolve({ related: [] }),
       ]);
       links = hideDoneTodos ? linksResult.filter((l) => !(l.type === 'todo' && l.is_done)) : linksResult;
-      discovered = discoverResult || { sameCategory: [], similar: [] };
+      discovered = discoverResult || { related: [] };
+      // 관련 목록이 바뀌었으니 더 이상 없는 항목의 체크는 정리
+      const relKeys = new Set((discovered.related || []).map((d) => `${d.type}:${d.id}`));
+      [...selectedDiscover].forEach((k) => { if (!relKeys.has(k)) selectedDiscover.delete(k); });
     } catch (e) {
       errorToast(e, '연결된 항목을 불러오지 못했어요');
       links = [];
@@ -81,11 +94,18 @@ export async function mountLinksWidget(container, self) {
   }
 
   function renderDiscoverRow(d) {
+    const key = `${d.type}:${d.id}`;
+    const badges = (d.reasons || [])
+      .slice(0, 2)
+      .map((r) => `<span class="link-reason" data-kind="${r.kind}">${REASON_ICON[r.kind] || ''} ${escapeHtml(reasonText(r))}</span>`)
+      .join('');
     return `
       <div class="link-item link-item-suggested" data-type="${d.type}" data-id="${d.id}">
-        <a class="link-item-main" href="${TYPE_ROUTE[d.type]}">
+        <input type="checkbox" class="link-discover-check" data-key="${key}" ${selectedDiscover.has(key) ? 'checked' : ''} title="선택" />
+        <a class="link-item-main" href="${TYPE_ROUTE[d.type]}/${d.id}">
           <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
           <span class="link-item-label">${escapeHtml(plainLabel(d.label))}</span>
+          ${badges ? `<span class="link-reasons">${badges}</span>` : ''}
         </a>
         <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>
       </div>`;
@@ -93,7 +113,7 @@ export async function mountLinksWidget(container, self) {
 
   function render() {
     const linkableTypes = Object.keys(LINK_TYPE_LABEL).filter((t) => t !== self.type || true); // 같은 타입끼리도 연결 허용(예: Todo-Todo)
-    const hasDiscovered = discovered.sameCategory.length > 0 || discovered.similar.length > 0;
+    const related = discovered.related || [];
     // 종류별로 묶어서 보여준다 — "이게 투두인지 메모인지" 한눈에 구분되게(피드백/디자인 시안 반영).
     const grouped = {};
     links.forEach((l) => {
@@ -101,7 +121,7 @@ export async function mountLinksWidget(container, self) {
     });
     const linkRow = (l) => `
       <div class="link-item" data-type="${l.type}" data-id="${l.id}">
-        <a class="link-item-main" href="${TYPE_ROUTE[l.type]}">
+        <a class="link-item-main" href="${TYPE_ROUTE[l.type]}/${l.id}">
           <span class="link-item-label">${escapeHtml(plainLabel(l.label))}</span>
           ${subtitleFor(l) ? `<span class="link-item-sub">${escapeHtml(subtitleFor(l))}</span>` : ''}
         </a>
@@ -138,28 +158,14 @@ export async function mountLinksWidget(container, self) {
         }
 
         ${
-          hasDiscovered
+          related.length
             ? `
           <div class="links-discover">
-            <div class="links-discover-head">✨ 관련 항목 <span class="links-discover-hint">자동 추천 · 오탐일 수 있어요</span></div>
-            ${
-              discovered.sameCategory.length
-                ? `
-              <div class="links-discover-group">
-                <div class="links-discover-group-label">🏷 같은 카테고리${discovered.sameCategory[0].tagName ? ` · ${escapeHtml(discovered.sameCategory[0].tagName)}` : ''}</div>
-                ${discovered.sameCategory.map(renderDiscoverRow).join('')}
-              </div>`
-                : ''
-            }
-            ${
-              discovered.similar.length
-                ? `
-              <div class="links-discover-group">
-                <div class="links-discover-group-label">🔎 비슷한 내용</div>
-                ${discovered.similar.map(renderDiscoverRow).join('')}
-              </div>`
-                : ''
-            }
+            <div class="links-discover-head">
+              ✨ 관련 항목 <span class="links-discover-hint">태그·날짜·키워드 기준</span>
+              <button class="btn-link link-discover-connect" id="lw-connectSel" ${selectedDiscover.size ? '' : 'hidden'}>선택 ${selectedDiscover.size}개 연결</button>
+            </div>
+            ${related.map(renderDiscoverRow).join('')}
           </div>`
             : ''
         }
@@ -211,6 +217,41 @@ export async function mountLinksWidget(container, self) {
         }
       });
     });
+
+    // 관련 항목 체크박스 → "선택 N개 연결" 버튼 노출/갱신
+    container.querySelectorAll('.link-discover-check').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) selectedDiscover.add(cb.dataset.key);
+        else selectedDiscover.delete(cb.dataset.key);
+        const btn = container.querySelector('#lw-connectSel');
+        if (btn) {
+          btn.hidden = selectedDiscover.size === 0;
+          btn.textContent = `선택 ${selectedDiscover.size}개 연결`;
+        }
+      });
+    });
+    const connectSelBtn = container.querySelector('#lw-connectSel');
+    if (connectSelBtn) {
+      connectSelBtn.addEventListener('click', async () => {
+        const picks = [...selectedDiscover].map((k) => {
+          const [t, i] = k.split(':');
+          return { type: t, id: Number(i) };
+        });
+        if (!picks.length) return;
+        connectSelBtn.disabled = true;
+        try {
+          await Promise.all(
+            picks.map((p) => window.itda.links.add({ aType: self.type, aId: self.id, bType: p.type, bId: p.id }))
+          );
+          toast(`${picks.length}개 연결했어요`);
+          selectedDiscover.clear();
+          await load();
+        } catch (err) {
+          errorToast(err, '일부를 연결하지 못했어요');
+          await load();
+        }
+      });
+    }
 
     const addBtn = container.querySelector('#lw-addBtn');
     if (addBtn) {

@@ -908,6 +908,13 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .links-discover-group-label{font-size:10.5px;color:var(--text-faint);padding:0 2px;}
 .link-item-suggested .link-item-main{background:transparent;border:1px dashed var(--border);}
 .link-item-suggested .link-item-main:hover{background:var(--brand-soft);border-color:var(--brand);}
+.link-discover-check{flex-shrink:0;width:13px;height:13px;accent-color:var(--brand);cursor:pointer;}
+.link-discover-connect{margin-left:auto;font-size:10.5px;}
+.link-reasons{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:auto;flex-shrink:0;}
+.link-reason{font-size:9px;font-weight:600;color:var(--text-faint);background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:0 5px;line-height:1.7;white-space:nowrap;}
+.link-reason[data-kind="tag"]{color:var(--brand);}
+.link-reason[data-kind="date"]{color:#6C8CF5;}
+.link-reason[data-kind="coCreated"]{color:#E7B54F;}
 
 @media (max-width: 900px){
   .todo-layout.panel-open{grid-template-columns:1fr;}

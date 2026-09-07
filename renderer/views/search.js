@@ -218,7 +218,12 @@ export async function mount(root) {
 
   function renderRelatedRow(r) {
     const key = `${r.entity_type}:${r.entity_id}`;
-    const reason = r.relatedReason === 'tag' ? `같은 태그${r.tagName ? ` · ${r.tagName}` : ''}` : '연결된 항목';
+    const reason =
+      r.relatedReason === 'tag'
+        ? `같은 태그${r.tagName ? ` · ${r.tagName}` : ''}`
+        : r.relatedReason === 'related'
+          ? '관련 있음'
+          : '연결된 항목';
     return `
       <div class="list-row search-related-row" data-key="${key}">
         <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
