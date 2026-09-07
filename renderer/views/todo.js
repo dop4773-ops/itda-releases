@@ -33,7 +33,7 @@ const EMPTY_MESSAGES = {
 
 const STATUS_LABEL = { todo: '해야 할 일', doing: '진행 중', done: '완료' };
 
-export async function mount(root) {
+export async function mount(root, deepLinkId) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
@@ -716,6 +716,17 @@ export async function mount(root) {
 
   await loadCategories();
   await refresh();
+
+  // 빠른찾기/커맨드팔레트/검색에서 #/todo/<id> 로 들어오면 그 Todo 상세를 연다(필터에 안 걸려도 보이게 '전체'로)
+  {
+    const id = Number(deepLinkId);
+    if (Number.isInteger(id) && id > 0) {
+      currentFilter = 'all';
+      root.querySelectorAll('#t-tabs .tab').forEach((t) => t.classList.toggle('active', t.dataset.filter === 'all'));
+      renderList();
+      openPanel(id);
+    }
+  }
 
   // 위젯(낱개 todo-item 창 등)이나 다른 창에서 이 화면의 todo가 바뀌었을 때 목록에 반영.
   // 지금 사용자가 뭔가 입력 중이면(제목 입력창 등) 그 순간엔 미루고 다음 변경 때 반영한다.

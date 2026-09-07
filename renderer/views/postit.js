@@ -20,7 +20,7 @@ const CHECKLIST_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="no
 const isMac = navigator.platform?.toUpperCase().includes('MAC');
 const NEW_POSTIT_SHORTCUT_LABEL = isMac ? '⌘N' : 'Ctrl+N';
 
-export async function mount(root) {
+export async function mount(root, deepLinkId) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
@@ -304,6 +304,19 @@ export async function mount(root) {
   document.addEventListener('keydown', handleNewPostitShortcut);
 
   await load();
+
+  // 빠른찾기/검색에서 #/postit/<id> 로 들어오면 그 카드로 스크롤 + 잠깐 강조
+  {
+    const id = Number(deepLinkId);
+    if (Number.isInteger(id) && id > 0) {
+      const card = root.querySelector(`.sticky-card[data-id="${id}"]`);
+      if (card) {
+        card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        card.classList.add('sticky-card-flash');
+        setTimeout(() => card.classList.remove('sticky-card-flash'), 1600);
+      }
+    }
+  }
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {

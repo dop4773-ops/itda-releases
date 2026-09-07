@@ -153,7 +153,7 @@ function deriveSnippet(memo) {
   return rest.join(' ').slice(0, 60);
 }
 
-export async function mount(root) {
+export async function mount(root, deepLinkId) {
   root.innerHTML = `
     <div class="notes-app">
       <div class="notes-sidebar">
@@ -1343,6 +1343,18 @@ export async function mount(root) {
     lockListMode = 'hidden';
   }
   await load(); // load()가 내부에서 loadFolders()도 같이 호출한다
+
+  // 빠른찾기/커맨드팔레트/검색에서 #/memo/<id> 로 들어오면 그 메모를 (다른 폴더에 있어도) 폴더 전환까지 해서 연다
+  {
+    const id = Number(deepLinkId);
+    const target = Number.isInteger(id) && id > 0 ? memos.find((m) => m.id === id) : null;
+    if (target) {
+      currentFolderId = target.folder_id || null;
+      renderFolderRail();
+      renderList();
+      openMemoMaybeLocked(id);
+    }
+  }
   setScreenShortcuts('메모', MEMO_SCREEN_SHORTCUTS);
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지

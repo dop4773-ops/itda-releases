@@ -105,11 +105,8 @@ function buildItemCommand(row) {
         location.hash = '#/inbox';
         return;
       }
-      if (row.entity_type === 'postit') {
-        window.itda.postitWidget.open(row.entity_id);
-        return;
-      }
-      goToThen(TYPE_ROUTE[row.entity_type], () => window.itda.itemWidget.open({ type: row.entity_type, id: row.entity_id }));
+      // 그 항목까지 바로 연다(#/type/id) — 메모가 다른 폴더에 있어도, Todo가 필터에 안 걸려도 열림
+      location.hash = `${TYPE_ROUTE[row.entity_type]}/${row.entity_id}`;
     },
   };
 }

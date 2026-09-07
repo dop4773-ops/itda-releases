@@ -35,6 +35,8 @@ const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포
 // 검색 결과가 왜 나왔는지 (search.repository의 matchedIn)
 const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치' };
 const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
+// 클릭 시 그 항목까지 바로 열리도록 딥링크(#/type/id). inbox는 낱개 상세가 없어 목록으로.
+const itemHref = (type, id) => (type === 'inbox' ? '#/inbox' : `${TYPE_ROUTE[type] || '#/dashboard'}/${id}`);
 // 타입별로 실제 삭제 API가 다르다 (todo/event/memo/postit는 소프트 삭제=휴지통행, inbox는 하드 삭제)
 const DELETE_API = {
   todo: (id) => window.itda.todos.delete(id),
@@ -158,7 +160,7 @@ export async function mount(root) {
     return `
       <div class="list-row search-related-row" data-key="${key}">
         <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
-        <a class="main" href="${TYPE_ROUTE[r.entity_type] || '#/dashboard'}">
+        <a class="main" href="${itemHref(r.entity_type, r.entity_id)}">
           <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}</b>
         </a>
       </div>`;
@@ -198,7 +200,7 @@ export async function mount(root) {
       return `
         <div class="search-card" data-key="${key}">
           <input type="checkbox" data-action="select" data-key="${key}" />
-          <a class="search-card-body" href="${TYPE_ROUTE[type] || '#/dashboard'}">
+          <a class="search-card-body" href="${itemHref(type, i.entity_id)}">
             <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
             <p>${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 80))}</p>
           </a>
@@ -207,7 +209,7 @@ export async function mount(root) {
     return `
       <div class="list-row search-result-row" data-key="${key}">
         <input type="checkbox" data-action="select" data-key="${key}" />
-        <a class="main" href="${TYPE_ROUTE[type] || '#/dashboard'}">
+        <a class="main" href="${itemHref(type, i.entity_id)}">
           <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
           <div class="meta">${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 60))}</div>
         </a>
@@ -220,7 +222,7 @@ export async function mount(root) {
     return `
       <div class="list-row search-related-row" data-key="${key}">
         <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
-        <a class="main" href="${TYPE_ROUTE[r.entity_type] || '#/dashboard'}">
+        <a class="main" href="${itemHref(r.entity_type, r.entity_id)}">
           <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}<span class="search-match-badge" data-match="related">${reason}</span></b>
         </a>
       </div>`;

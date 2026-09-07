@@ -59,10 +59,14 @@ function openRoute(route) {
   close();
 }
 
+const ITEM_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit' };
 function openItem(row) {
-  if (row.entity_type === 'postit') window.itda.postitWidget.open(row.entity_id).catch(() => {});
-  else if (row.entity_type === 'inbox') window.itda.widgets.openMainApp('#/inbox').catch(() => {});
-  else window.itda.itemWidget.open({ type: row.entity_type, id: row.entity_id }).catch(() => {});
+  if (row.entity_type === 'inbox') {
+    window.itda.widgets.openMainApp('#/inbox').catch(() => {});
+  } else {
+    // 본체를 그 항목까지 바로 연다 — 메모가 다른 폴더에 있어도, Todo가 필터에 안 걸려도 열림(#/type/id)
+    window.itda.widgets.openMainApp(`${ITEM_ROUTE[row.entity_type] || '#/dashboard'}/${row.entity_id}`).catch(() => {});
+  }
   close();
 }
 

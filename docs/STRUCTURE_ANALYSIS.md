@@ -366,6 +366,15 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 
 **검색 재편 5단계 완료.** 남은 것(사용자 판단): 오타 보정 / 검색어 자동완성·연관어 / Spotlight를 이 엔진에 완전 통일.
 
+## 딥링크 — 검색 결과 클릭 시 그 항목까지 열기 (v2.58.39)
+`#/memo/<id>` `#/todo/<id>` `#/calendar/<id>` `#/postit/<id>` — router가 sub를 각 뷰 `mount(root, sub)`로 넘김.
+- memo: 그 메모가 든 폴더로 전환 + 선택(다른 폴더에 있어도 열림 — 기존 버그)
+- todo: 필터 '전체'로 + 상세 패널 열기(완료 항목도)
+- calendar: 그 일정 날짜로 이동 + day 뷰 + 상세
+- postit: 그 카드로 스크롤 + 잠깐 강조
+빠른찾기 `openItem` / 커맨드팔레트 `buildItemCommand` / `#/search` 링크가 전부 이 딥링크 사용
+(빠른찾기·팔레트는 예전엔 낱개 위젯을 띄웠음 — 이제 본체에서 그 항목을 연다).
+
 **보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
 
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)

@@ -368,7 +368,7 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
     </div>`;
 }
 
-export async function mount(root) {
+export async function mount(root, deepLinkId) {
   root.innerHTML = `
     <div class="page-head">
       <div class="page-head-title">
@@ -1149,6 +1149,25 @@ export async function mount(root) {
 
   await loadCategories();
   await load();
+
+  // 빠른찾기/커맨드팔레트/검색에서 #/calendar/<id> 로 들어오면 그 일정 날짜로 이동해 상세를 연다
+  {
+    const id = Number(deepLinkId);
+    if (Number.isInteger(id) && id > 0) {
+      try {
+        const evt = await window.itda.events.get(id);
+        if (evt && !unmounted) {
+          anchor = parseKey((evt.start_at || '').slice(0, 10));
+          currentView = 'day';
+          root.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === 'day'));
+          await load();
+          openDetail({ ...evt, source: 'local' });
+        }
+      } catch (e) {
+        /* 못 찾으면 그냥 캘린더만 */
+      }
+    }
+  }
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
