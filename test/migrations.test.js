@@ -70,8 +70,10 @@ test('v3: 구버전 FTS5 search_index → 일반 테이블(chosung 포함)로 �
   const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='search_index'").get().sql;
   assert.ok(!sql.includes('fts5'), '일반 테이블로 바뀜');
   assert.ok(hasCol(db, 'search_index', 'chosung'));
-  const row = db.prepare("SELECT title, chosung FROM search_index WHERE entity_type='todo'").get();
+  assert.ok(hasCol(db, 'search_index', 'updated_at'), 'v4: updated_at 컬럼');
+  const row = db.prepare("SELECT title, chosung, updated_at FROM search_index WHERE entity_type='todo'").get();
   assert.equal(row.chosung, 'ㄱㅂㅅ ㅍㄱ ㅁㅁ', '초성 채워짐');
+  assert.ok(row.updated_at, 'updated_at 채워짐');
   db.close();
 });
 

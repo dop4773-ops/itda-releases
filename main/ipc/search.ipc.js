@@ -39,8 +39,37 @@ function relatedFor(repos, direct, cap = 10) {
   return out.slice(0, cap);
 }
 
+const OPENED_KEY = 'search_opened';
+const OPENED_MAX = 20;
+
 function registerSearchIpc(ipcMain, repos) {
   ipcMain.handle('search:recentItems', () => repos.search.recentItems(8));
+
+  // 항목을 "열었다"고 기록 — 라우터가 #/type/id 로 이동할 때마다 호출. 최근 20개, 같은 항목은 앞으로.
+  ipcMain.handle('search:recordOpen', (event, { type, id } = {}) => {
+    if (!['todo', 'event', 'memo', 'postit', 'inbox'].includes(type) || !id) return { ok: false };
+    let list = [];
+    try {
+      list = JSON.parse(repos.settings.get(OPENED_KEY) || '[]');
+    } catch (e) {
+      list = [];
+    }
+    const key = `${type}:${Number(id)}`;
+    list = [{ type, id: Number(id) }, ...list.filter((e) => `${e.type}:${e.id}` !== key)].slice(0, OPENED_MAX);
+    repos.settings.set(OPENED_KEY, JSON.stringify(list));
+    return { ok: true };
+  });
+
+  // 최근 연 항목 (완전삭제/휴지통 간 것은 search_index에 없어 자동 제외)
+  ipcMain.handle('search:recentOpened', () => {
+    let list = [];
+    try {
+      list = JSON.parse(repos.settings.get(OPENED_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+    return repos.search.indexedByKeys(Array.isArray(list) ? list.slice(0, 12) : []);
+  });
 
   ipcMain.handle('search:query', (event, arg) => {
     // 하위호환: 예전엔 검색어 문자열만 넘겼음.

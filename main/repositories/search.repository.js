@@ -13,11 +13,39 @@ const META_DATE = {
   inbox: "substr(created_at,1,10)",
 };
 
+const stripTags = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
+
 function snippetLabel(row) {
   const title = (row.title || '').trim();
   if (title) return title;
-  const plain = (row.content || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return plain.slice(0, 60) || '(제목 없음)';
+  return stripTags(row.content).slice(0, 60) || '(제목 없음)';
+}
+
+// 본문에서 검색어 근처 ~90자를 잘라 미리보기 문구를 만든다(결과 구분용). 매치가 없으면 앞부분.
+function makeSnippet(content, tokens) {
+  const plain = stripTags(content);
+  if (!plain) return '';
+  const lc = plain.toLowerCase();
+  let idx = -1;
+  for (const t of tokens) {
+    const i = lc.indexOf(t.toLowerCase());
+    if (i >= 0 && (idx < 0 || i < idx)) idx = i;
+  }
+  if (idx < 0) return plain.slice(0, 90) + (plain.length > 90 ? '…' : '');
+  const start = Math.max(0, idx - 30);
+  const end = Math.min(plain.length, start + 90);
+  return (start > 0 ? '…' : '') + plain.slice(start, end).trim() + (end < plain.length ? '…' : '');
+}
+
+// "최신도" 가산 — 같은 매치 품질(_rank) 안에서 최근에 고친 항목을 위로.
+function recencyBoost(updatedAt) {
+  if (!updatedAt) return 0;
+  const days = (Date.now() - new Date(String(updatedAt).replace(' ', 'T')).getTime()) / 86400000;
+  if (!(days >= 0)) return 0;
+  if (days < 2) return 3;
+  if (days < 14) return 2;
+  if (days < 60) return 1;
+  return 0;
 }
 
 // 검색 결과에 기간(dateFrom/dateTo, 'YYYY-MM-DD')·상태(status: 'done'|'open') 필터를 적용.
@@ -84,7 +112,7 @@ module.exports = function createSearchRepository(db) {
 
       const rows = db
         .prepare(
-          `SELECT entity_type, entity_id, title, content, chosung
+          `SELECT entity_type, entity_id, title, content, chosung, updated_at
            FROM search_index
            WHERE (${clauses.join(' OR ')})${typeClause}`
         )
@@ -113,11 +141,21 @@ module.exports = function createSearchRepository(db) {
           rank = 4;
           matchedIn = 'content';
         }
-        return { entity_type: r.entity_type, entity_id: r.entity_id, title: r.title, content: r.content, matchedIn, _rank: rank };
+        return {
+          entity_type: r.entity_type,
+          entity_id: r.entity_id,
+          title: r.title,
+          content: r.content,
+          matchedIn,
+          snippet: matchedIn === 'content' ? makeSnippet(r.content, tokens) : '',
+          _rank: rank,
+          _recency: recencyBoost(r.updated_at),
+        };
       });
-      scored.sort((a, b) => a._rank - b._rank || (a.title || '').length - (b.title || '').length);
+      // 매치 품질(_rank)이 먼저 — 그 안에서 최근에 고친 것 위로 → 제목 짧은 것 순.
+      scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
       const filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
-      return filtered.slice(0, limit).map(({ _rank, ...rest }) => rest);
+      return filtered.slice(0, limit).map(({ _rank, _recency, ...rest }) => rest);
     },
 
     // "@검색" 빠른 연결 후보 (inbox 제외, 상위 8건) — 예전 links.repository.searchCandidates.
@@ -129,6 +167,22 @@ module.exports = function createSearchRepository(db) {
         )
         .slice(0, 8)
         .map((h) => ({ type: h.entity_type, id: h.entity_id, label: snippetLabel(h) }));
+    },
+
+    // [{type,id}] 목록을 search_index에서 조회(살아있는 것만, 입력 순서 유지). "최근 연 항목"용.
+    indexedByKeys(keys) {
+      if (!Array.isArray(keys) || !keys.length) return [];
+      const stmt = db.prepare('SELECT entity_type, entity_id, title, content FROM search_index WHERE entity_type = ? AND entity_id = ?');
+      const out = [];
+      const seen = new Set();
+      for (const k of keys) {
+        const key = `${k.type}:${k.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const r = stmt.get(String(k.type), Number(k.id));
+        if (r) out.push({ entity_type: r.entity_type, entity_id: r.entity_id, title: r.title, content: r.content });
+      }
+      return out;
     },
 
     // 검색 시작화면의 "최근 항목" — todo/event/memo/postit을 updated_at 최신순으로 섞어서.

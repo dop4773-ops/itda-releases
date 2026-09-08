@@ -10,7 +10,8 @@ const { chosung } = require('./shared/hangul');
 // ⚠ 아래 마이그레이션 단계를 새로 추가하면 이 번호를 +1 한다.
 //   v2: item_links 고아 연결(상대 항목이 완전삭제됨) 1회성 청소
 //   v3: search_index를 FTS5 → 일반 테이블로 재구축(한글 부분일치·초성검색 지원) + chosung 컬럼
-const SCHEMA_VERSION = 3;
+//   v4: search_index에 updated_at 컬럼 (검색 랭킹의 "최신도" 가산용)
+const SCHEMA_VERSION = 4;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -109,9 +110,14 @@ function applyLightweightMigrations(db) {
   const searchTblSql = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='search_index'`)
     .get()?.sql;
-  if (!searchTblSql || searchTblSql.includes('fts5') || !hasColumn('search_index', 'chosung')) {
+  if (
+    !searchTblSql ||
+    searchTblSql.includes('fts5') ||
+    !hasColumn('search_index', 'chosung') ||
+    !hasColumn('search_index', 'updated_at') // v4
+  ) {
     rebuildSearchIndex(db);
-    console.log('[itda] 마이그레이션: search_index 재구축(일반 테이블 + 초성 검색)');
+    console.log('[itda] 마이그레이션: search_index 재구축(일반 테이블 + 초성 + updated_at)');
   }
 
   if (!hasColumn('todos', 'status')) {
@@ -297,11 +303,29 @@ function applyLightweightMigrations(db) {
 // search_index(일반 테이블) + 동기화 트리거를 만들고 원본 5개 테이블에서 다시 채운다.
 // 신규 DB(schema.sql 적용 직후)와 v3 마이그레이션이 공유한다 — 단일 소스.
 function rebuildSearchIndex(db) {
+  // 타입별 트리거 생성기 — todo/event는 (title, coalesce(memo,'')), memo/postit은 (coalesce(title,''), content).
+  const softTrigger = (t, tbl, titleE, contE) => `
+    DROP TRIGGER IF EXISTS trg_${t}s_ai; DROP TRIGGER IF EXISTS trg_${t}s_au; DROP TRIGGER IF EXISTS trg_${t}s_ad;
+    CREATE TRIGGER trg_${t}s_ai AFTER INSERT ON ${tbl} BEGIN
+      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT '${t}', new.id, ${titleE}, ${contE}, chosung(${titleE}), new.updated_at WHERE new.deleted_at IS NULL;
+    END;
+    CREATE TRIGGER trg_${t}s_au AFTER UPDATE ON ${tbl} BEGIN
+      DELETE FROM search_index WHERE entity_type='${t}' AND entity_id = old.id;
+      INSERT INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT '${t}', new.id, ${titleE}, ${contE}, chosung(${titleE}), new.updated_at WHERE new.deleted_at IS NULL;
+    END;
+    CREATE TRIGGER trg_${t}s_ad AFTER DELETE ON ${tbl} BEGIN
+      DELETE FROM search_index WHERE entity_type='${t}' AND entity_id = old.id;
+    END;`;
+  const softTriggers = [
+    softTrigger('todo', 'todos', 'new.title', "coalesce(new.memo,'')"),
+    softTrigger('event', 'events', 'new.title', "coalesce(new.memo,'')"),
+    softTrigger('memo', 'memos', "coalesce(new.title,'')", 'new.content'),
+    softTrigger('postit', 'postits', "coalesce(new.title,'')", 'new.content'),
+  ].join('\n');
+
   db.exec(`
-    DROP TRIGGER IF EXISTS trg_todos_ai;   DROP TRIGGER IF EXISTS trg_todos_au;   DROP TRIGGER IF EXISTS trg_todos_ad;
-    DROP TRIGGER IF EXISTS trg_events_ai;  DROP TRIGGER IF EXISTS trg_events_au;  DROP TRIGGER IF EXISTS trg_events_ad;
-    DROP TRIGGER IF EXISTS trg_memos_ai;   DROP TRIGGER IF EXISTS trg_memos_au;   DROP TRIGGER IF EXISTS trg_memos_ad;
-    DROP TRIGGER IF EXISTS trg_postits_ai; DROP TRIGGER IF EXISTS trg_postits_au; DROP TRIGGER IF EXISTS trg_postits_ad;
     DROP TRIGGER IF EXISTS trg_inbox_ai;   DROP TRIGGER IF EXISTS trg_inbox_ad;
     DROP TABLE IF EXISTS search_index;
 
@@ -311,67 +335,17 @@ function rebuildSearchIndex(db) {
       title       TEXT NOT NULL DEFAULT '',
       content     TEXT NOT NULL DEFAULT '',   -- memo/postit은 저장된 HTML 그대로(조회 측에서 태그 제거)
       chosung     TEXT NOT NULL DEFAULT '',   -- title의 초성 (예: "김부수" → "ㄱㅂㅅ")
+      updated_at  TEXT NOT NULL DEFAULT '',   -- 원본의 updated_at(inbox는 created_at) — 검색 랭킹 "최신도"용
       PRIMARY KEY (entity_type, entity_id)
     ) WITHOUT ROWID;
     CREATE INDEX idx_search_type ON search_index(entity_type);
 
-    -- todo/event/memo/postit: soft delete → deleted_at IS NULL일 때만 인덱스에 존재(복원 시 자동 재등록)
-    CREATE TRIGGER trg_todos_ai AFTER INSERT ON todos BEGIN
-      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'todo', new.id, new.title, coalesce(new.memo,''), chosung(new.title) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_todos_au AFTER UPDATE ON todos BEGIN
-      DELETE FROM search_index WHERE entity_type='todo' AND entity_id = old.id;
-      INSERT INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'todo', new.id, new.title, coalesce(new.memo,''), chosung(new.title) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_todos_ad AFTER DELETE ON todos BEGIN
-      DELETE FROM search_index WHERE entity_type='todo' AND entity_id = old.id;
-    END;
+    ${softTriggers}
 
-    CREATE TRIGGER trg_events_ai AFTER INSERT ON events BEGIN
-      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'event', new.id, new.title, coalesce(new.memo,''), chosung(new.title) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_events_au AFTER UPDATE ON events BEGIN
-      DELETE FROM search_index WHERE entity_type='event' AND entity_id = old.id;
-      INSERT INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'event', new.id, new.title, coalesce(new.memo,''), chosung(new.title) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_events_ad AFTER DELETE ON events BEGIN
-      DELETE FROM search_index WHERE entity_type='event' AND entity_id = old.id;
-    END;
-
-    CREATE TRIGGER trg_memos_ai AFTER INSERT ON memos BEGIN
-      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'memo', new.id, coalesce(new.title,''), new.content, chosung(coalesce(new.title,'')) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_memos_au AFTER UPDATE ON memos BEGIN
-      DELETE FROM search_index WHERE entity_type='memo' AND entity_id = old.id;
-      INSERT INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'memo', new.id, coalesce(new.title,''), new.content, chosung(coalesce(new.title,'')) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_memos_ad AFTER DELETE ON memos BEGIN
-      DELETE FROM search_index WHERE entity_type='memo' AND entity_id = old.id;
-    END;
-
-    CREATE TRIGGER trg_postits_ai AFTER INSERT ON postits BEGIN
-      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'postit', new.id, coalesce(new.title,''), new.content, chosung(coalesce(new.title,'')) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_postits_au AFTER UPDATE ON postits BEGIN
-      DELETE FROM search_index WHERE entity_type='postit' AND entity_id = old.id;
-      INSERT INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'postit', new.id, coalesce(new.title,''), new.content, chosung(coalesce(new.title,'')) WHERE new.deleted_at IS NULL;
-    END;
-    CREATE TRIGGER trg_postits_ad AFTER DELETE ON postits BEGIN
-      DELETE FROM search_index WHERE entity_type='postit' AND entity_id = old.id;
-    END;
-
-    -- inbox_items: deleted_at 없음(하드 삭제) → INSERT/DELETE만
+    -- inbox_items: deleted_at 없음(하드 삭제) → INSERT/DELETE만. updated_at이 없어 created_at을 쓴다.
     CREATE TRIGGER trg_inbox_ai AFTER INSERT ON inbox_items BEGIN
-      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      VALUES ('inbox', new.id, '', new.content, '');
+      INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      VALUES ('inbox', new.id, '', new.content, '', new.created_at);
     END;
     CREATE TRIGGER trg_inbox_ad AFTER DELETE ON inbox_items BEGIN
       DELETE FROM search_index WHERE entity_type='inbox' AND entity_id = old.id;
@@ -379,16 +353,16 @@ function rebuildSearchIndex(db) {
   `);
 
   db.exec(`
-    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'todo', id, title, coalesce(memo,''), chosung(title) FROM todos WHERE deleted_at IS NULL;
-    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'event', id, title, coalesce(memo,''), chosung(title) FROM events WHERE deleted_at IS NULL;
-    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'memo', id, coalesce(title,''), content, chosung(coalesce(title,'')) FROM memos WHERE deleted_at IS NULL;
-    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'postit', id, coalesce(title,''), content, chosung(coalesce(title,'')) FROM postits WHERE deleted_at IS NULL;
-    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung)
-      SELECT 'inbox', id, '', content, '' FROM inbox_items;
+    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT 'todo', id, title, coalesce(memo,''), chosung(title), updated_at FROM todos WHERE deleted_at IS NULL;
+    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT 'event', id, title, coalesce(memo,''), chosung(title), updated_at FROM events WHERE deleted_at IS NULL;
+    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT 'memo', id, coalesce(title,''), content, chosung(coalesce(title,'')), updated_at FROM memos WHERE deleted_at IS NULL;
+    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT 'postit', id, coalesce(title,''), content, chosung(coalesce(title,'')), updated_at FROM postits WHERE deleted_at IS NULL;
+    INSERT OR REPLACE INTO search_index(entity_type,entity_id,title,content,chosung,updated_at)
+      SELECT 'inbox', id, '', content, '', created_at FROM inbox_items;
   `);
 }
 

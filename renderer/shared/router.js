@@ -60,6 +60,11 @@ async function navigate() {
     perf(`route mount ${hash}`, tMount);
     if (typeof result === 'function') unmountCurrent = result;
     window.dispatchEvent(new CustomEvent('itda:route-mounted', { detail: { hash } })); // 커맨드 팔레트가 "화면 이동 후 후속 동작"을 걸 수 있게(예: 새 투두 입력창 포커스)
+    // '#/memo/42' 같은 딥링크로 특정 항목을 열면 "최근 연 항목"에 기록(빠른찾기 시작화면용)
+    if (sub && /^\d+$/.test(sub)) {
+      const t = { '#/memo': 'memo', '#/todo': 'todo', '#/calendar': 'event', '#/postit': 'postit' }[hash];
+      if (t) window.itda.search?.recordOpen?.({ type: t, id: Number(sub) });
+    }
   } catch (e) {
     console.error(`[router] ${hash} 화면 로드 실패`, e);
     root.innerHTML = `<div class="panel"><div class="empty">화면을 불러오는 중 오류가 발생했어요.<br>${e.message}</div></div>`;

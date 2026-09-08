@@ -18,7 +18,7 @@ let win = null;
 // find는 결과가 많으면 내부(#sp-results)에서 스크롤.
 const SIZE = {
   capture: { width: 640, height: 100 },
-  find: { width: 640, height: 424 },
+  find: { width: 640, height: 520 },
 };
 
 function openSpotlight(mode = 'capture') {

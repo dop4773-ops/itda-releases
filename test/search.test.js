@@ -95,6 +95,47 @@ test('상태 필터: status는 Todo에만 적용, 다른 타입은 통과', () =
   assert.ok(!titles.includes('김부수 완료 할일'));
 });
 
+test('랭킹: 같은 매치 품질이면 최근에 고친 항목이 위로', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const oldOne = repos.memos.insert({ title: '김부수 예전 메모', content: 'x' });
+  const newOne = repos.memos.insert({ title: '김부수 최근 메모', content: 'y' });
+  db.prepare("UPDATE memos SET updated_at = '2020-01-01 00:00:00' WHERE id = ?").run(oldOne.id);
+  db.prepare("UPDATE memos SET updated_at = datetime('now','localtime') WHERE id = ?").run(newOne.id);
+  const hits = repos.search.query('김부수');
+  assert.equal(hits[0].entity_id, newOne.id, '최근 고친 게 먼저');
+});
+
+test('본문 매치엔 snippet(검색어 주변 문구) 포함', () => {
+  const repos = createRepositories(freshDb());
+  repos.memos.insert({
+    title: '9월 회의록',
+    content: '<p>여러 안건 논의 후 김부수 환자 보호자 상담을 9월 10일로 잡기로 함</p>',
+  });
+  const hits = repos.search.query('김부수');
+  assert.equal(hits[0].matchedIn, 'content');
+  assert.ok(hits[0].snippet.includes('김부수'), 'snippet에 검색어 포함');
+  assert.ok(!hits[0].snippet.includes('<'), 'HTML 태그 제거됨');
+});
+
+test('indexedByKeys: 살아있는 항목만 입력 순서대로', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const a = repos.todos.insert({ title: '할일A' });
+  const b = repos.memos.insert({ title: '메모B', content: '' });
+  const gone = repos.todos.insert({ title: '삭제될' });
+  repos.todos.softDelete(gone.id);
+  const out = repos.search.indexedByKeys([
+    { type: 'memo', id: b.id },
+    { type: 'todo', id: gone.id },
+    { type: 'todo', id: a.id },
+  ]);
+  assert.deepEqual(
+    out.map((r) => `${r.entity_type}:${r.entity_id}`),
+    [`memo:${b.id}`, `todo:${a.id}`]
+  );
+});
+
 test('recentItems: updated_at 최신순으로 타입 섞어 반환, 소프트삭제 제외', () => {
   const db = freshDb();
   const repos = createRepositories(db);

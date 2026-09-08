@@ -22,8 +22,11 @@ let mode = params.get('mode') === 'find' ? 'find' : 'capture';
 const root = document.getElementById('sp-root');
 let inputEl = null;
 let resultsEl = null;
-let items = []; // { icon, label, run }
+let items = []; // { icon, label, sub?, _rank, _section, run }
 let active = 0;
+
+const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
+const ITEM_LIMIT = 20;
 
 // "큰 카테고리" — 화면 + 설정 세부 탭. route에 '#/settings/<탭>'을 주면 본체가 그 탭을 바로 연다(router.js).
 const SCREEN_COMMANDS = [
@@ -61,6 +64,7 @@ function openRoute(route) {
 
 const ITEM_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit' };
 function openItem(row) {
+  window.itda.search?.recordOpen?.({ type: row.entity_type, id: row.entity_id }); // "최근 연 항목" 기록
   if (row.entity_type === 'inbox') {
     window.itda.widgets.openMainApp('#/inbox').catch(() => {});
   } else {
@@ -68,6 +72,22 @@ function openItem(row) {
     window.itda.widgets.openMainApp(`${ITEM_ROUTE[row.entity_type] || '#/dashboard'}/${row.entity_id}`).catch(() => {});
   }
   close();
+}
+
+// search 결과 행 → spotlight 항목 엔트리
+function itemEntry(row, exactKey) {
+  const label = stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '(제목 없음)';
+  const sub = row.snippet
+    ? stripHtmlToPlainText(row.snippet).replace(/\s+/g, ' ').trim().slice(0, 90)
+    : TYPE_LABEL[row.entity_type] || '';
+  return {
+    icon: TYPE_EMOJI[row.entity_type] || '•',
+    label,
+    sub,
+    _rank: exactKey !== undefined && label.toLowerCase() === exactKey ? 0 : 2,
+    _section: 'item',
+    run: () => openItem(row),
+  };
 }
 
 function render() {
@@ -114,15 +134,28 @@ function renderResults() {
     resultsEl.innerHTML = '';
     return;
   }
-  resultsEl.innerHTML = items.length
-    ? items
-        .map(
-          (it, i) => `<div class="sp-item ${i === active ? 'active' : ''}" data-i="${i}">
-            <span class="sp-item-icon">${it.icon}</span><span class="sp-item-label">${escapeHtml(it.label)}</span>
-          </div>`
-        )
-        .join('')
-    : `<div class="sp-empty">일치하는 항목이 없어요</div>`;
+  if (!items.length) {
+    resultsEl.innerHTML = `<div class="sp-empty">${inputEl && inputEl.value.trim() ? '일치하는 항목이 없어요' : '최근 항목이 없어요'}</div>`;
+    return;
+  }
+  // 섹션 헤더: 앞의 카테고리(_section != 'item') 블록과 뒤의 항목 블록 사이에 하나. 빈 검색어일 땐 _section 라벨 그대로.
+  let lastSection = null;
+  resultsEl.innerHTML = items
+    .map((it, i) => {
+      let header = '';
+      if (it._section && it._section !== lastSection) {
+        lastSection = it._section;
+        const label = { open: '최근 연 항목', recent: '최근 항목', item: '항목', shortcut: '바로가기' }[it._section];
+        if (label && !(it._section === 'item' && !items.some((x) => x._section !== 'item'))) {
+          header = `<div class="sp-section">${label}</div>`;
+        }
+      }
+      return `${header}<div class="sp-item ${i === active ? 'active' : ''}" data-i="${i}">
+        <span class="sp-item-icon">${it.icon}</span>
+        <span class="sp-item-text"><span class="sp-item-label">${escapeHtml(it.label)}</span>${it.sub ? `<span class="sp-item-sub">${escapeHtml(it.sub)}</span>` : ''}</span>
+      </div>`;
+    })
+    .join('');
 }
 
 function escapeHtml(s) {
@@ -146,6 +179,33 @@ function rebuildItems(itemEntries) {
   renderResults();
 }
 
+// 빈 검색어 시작화면 — 최근 연 항목 + 최근 만든/고친 항목 (화면 목록은 타이핑하면 나옴)
+let startToken = 0;
+async function loadRecentStart() {
+  const mine = ++startToken;
+  let opened = [];
+  let recent = [];
+  try {
+    [opened, recent] = await Promise.all([
+      window.itda.search.recentOpened().catch(() => []),
+      window.itda.search.recentItems().catch(() => []),
+    ]);
+  } catch (e) {
+    /* 무시 */
+  }
+  if (mine !== startToken || inputEl.value.trim()) return; // 그 사이 타이핑/재호출했으면 버림
+  const openedKeys = new Set(opened.map((r) => `${r.entity_type}:${r.entity_id}`));
+  items = [
+    ...opened.slice(0, 8).map((r) => ({ ...itemEntry(r), _section: 'open', _rank: 0 })),
+    ...recent
+      .filter((r) => !openedKeys.has(`${r.entity_type}:${r.entity_id}`))
+      .slice(0, 8)
+      .map((r) => ({ ...itemEntry(r), _section: 'recent', _rank: 1 })),
+  ].map((e, i) => ({ ...e, _i: i }));
+  active = 0;
+  renderResults();
+}
+
 // 카테고리(화면/설정탭/태그) 항목의 rank 계산. k에 안 걸리면 null(제외).
 function categoryRank(c, k) {
   if (!k) return 1;
@@ -161,31 +221,29 @@ const debouncedItemSearch = debounce(async (kw) => {
   const k = kw.trim().toLowerCase();
   let rows = [];
   try {
-    rows = await window.itda.search.query(kw);
+    rows = await window.itda.search.query({ query: kw, limit: ITEM_LIMIT });
   } catch (e) {
     rows = [];
   }
   if (inputEl.value.trim() !== kw.trim()) return;
-  const itemEntries = rows.slice(0, 8).map((row) => {
-    const label = stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 70) || '(제목 없음)';
-    return {
-      icon: TYPE_EMOJI[row.entity_type] || '•',
-      label,
-      _rank: label.toLowerCase() === k ? 0 : 2, // 제목이 검색어와 정확히 같으면 최상단
-      run: () => openItem(row),
-    };
-  });
-  rebuildItems(itemEntries);
-}, 160);
+  rebuildItems(rows.slice(0, ITEM_LIMIT).map((row) => itemEntry(row, k)));
+}, 150);
 
 function refreshFind(kw) {
   const k = kw.trim().toLowerCase();
+  if (!k) {
+    categoryEntries = [];
+    items = [];
+    renderResults();
+    loadRecentStart(); // 최근 연 항목 + 최근 항목
+    return;
+  }
   categoryEntries = [...SCREEN_COMMANDS, ...tagCommands]
     .map((c) => ({ c, _rank: categoryRank(c, k) }))
     .filter((x) => x._rank !== null)
-    .map(({ c, _rank }) => ({ icon: c.icon, label: c.label, _rank, run: () => openRoute(c.route) }));
+    .map(({ c, _rank }) => ({ icon: c.icon, label: c.label, _rank, _section: 'shortcut', run: () => openRoute(c.route) }));
   rebuildItems([]);
-  if (k) debouncedItemSearch(kw);
+  debouncedItemSearch(kw);
 }
 
 async function submitCapture() {
