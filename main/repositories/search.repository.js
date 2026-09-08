@@ -104,6 +104,23 @@ function applyTagFilter(db, rows, tagName) {
   return rows.filter((r) => ok.has(`${r.entity_type}:${r.entity_id}`));
 }
 
+// 검색 결과의 일정(event) 행에 start_at/all_day를 붙인다 — UI가 목록에서 "9/10 (수)"처럼 표시.
+function attachEventMeta(db, rows) {
+  const ids = rows.filter((r) => r.entity_type === 'event').map((r) => r.entity_id);
+  if (!ids.length) return rows;
+  const ph = ids.map(() => '?').join(',');
+  const meta = {};
+  db.prepare(`SELECT id, start_at, all_day FROM events WHERE id IN (${ph})`)
+    .all(...ids)
+    .forEach((x) => {
+      meta[x.id] = { eventStart: x.start_at, eventAllDay: !!x.all_day };
+    });
+  rows.forEach((r) => {
+    if (r.entity_type === 'event' && meta[r.entity_id]) Object.assign(r, meta[r.entity_id]);
+  });
+  return rows;
+}
+
 module.exports = function createSearchRepository(db) {
   const repo = {
     // 통합검색. 랭킹: 제목 정확 > 제목 시작 > 제목 포함 > 초성(제목) > 본문 포함.
@@ -178,7 +195,7 @@ module.exports = function createSearchRepository(db) {
       scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
       let filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
       filtered = applyTagFilter(db, filtered, tag);
-      return filtered.slice(0, limit).map(({ _rank, _recency, ...rest }) => rest);
+      return attachEventMeta(db, filtered.slice(0, limit).map(({ _rank, _recency, ...rest }) => rest));
     },
 
     // 검색어 없이 타입/태그 프리픽스만 입력했을 때("메모 ", "#재활") — 그 범위의 최근 항목을 나열.
@@ -205,14 +222,17 @@ module.exports = function createSearchRepository(db) {
         rows.push(...db.prepare(sql).all(...params));
       }
       rows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-      return rows.slice(0, limit).map((r) => ({
-        entity_type: r.entity_type,
-        entity_id: r.entity_id,
-        title: r.title || '',
-        content: '',
-        snippet: '',
-        matchedIn: 'title',
-      }));
+      return attachEventMeta(
+        db,
+        rows.slice(0, limit).map((r) => ({
+          entity_type: r.entity_type,
+          entity_id: r.entity_id,
+          title: r.title || '',
+          content: '',
+          snippet: '',
+          matchedIn: 'title',
+        }))
+      );
     },
 
     // "@검색" 빠른 연결 후보 (inbox 제외, 상위 8건) — 예전 links.repository.searchCandidates.
@@ -239,7 +259,7 @@ module.exports = function createSearchRepository(db) {
         const r = stmt.get(String(k.type), Number(k.id));
         if (r) out.push({ entity_type: r.entity_type, entity_id: r.entity_id, title: r.title, content: r.content });
       }
-      return out;
+      return attachEventMeta(db, out);
     },
 
     // 검색 시작화면의 "최근 항목" — todo/event/memo/postit을 updated_at 최신순으로 섞어서.
@@ -259,7 +279,10 @@ module.exports = function createSearchRepository(db) {
         ...pull('postit', 'postits', "coalesce(nullif(title,''), substr(content,1,120))"),
       ];
       rows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-      return rows.slice(0, limit).map((r) => ({ entity_type: r.entity_type, entity_id: r.entity_id, title: r.title || '', content: '' }));
+      return attachEventMeta(
+        db,
+        rows.slice(0, limit).map((r) => ({ entity_type: r.entity_type, entity_id: r.entity_id, title: r.title || '', content: '' }))
+      );
     },
 
     // discoverRelated "비슷한 내용" — 키워드 여러 개를 넓게(OR) 훑는다.

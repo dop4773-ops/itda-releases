@@ -412,6 +412,14 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
 - 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
+## 검색 결과에 일정 날짜 + 필터 팝오버 버그 (v2.61.1)
+- **일정 날짜 표시**: `search.repository`가 event 결과 행에 `eventStart`/`eventAllDay`를 붙임
+  (`attachEventMeta`, query/browse/recentItems/indexedByKeys 공통). `quick-find-core.eventDateLabel()`
+  → "9/10 (목)" / 시간 있으면 "9/10 (목) 14:00" / 다른 해면 "2099. 1/2 (금)". 빠른찾기·팔레트·검색 3곳 모두.
+- **필터 팝오버가 계속 떠 있던 버그**: `.search-filter-pop{display:flex}`가 `hidden` 속성의 UA `display:none`을
+  덮어써서 `el.hidden` 토글이 무력화됨. 근본수정 = `styles.css`에 전역 `[hidden]{display:none!important}` 한 줄
+  (`.sfp-dates`, `.search-type-tabs` 등 같은 잠재버그도 같이 해결).
+
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)
 - **세부항목 검색**: SCREEN_COMMANDS에 설정 세부 탭 10개(`#/settings/<탭>`) + 카테고리 태그(`window.itda.categories.list`) 추가. router.js가 `#/base/sub` 파싱 → `mount(root, sub)`, settings.js가 `initialTab`으로 그 탭을 바로 연다.
 - **정렬**: (0) 정확히 일치(라벨 단어/키워드 토큰/항목 제목이 검색어와 정확히 같음) → (1) 큰 카테고리(부분 일치) → (2) 개별 항목. 같은 rank는 삽입순(카테고리 먼저). `test/spotlight-rank.test.js`.

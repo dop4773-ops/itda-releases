@@ -3,7 +3,7 @@ import { TABS as SETTINGS_TABS } from '../views/settings.js';
 import { TAG_ICON } from '../views/tags.js';
 import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
 import { getCachedBinding, matchesAccelerator } from './shortcuts.js';
-import { parseQuery, describeScope } from './quick-find-core.js';
+import { parseQuery, describeScope, eventDateLabel } from './quick-find-core.js';
 
 // 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
@@ -102,6 +102,7 @@ function buildItemCommand(row) {
     icon: `<span>${emoji}</span>`,
     label,
     _kind: 'item',
+    dateLabel: row.entity_type === 'event' ? eventDateLabel(row.eventStart, row.eventAllDay) : '',
     matchedIn: row.matchedIn || null,
     run: () => {
       if (row.entity_type === 'inbox') {
@@ -150,6 +151,7 @@ export function initCommandPalette({ openQuickCapture }) {
     listEl.innerHTML = filtered
       .map((c, i) => {
         const badge = c._kind === 'item' && MATCH_LABEL[c.matchedIn] ? `<span class="cmdk-badge">${MATCH_LABEL[c.matchedIn]}</span>` : '';
+        const dateChip = c.dateLabel ? `<span class="cmdk-date">${escapeHtml(c.dateLabel)}</span>` : '';
         const header =
           (i === firstItem && firstItem !== -1
             ? `<div class="cmdk-section">검색 결과${currentScope ? ` · ${escapeHtml(currentScope)}` : ''}</div>`
@@ -157,7 +159,7 @@ export function initCommandPalette({ openQuickCapture }) {
           (i === firstCmd && firstCmd !== -1 ? `<div class="cmdk-section">명령</div>` : '');
         return `${header}<div class="cmdk-item ${i === activeIndex ? 'active' : ''}" data-index="${i}">
           <span class="cmdk-item-icon">${c.icon}</span>
-          <span class="cmdk-item-label">${escapeHtml(c.label)}${badge}</span>
+          <span class="cmdk-item-label">${escapeHtml(c.label)}${dateChip}${badge}</span>
         </div>`;
       })
       .join('');

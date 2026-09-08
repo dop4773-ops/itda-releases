@@ -187,6 +187,19 @@ test('browse: 검색어 없이 타입/태그로만 최근순 나열', () => {
   assert.deepEqual(repos.search.browse({ tag: '없음' }), []);
 });
 
+test('일정 결과에 start_at/all_day가 붙는다 (목록에서 날짜 표시용)', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  repos.events.insert({ title: '재활 회의', startAt: '2026-09-10 14:00', endAt: '2026-09-10 15:00' });
+  const hits = repos.search.query('재활 회의');
+  const ev = hits.find((h) => h.entity_type === 'event');
+  assert.ok(ev, '일정이 검색됨');
+  assert.equal(ev.eventStart, '2026-09-10 14:00');
+  assert.equal(ev.eventAllDay, false);
+  // browse / recentItems 경로에도
+  assert.equal(repos.search.browse({ type: 'event' })[0].eventStart, '2026-09-10 14:00');
+});
+
 test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㄱㅂㅅ'), true);
   assert.equal(isChosungQuery('ㄱ ㅂㅅ'), true);

@@ -46,6 +46,21 @@ export function parseQuery(raw, tagNames = []) {
   return { type, tag, text: text.trim() };
 }
 
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 일정(event) 검색 결과에 곁들이는 날짜 라벨 — "9/10 (수)" / 시간 있으면 "9/10 (수) 14:00".
+// 다른 해면 "2027. 3/5 (금)".
+export function eventDateLabel(startAt, allDay) {
+  if (!startAt) return '';
+  const d = new Date(String(startAt).replace(' ', 'T'));
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const yr = d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}. ` : '';
+  const md = `${yr}${d.getMonth() + 1}/${d.getDate()} (${WD[d.getDay()]})`;
+  if (allDay) return md;
+  return `${md} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 // 활성 스코프를 한 줄로 — 섹션 헤더 접두("메모 · #재활 · 항목")에 쓴다.
 export function describeScope({ type, tag }) {
   const bits = [];

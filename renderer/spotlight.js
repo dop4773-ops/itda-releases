@@ -2,7 +2,7 @@
 // main/spotlight/window-manager.js 가 이 페이지를 frameless 창에 띄운다.
 import { debounce } from './shared/ui-utils.js';
 import { stripHtmlToPlainText } from './shared/rich-text.js';
-import { parseQuery, describeScope, TYPE_EMOJI, TYPE_LABEL, ITEM_ROUTE } from './shared/quick-find-core.js';
+import { parseQuery, describeScope, eventDateLabel, TYPE_EMOJI, TYPE_LABEL, ITEM_ROUTE } from './shared/quick-find-core.js';
 
 // 이 작은 팝업에는 다크모드 + UI 테마 팔레트만 맞춰준다(배율/폰트는 굳이 안 함 — shell.js
 // 전체 테마 로직을 끌어오면 의존성이 커진다).
@@ -77,9 +77,9 @@ function openItem(row) {
 // search 결과 행 → spotlight 항목 엔트리
 function itemEntry(row, exactKey) {
   const label = stripHtmlToPlainText(row.title || row.content || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '(제목 없음)';
-  const sub = row.snippet
-    ? stripHtmlToPlainText(row.snippet).replace(/\s+/g, ' ').trim().slice(0, 90)
-    : TYPE_LABEL[row.entity_type] || '';
+  const snip = row.snippet ? stripHtmlToPlainText(row.snippet).replace(/\s+/g, ' ').trim().slice(0, 90) : '';
+  const dateLbl = row.entity_type === 'event' ? eventDateLabel(row.eventStart, row.eventAllDay) : '';
+  const sub = [dateLbl, snip || (dateLbl ? '' : TYPE_LABEL[row.entity_type] || '')].filter(Boolean).join('  ·  ');
   return {
     icon: TYPE_EMOJI[row.entity_type] || '•',
     label,

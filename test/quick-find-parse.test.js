@@ -64,3 +64,25 @@ test('태그 + 타입 같이: "#재활 메모 김부수"', () => {
 test('태그명 대소문자 무관', () => {
   assert.deepEqual(parseQuery('#Rehab foo', ['rehab']), { type: null, tag: 'rehab', text: 'foo' });
 });
+
+// eventDateLabel — quick-find-core.js. ⚠ 그쪽 로직 바꾸면 여기도.
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+function eventDateLabel(startAt, allDay) {
+  if (!startAt) return '';
+  const d = new Date(String(startAt).replace(' ', 'T'));
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
+  const yr = d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}. ` : '';
+  const md = `${yr}${d.getMonth() + 1}/${d.getDate()} (${WD[d.getDay()]})`;
+  if (allDay) return md;
+  return `${md} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+test('eventDateLabel: 시간 있으면 HH:MM, 종일이면 날짜만, 다른 해면 연도', () => {
+  const thisYear = new Date().getFullYear();
+  assert.equal(eventDateLabel(`${thisYear}-09-10 14:05`, false), `9/10 (${WD[new Date(`${thisYear}-09-10T14:05`).getDay()]}) 14:05`);
+  assert.equal(eventDateLabel(`${thisYear}-09-10 00:00`, true), `9/10 (${WD[new Date(`${thisYear}-09-10T00:00`).getDay()]})`);
+  assert.ok(eventDateLabel('2099-01-02 09:00', false).startsWith('2099. 1/2 '));
+  assert.equal(eventDateLabel('', false), '');
+  assert.equal(eventDateLabel('nope', false), '');
+});

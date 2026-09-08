@@ -3,6 +3,7 @@ import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { TYPE_EMOJI } from '../shared/links-ui.js';
 import { todayStr, dateKey, startOfWeek } from '../shared/date-utils.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { eventDateLabel } from '../shared/quick-find-core.js';
 
 const RECENT_KEY = 'search_recent'; // 최근 검색어 (JSON 배열, 최대 8개)
 async function getRecentQueries() {
@@ -157,11 +158,13 @@ export async function mount(root) {
 
   function renderStartItemRow(r) {
     const key = `${r.entity_type}:${r.entity_id}`;
+    const dateLbl = r.entity_type === 'event' ? eventDateLabel(r.eventStart, r.eventAllDay) : '';
+    const dateChip = dateLbl ? `<span class="search-date-chip">${escapeHtml(dateLbl)}</span>` : '';
     return `
       <div class="list-row search-related-row" data-key="${key}">
         <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
         <a class="main" href="${itemHref(r.entity_type, r.entity_id)}">
-          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}</b>
+          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}${dateChip}</b>
         </a>
       </div>`;
   }
@@ -196,13 +199,16 @@ export async function mount(root) {
   function renderResultCard(type, i) {
     const key = `${type}:${i.entity_id}`;
     const badge = MATCH_LABEL[i.matchedIn] ? `<span class="search-match-badge" data-match="${i.matchedIn}">${MATCH_LABEL[i.matchedIn]}</span>` : '';
+    const dateLbl = type === 'event' ? eventDateLabel(i.eventStart, i.eventAllDay) : '';
+    const dateChip = dateLbl ? `<span class="search-date-chip">${escapeHtml(dateLbl)}</span>` : '';
+    const preview = escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 80));
     if (currentView === 'board') {
       return `
         <div class="search-card" data-key="${key}">
           <input type="checkbox" data-action="select" data-key="${key}" />
           <a class="search-card-body" href="${itemHref(type, i.entity_id)}">
-            <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
-            <p>${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 80))}</p>
+            <b>${escapeHtml(i.title || '(제목 없음)')}${dateChip}${badge}</b>
+            <p>${preview}</p>
           </a>
         </div>`;
     }
@@ -210,7 +216,7 @@ export async function mount(root) {
       <div class="list-row search-result-row" data-key="${key}">
         <input type="checkbox" data-action="select" data-key="${key}" />
         <a class="main" href="${itemHref(type, i.entity_id)}">
-          <b>${escapeHtml(i.title || '(제목 없음)')}${badge}</b>
+          <b>${escapeHtml(i.title || '(제목 없음)')}${dateChip}${badge}</b>
           <div class="meta">${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 60))}</div>
         </a>
       </div>`;
