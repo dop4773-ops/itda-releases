@@ -104,7 +104,7 @@ function applyLightweightMigrations(db) {
 
   // v3: search_index(FTS5 → 일반 테이블 + chosung). 다른 단계보다 먼저 — 이후 단계가 원본 테이블을
   // 건드리면 동기화 트리거가 도는데, 새 트리거/테이블이 이미 자리잡아 있어야 한다.
-  // FTS5 unicode61은 한글을 공백 없는 한 덩어리 토큰으로 잡아 "김 부수"≠"김부수", "부수" 단독 검색이
+  // FTS5 unicode61은 한글을 공백 없는 한 덩어리 토큰으로 잡아 "홍 길동"≠"홍길동", "길동" 단독 검색이
   // 안 되는 등 한국어 부분일치가 취약했다. 개인 규모 DB(수천 건)에선 title/content LIKE 스캔이 1ms
   // 안쪽이라, 정확한 부분일치 + 초성(chosung) 컬럼을 갖춘 일반 테이블이 낫다.
   const searchTblSql = db
@@ -334,7 +334,7 @@ function rebuildSearchIndex(db) {
       entity_id   INTEGER NOT NULL,
       title       TEXT NOT NULL DEFAULT '',
       content     TEXT NOT NULL DEFAULT '',   -- memo/postit은 저장된 HTML 그대로(조회 측에서 태그 제거)
-      chosung     TEXT NOT NULL DEFAULT '',   -- title의 초성 (예: "김부수" → "ㄱㅂㅅ")
+      chosung     TEXT NOT NULL DEFAULT '',   -- title의 초성 (예: "홍길동" → "ㅎㄱㄷ")
       updated_at  TEXT NOT NULL DEFAULT '',   -- 원본의 updated_at(inbox는 created_at) — 검색 랭킹 "최신도"용
       PRIMARY KEY (entity_type, entity_id)
     ) WITHOUT ROWID;

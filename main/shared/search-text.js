@@ -6,12 +6,12 @@
 // 검색어 정규화 — 공백 정리 + 아주 흔한 꼬리말만 제거. 공격적인 자동보정은 안 한다.
 function normalizeQuery(raw) {
   let s = String(raw || '').trim().replace(/\s+/g, ' ');
-  s = s.replace(/(.)님$/, '$1'); // "김부수님" → "김부수"
-  s = s.replace(/\s+(환자|선생님)$/, ''); // "김부수 환자" → "김부수"
+  s = s.replace(/(.)님$/, '$1'); // "홍길동님" → "홍길동"
+  s = s.replace(/\s+(환자|선생님)$/, ''); // "홍길동 환자" → "홍길동"
   return s.trim();
 }
 
-// "김 부수" 처럼 공백이 있으면 [토큰들, 공백제거형] 둘 다 후보로 본다.
+// "홍 길동" 처럼 공백이 있으면 [토큰들, 공백제거형] 둘 다 후보로 본다.
 function queryForms(normalized) {
   const tokens = normalized.split(' ').filter(Boolean);
   const flat = normalized.replace(/\s+/g, '');

@@ -65,14 +65,14 @@ test('신규(최신) DB는 스탬프가 있으면 마이그레이션을 건너�
 
 test('v3: 구버전 FTS5 search_index → 일반 테이블(chosung 포함)로 재구축', () => {
   const db = oldDb();
-  db.prepare("INSERT INTO todos (title) VALUES ('김부수 평가 메모')").run();
+  db.prepare("INSERT INTO todos (title) VALUES ('홍길동 평가 메모')").run();
   runLightweightMigrations(db);
   const sql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='search_index'").get().sql;
   assert.ok(!sql.includes('fts5'), '일반 테이블로 바뀜');
   assert.ok(hasCol(db, 'search_index', 'chosung'));
   assert.ok(hasCol(db, 'search_index', 'updated_at'), 'v4: updated_at 컬럼');
   const row = db.prepare("SELECT title, chosung, updated_at FROM search_index WHERE entity_type='todo'").get();
-  assert.equal(row.chosung, 'ㄱㅂㅅ ㅍㄱ ㅁㅁ', '초성 채워짐');
+  assert.equal(row.chosung, 'ㅎㄱㄷ ㅍㄱ ㅁㅁ', '초성 채워짐');
   assert.ok(row.updated_at, 'updated_at 채워짐');
   db.close();
 });

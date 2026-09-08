@@ -11,7 +11,7 @@ test('연결된 항목 + 같은 태그 항목을 관련으로, 직접일치·중
   const repos = createRepositories(db);
   const cat = repos.categories.insert({ name: '재활', colorHex: '#4FB897' });
 
-  const memoA = repos.memos.insert({ title: '김부수 평가 노트', content: 'x', categoryId: cat.id });
+  const memoA = repos.memos.insert({ title: '홍길동 평가 노트', content: 'x', categoryId: cat.id });
   const todoB = repos.todos.insert({ title: '치료계획 확인' }); // 연결 대상
   const memoC = repos.memos.insert({ title: '재활 일지', content: 'y', categoryId: cat.id }); // 같은 태그
   const memoD = repos.memos.insert({ title: '전혀 상관없는 다른 글', content: 'z' });
@@ -22,7 +22,7 @@ test('연결된 항목 + 같은 태그 항목을 관련으로, 직접일치·중
 
   repos.links.insertIgnore(canonicalizeLink('memo', memoA.id, 'todo', todoB.id));
 
-  const direct = repos.search.query('김부수'); // memoA만 매치
+  const direct = repos.search.query('홍길동'); // memoA만 매치
   assert.equal(direct.length, 1);
   assert.equal(direct[0].entity_id, memoA.id);
 
@@ -44,7 +44,7 @@ test('discoverRelated: 근거별 점수 — 태그·날짜·키워드·같이만
   const db = freshDb();
   const repos = createRepositories(db);
   const cat = repos.categories.insert({ name: '테스트태그ZZ', colorHex: '#6C8CF5' });
-  const anchor = repos.todos.insert({ title: '김부수 재활 평가', dueDate: '2026-09-10', categoryId: cat.id });
+  const anchor = repos.todos.insert({ title: '홍길동 재활 평가', dueDate: '2026-09-10', categoryId: cat.id });
   const sameTag = repos.todos.insert({ title: '다른 건', categoryId: cat.id });
   db.prepare("UPDATE todos SET created_at = '2020-01-01 00:00:00' WHERE id IN (?,?)").run(anchor.id, sameTag.id);
   const sharesKw = repos.memos.insert({ title: '재활 평가 프로토콜', content: '' });
@@ -61,7 +61,7 @@ test('discoverRelated: 근거별 점수 — 태그·날짜·키워드·같이만
 test('완전삭제/휴지통 상대는 관련 항목에 안 뜬다', () => {
   const db = freshDb();
   const repos = createRepositories(db);
-  const memoA = repos.memos.insert({ title: '앵커 메모 김부수', content: 'x' });
+  const memoA = repos.memos.insert({ title: '앵커 메모 홍길동', content: 'x' });
   const trashedTodo = repos.todos.insert({ title: '휴지통 갈 할일' });
   const goneMemo = repos.memos.insert({ title: '곧 완전삭제', content: '' });
   repos.links.insertIgnore(canonicalizeLink('memo', memoA.id, 'todo', trashedTodo.id));
@@ -69,7 +69,7 @@ test('완전삭제/휴지통 상대는 관련 항목에 안 뜬다', () => {
   repos.todos.softDelete(trashedTodo.id); // 휴지통
   db.prepare('DELETE FROM memos WHERE id = ?').run(goneMemo.id); // 완전삭제
 
-  const keys = relatedFor(repos, repos.search.query('김부수')).map((r) => `${r.entity_type}:${r.entity_id}`);
+  const keys = relatedFor(repos, repos.search.query('홍길동')).map((r) => `${r.entity_type}:${r.entity_id}`);
   assert.ok(!keys.includes(`todo:${trashedTodo.id}`), '휴지통 항목 제외');
   assert.ok(!keys.includes(`memo:${goneMemo.id}`), '완전삭제 항목 제외');
 });
