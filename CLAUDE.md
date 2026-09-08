@@ -34,6 +34,18 @@
 - `prompt()`, `alert()`, `confirm()` 등 브라우저 전용 API는 Electron 렌더러에서 제대로 동작하지 않을 수 있음 — 절대 사용하지 말 것. 다이얼로그가 필요하면 기존 커스텀 모달 컴포넌트를 재사용할 것.
 - 새 코드 작성 시 `npm run lint` 를 통과하는지 확인할 것 (에러 0개 기준).
 
+## 커밋 / 버전 / 릴리스 (기본 동작 — 매번 지시 안 해도 됨)
+
+- **한 묶음(배치) 작업이 끝나면 스스로 커밋 + 푸시한다.** 사용자가 "커밋해줘"라고 매번 말하지 않아도 됨.
+  단, 절반만 된 작업·검증 안 끝난 상태로는 커밋하지 않는다 (lint 0 + 관련 테스트/CDP 확인 후).
+- **커밋마다 `package.json`의 version을 올린다** (GitHub Actions가 그 버전으로 Windows 빌드/릴리스).
+  - 작은 변경 / 버그 수정 / 한 묶음 손질 → **패치** (예: 2.59.1 → 2.59.2)
+  - 큰 기능 / 여러 단계짜리 작업 / 의미 있는 업데이트 → **마이너** (예: 2.59.x → 2.60.0)
+- 실제 코드는 작업 폴더 `~/itda`에서 수정하고, 커밋은 git 클론인 `~/Desktop/itda_project`에서 한다.
+  바뀐 파일을 **하나씩 명시적 경로로** 복사(`cp a a; cp b b` — `cp a b dest/` 사고 금지) → `package.json` 버전업 → 커밋 → `git push origin main`.
+- 커밋 후 CI(GitHub Actions)가 `npm run lint` → `npm test` → `electron-builder`로 Windows 설치본을 만들어
+  dop4773-ops/itda-releases에 릴리스한다. 결과(success/실패)를 확인해서 보고한다.
+
 ## 세션 종료 전 체크
 
 - 이번 세션에서 손댄 기능과 관련된 항목을 `RELEASE_CHECKLIST.md`에서 찾아 실제로 재검증하고, 결과(통과/실패)를 보고할 것.
