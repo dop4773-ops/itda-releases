@@ -120,9 +120,12 @@ export async function mount(root, initialTab) {
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div><div class="settings-row-title">너비</div><div class="settings-row-desc">접힌 상태에서는 적용되지 않아요.</div></div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <input type="range" id="sb-widthRange" style="width:140px;" />
-                <span id="sb-widthValue" style="font-size:12px;color:var(--text-soft);width:44px;text-align:right;">220px</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-secondary" id="sb-widthMinus" title="4px 좁게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
+                <input type="range" id="sb-widthRange" style="width:120px;" />
+                <button class="btn-secondary" id="sb-widthPlus" title="4px 넓게" style="padding:3px 9px;font-size:14px;line-height:1;">+</button>
+                <input type="number" id="sb-widthValue" step="1" class="input" style="width:56px;text-align:center;" />
+                <span style="font-size:12px;color:var(--text-faint);">px</span>
               </div>
             </div>
           </div>
@@ -171,6 +174,16 @@ export async function mount(root, initialTab) {
               <div style="display:flex;align-items:center;gap:6px;">
                 <input type="color" id="display-textColorDark" class="rich-color-btn" style="width:30px;height:30px;" />
                 <button class="btn-danger" id="display-textColorDarkReset">기본값</button>
+              </div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div class="settings-row-title">대시보드 인사말 글자색</div>
+                <div class="settings-row-desc">대시보드 상단 "좋은 오후입니다" 문구 색이에요. 배경 이미지를 깔았을 때 잘 보이게 조정하세요.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input type="color" id="display-greetingColor" class="rich-color-btn" style="width:30px;height:30px;" />
+                <button class="btn-danger" id="display-greetingColorReset">기본값</button>
               </div>
             </div>
           </div>
@@ -239,9 +252,12 @@ export async function mount(root, initialTab) {
                 <div class="settings-row-title">투명도</div>
                 <div class="settings-row-desc">위젯 창을 얼마나 비치게 할지 정해요. 이미 열려있는 위젯에도 바로 적용돼요.</div>
               </div>
-              <div style="display:flex;align-items:center;gap:8px;">
-                <input type="range" id="widget-opacityRange" min="40" max="100" step="5" style="width:120px;" />
-                <span id="widget-opacityValue" style="font-size:12px;color:var(--text-faint);width:34px;text-align:right;">100%</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-secondary" id="widget-opacityMinus" title="5% 낮게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
+                <input type="range" id="widget-opacityRange" min="40" max="100" step="5" style="width:110px;" />
+                <button class="btn-secondary" id="widget-opacityPlus" title="5% 높게" style="padding:3px 9px;font-size:14px;line-height:1;">+</button>
+                <input type="number" id="widget-opacityValue" min="40" max="100" step="1" class="input" style="width:52px;text-align:center;" />
+                <span style="font-size:12px;color:var(--text-faint);">%</span>
               </div>
             </div>
             <div class="update-row" style="margin-top:10px;">
@@ -705,6 +721,27 @@ export async function mount(root, initialTab) {
     await initTextColorRow('light', 'display-textColorLight', 'display-textColorLightReset');
     await initTextColorRow('dark', 'display-textColorDark', 'display-textColorDarkReset');
 
+    // 대시보드 인사말 글자색 (app_settings: dash_greeting_color, 빈 값 = 기본)
+    const greetInput = $('display-greetingColor');
+    const savedGreet = await window.itda.settings.get('dash_greeting_color');
+    greetInput.value = savedGreet || '#2B2E3A';
+    greetInput.addEventListener('input', async () => {
+      try {
+        await window.itda.settings.set({ key: 'dash_greeting_color', value: greetInput.value });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    });
+    $('display-greetingColorReset').addEventListener('click', async () => {
+      try {
+        await window.itda.settings.set({ key: 'dash_greeting_color', value: '' });
+        greetInput.value = '#2B2E3A';
+        toast('기본값으로 되돌렸어요 (대시보드에서 확인)');
+      } catch (e) {
+        errorToast(e, '되돌리지 못했어요');
+      }
+    });
+
     const fabToggle = $('display-fabToggle');
     fabToggle.checked = (await window.itda.settings.get('fab_hidden')) === '1';
     fabToggle.addEventListener('change', async () => {
@@ -807,23 +844,34 @@ export async function mount(root, initialTab) {
       [['both', '아이콘 + 텍스트'], ['icon', '아이콘만']], (v) => setSidebarSetting('sidebar_labels', v));
 
     const wr = $('sb-widthRange');
-    const wv = $('sb-widthValue');
-    wr.min = String(SIDEBAR_WIDTH_MIN);
-    wr.max = String(SIDEBAR_WIDTH_MAX);
+    const wv = $('sb-widthValue'); // <input type="number">
+    wr.min = wv.min = String(SIDEBAR_WIDTH_MIN);
+    wr.max = wv.max = String(SIDEBAR_WIDTH_MAX);
     wr.step = '4';
-    wr.value = String(await getSidebarWidth());
-    wv.textContent = wr.value + 'px';
-    wr.addEventListener('input', () => {
-      wv.textContent = wr.value + 'px';
-      document.documentElement.style.setProperty('--sidebar-w', wr.value + 'px'); // 드래그 중 라이브 미리보기
-    });
-    wr.addEventListener('change', async () => {
+    const clampW = (n) => Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(Number(n) || SIDEBAR_WIDTH_MIN)));
+    let wApplied = clampW(await getSidebarWidth());
+    const paintW = (n) => {
+      wr.value = String(n);
+      wv.value = String(n);
+      document.documentElement.style.setProperty('--sidebar-w', n + 'px'); // 라이브 미리보기
+    };
+    paintW(wApplied);
+    const commitW = async (n) => {
+      const c = clampW(n);
+      paintW(c);
+      if (c === wApplied) return;
+      wApplied = c;
       try {
-        await setSidebarSetting('sidebar_width', wr.value);
+        await setSidebarSetting('sidebar_width', String(c));
       } catch (e) {
         errorToast(e, '저장하지 못했어요');
       }
-    });
+    };
+    wr.addEventListener('input', () => paintW(clampW(wr.value)));
+    wr.addEventListener('change', () => commitW(wr.value));
+    wv.addEventListener('change', () => commitW(wv.value));
+    $('sb-widthMinus').addEventListener('click', () => commitW(wApplied - 4));
+    $('sb-widthPlus').addEventListener('click', () => commitW(wApplied + 4));
   }
 
   // ================= 단축키 =================
@@ -1301,24 +1349,35 @@ export async function mount(root, initialTab) {
 
   async function initWidgetAppearancePanel() {
     const range = $('widget-opacityRange');
-    const valueLabel = $('widget-opacityValue');
+    const valueInput = $('widget-opacityValue');
     const savedOpacity = await window.itda.settings.get('widget_opacity');
-    const percent = savedOpacity ? Math.round(Number(savedOpacity) * 100) : 100;
-    range.value = percent;
-    valueLabel.textContent = `${percent}%`;
+    const clampOpacity = (n) => Math.min(100, Math.max(40, Math.round(Number(n) || 100)));
+    let percent = savedOpacity ? clampOpacity(Number(savedOpacity) * 100) : 100;
+    const paint = (n) => {
+      percent = n;
+      range.value = String(n);
+      valueInput.value = String(n);
+    };
+    paint(percent);
 
     const scheduleOpacitySave = wrapAutosave(async () => {
       try {
-        await window.itda.settings.set({ key: 'widget_opacity', value: String(Number(range.value) / 100) });
+        await window.itda.settings.set({ key: 'widget_opacity', value: String(percent / 100) });
         await window.itda.widgets.applyAppearance();
       } catch (e) {
         errorToast(e, '투명도를 저장하지 못했어요');
       }
     }, 200);
-    range.addEventListener('input', () => {
-      valueLabel.textContent = `${range.value}%`;
+    const setOpacity = (n) => {
+      const c = clampOpacity(n);
+      if (c === percent) return;
+      paint(c);
       scheduleOpacitySave();
-    });
+    };
+    range.addEventListener('input', () => setOpacity(range.value));
+    valueInput.addEventListener('change', () => setOpacity(valueInput.value));
+    $('widget-opacityMinus').addEventListener('click', () => setOpacity(percent - 5));
+    $('widget-opacityPlus').addEventListener('click', () => setOpacity(percent + 5));
 
     const alwaysOnTopToggle = $('widget-alwaysOnTopToggle');
     // 값이 아예 없던 적(신규 설치 직후)엔 켜진 것으로 취급 — 지금까지의 기본 동작(항상 위)과 맞춤

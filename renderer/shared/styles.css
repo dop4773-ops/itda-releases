@@ -2126,6 +2126,7 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .s-row:last-child{border-bottom:none;}
 .s-row:hover{background:var(--bg);}
 .s-row.active{background:var(--brand-soft);}
+.s-row.kbd{box-shadow:inset 2px 0 0 var(--brand);background:var(--bg);}
 .s-row-check{accent-color:var(--brand);flex-shrink:0;opacity:.45;transition:opacity .1s;}
 .s-row:hover .s-row-check,.s-row.selected .s-row-check,.s-row.active .s-row-check{opacity:1;}
 .s-row-icon{flex-shrink:0;width:18px;text-align:center;font-size:13px;}

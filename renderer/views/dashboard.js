@@ -343,6 +343,16 @@ export async function mount(root) {
     })
     .catch(() => {});
 
+  // 인사말 글자색 (설정 > 화면). 배경 이미지/다크 대시테마 위에서도 보이도록 인라인으로 강제.
+  window.itda.settings
+    .get('dash_greeting_color')
+    .then((color) => {
+      if (!color) return;
+      const g = root.querySelector('.dash-greeting');
+      g?.querySelectorAll('h1, p').forEach((el) => (el.style.color = color));
+    })
+    .catch(() => {});
+
   // 카드 on/off (설정에서 저장한 JSON 하나로 관리). 사이드 패널 카드가 둘 다 꺼져 있으면
   // 우측 패널을 열 이유가 없으므로 헤더의 "사이드 패널 열기" 버튼을 숨긴다.
   // 위젯 레이아웃 상태(dashboard_layout)와 사이드 패널 열림 상태(dashboard_side_open)는

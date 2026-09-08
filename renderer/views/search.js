@@ -3,6 +3,7 @@ import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { TYPE_EMOJI } from '../shared/links-ui.js';
 import { todayStr, dateKey, startOfWeek, addDays } from '../shared/date-utils.js';
 import { attachContextMenu } from '../shared/context-menu.js';
+import { setScreenShortcuts } from '../shared/shell.js';
 
 const RECENT_KEY = 'search_recent'; // 최근 검색어 (JSON 배열, 최대 8개) — app_settings(로컬 SQLite)에만 저장
 async function getRecentQueries() {
@@ -159,6 +160,7 @@ export async function mount(root) {
   let loading = false;
   let selected = new Set(); // "type:id"
   let drawerKey = null;
+  let kbdIdx = -1; // 키보드 커서(↑↓)로 짚은 결과 행 인덱스
   let categories = [];
   const filters = { types: [], period: 'all', dateFrom: null, dateTo: null, status: 'all', sort: 'recent' };
 
@@ -239,6 +241,7 @@ export async function mount(root) {
       offset = 0;
       results = [];
       selected.clear();
+      kbdIdx = -1;
     }
     tokens = keyword.trim().split(/\s+/).filter(Boolean);
     loading = true;
@@ -336,6 +339,8 @@ export async function mount(root) {
     updateBulkBar();
     // 드로어가 열려있던 항목이 새 결과에도 있으면 선택 표시 유지
     if (drawerKey) resultsEl.querySelector(`.s-row[data-key="${drawerKey}"]`)?.classList.add('active');
+    if (kbdIdx >= rowEls().length) kbdIdx = -1;
+    paintKbd();
   }
 
   function resultRow(r) {
@@ -658,13 +663,50 @@ export async function mount(root) {
   });
   $('s-loadMore').addEventListener('click', () => runSearch(lastKeyword, { append: true }));
 
-  document.addEventListener('keydown', onEsc);
-  function onEsc(e) {
-    if (e.key === 'Escape' && drawerKey) {
+  // ---------- 단축키 ----------
+  function rowEls() {
+    return [...$('s-results').querySelectorAll('.s-row')];
+  }
+  function paintKbd() {
+    const els = rowEls();
+    els.forEach((el, i) => el.classList.toggle('kbd', i === kbdIdx));
+    if (kbdIdx >= 0 && els[kbdIdx]) els[kbdIdx].scrollIntoView({ block: 'nearest' });
+  }
+  function moveKbd(delta) {
+    const n = rowEls().length;
+    if (!n) return;
+    kbdIdx = kbdIdx < 0 ? (delta > 0 ? 0 : n - 1) : (kbdIdx + delta + n) % n;
+    paintKbd();
+  }
+  function onKey(e) {
+    if (e.defaultPrevented) return;
+    const typing = document.activeElement === $('s-input');
+    if (e.key === 'Escape') {
+      if (drawerKey) { e.preventDefault(); closeDrawer(); }
+      else if (typing && $('s-input').value) { e.preventDefault(); $('s-input').value = ''; $('s-clear').hidden = true; runSearch(''); }
+      return;
+    }
+    if ((e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) ||
+        ((e.metaKey || e.ctrlKey) && (e.key === 'f' || e.key === 'k'))) {
       e.preventDefault();
-      closeDrawer();
+      $('s-input').focus();
+      $('s-input').select();
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveKbd(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveKbd(-1); }
+    else if (e.key === 'Enter' && kbdIdx >= 0) {
+      const el = rowEls()[kbdIdx];
+      if (el) { e.preventDefault(); openDrawer(el.dataset.type, Number(el.dataset.id)); }
     }
   }
+  document.addEventListener('keydown', onKey);
+  setScreenShortcuts('검색', [
+    { label: '검색창', keys: '/' },
+    { label: '결과 이동', keys: '↑↓' },
+    { label: '열기', keys: 'Enter' },
+    { label: '닫기', keys: 'Esc' },
+  ]);
 
   renderPrompt();
 
@@ -672,6 +714,7 @@ export async function mount(root) {
     clearTimeout(debounceTimer);
     clearTimeout(recordTimer);
     document.removeEventListener('mousedown', onFilterOutside);
-    document.removeEventListener('keydown', onEsc);
+    document.removeEventListener('keydown', onKey);
+    setScreenShortcuts(null, []);
   };
 }
