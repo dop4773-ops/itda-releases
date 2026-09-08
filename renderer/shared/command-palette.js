@@ -3,6 +3,7 @@ import { TABS as SETTINGS_TABS } from '../views/settings.js';
 import { TAG_ICON } from '../views/tags.js';
 import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
 import { getCachedBinding, matchesAccelerator } from './shortcuts.js';
+import { parseQuery, describeScope } from './quick-find-core.js';
 
 // 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
@@ -15,9 +16,11 @@ const SETTINGS_TAB_KEYWORDS = {
   update: '버전 업데이트확인',
 };
 
-// Obsidian의 Command Palette를 참고한 "빠른 실행" 메뉴 (문서 9번).
+// 잇다 안에서 쓰는 "빠른 찾기" (전역 Spotlight 창 = renderer/spotlight.js 의 잇다-안 버전).
+// 화면·태그·항목 검색은 Spotlight와 같은 규칙(quick-find-core.js)을 쓰고, 여기엔 "새 메모
+// 만들기" 같은 명령 실행이 더 붙는다(본체 DOM에 접근할 수 있어서).
 // 기존 단축키(Ctrl/Cmd+K = 빠른입력, OS 전역 Ctrl/Cmd+Alt+I = 어디서든 빠른입력)와
-// 겹치지 않도록, "커맨드 팔레트" 자체는 VSCode/Slack 등에서 널리 쓰는 Ctrl/Cmd+Shift+P를 쓴다.
+// 겹치지 않도록, VSCode/Slack 등에서 널리 쓰는 Ctrl/Cmd+Shift+P를 쓴다.
 // (그냥 Ctrl+P는 웹 관례상 "인쇄"로 강하게 인식되는 조합이라 의도적으로 피함)
 const ACCELERATOR_LABEL_MAC = '⌘⇧P';
 const ACCELERATOR_LABEL_WIN = 'Ctrl+Shift+P';const SEARCH_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
@@ -121,10 +124,12 @@ export function initCommandPalette({ openQuickCapture }) {
   let activeIndex = 0;
   let searchGeneration = 0; // 빠르게 타이핑할 때 늦게 도착한 옛 검색 결과가 최신 결과를 덮어쓰는 것 방지
 
+  let categoryNames = [];
   async function refreshTagCommands() {
     try {
       const categories = await window.itda.categories.list();
       tagCommands = categories.map(buildTagCommand);
+      categoryNames = categories.map((c) => c.name);
     } catch (e) {
       tagCommands = [];
     }
@@ -146,7 +151,9 @@ export function initCommandPalette({ openQuickCapture }) {
       .map((c, i) => {
         const badge = c._kind === 'item' && MATCH_LABEL[c.matchedIn] ? `<span class="cmdk-badge">${MATCH_LABEL[c.matchedIn]}</span>` : '';
         const header =
-          (i === firstItem && firstItem !== -1 ? `<div class="cmdk-section">검색 결과</div>` : '') +
+          (i === firstItem && firstItem !== -1
+            ? `<div class="cmdk-section">검색 결과${currentScope ? ` · ${escapeHtml(currentScope)}` : ''}</div>`
+            : '') +
           (i === firstCmd && firstCmd !== -1 ? `<div class="cmdk-section">명령</div>` : '');
         return `${header}<div class="cmdk-item ${i === activeIndex ? 'active' : ''}" data-index="${i}">
           <span class="cmdk-item-icon">${c.icon}</span>
@@ -170,6 +177,7 @@ export function initCommandPalette({ openQuickCapture }) {
   let commandMatches = []; // 이번 검색어에 걸린 명령(정적+태그)
   let itemMatchesCache = []; // 이번 검색어에 걸린 실제 항목
   let queryActive = false; // 검색어가 있을 때만 "검색 결과 / 명령" 섹션 헤더를 보인다
+  let currentScope = ''; // 활성 타입/태그 프리픽스 표시("메모", "#재활") — 섹션 헤더에 접미
 
   // 정렬: (0) 정확히 일치(명령 라벨/키워드 토큰, 항목 제목) → (1) 항목 → (2) 명령.
   // "검색 결과"(항목)를 "명령"보다 위에 두는 목업 구성 + 정확일치는 무조건 최상단.
@@ -181,18 +189,23 @@ export function initCommandPalette({ openQuickCapture }) {
     render();
   }
 
-  const debouncedItemSearch = debounce(async (keyword, generation) => {
+  const debouncedItemSearch = debounce(async (parsed, generation) => {
+    const scoped = !!(parsed.type || parsed.tag);
     let rows = [];
     try {
-      rows = await window.itda.search.query(keyword);
+      rows = await window.itda.search.query(
+        parsed.text
+          ? { query: parsed.text, type: parsed.type, tag: parsed.tag, limit: 20 }
+          : { type: parsed.type, tag: parsed.tag, limit: 20 }
+      );
     } catch (e) {
       rows = [];
     }
     if (generation !== searchGeneration) return; // 그 사이 입력이 더 바뀌었으면 이 결과는 버림
-    const q = keyword.trim().toLowerCase();
-    itemMatchesCache = rows.slice(0, 8).map((row) => {
+    const q = (parsed.text || '').trim().toLowerCase();
+    itemMatchesCache = rows.slice(0, scoped ? 12 : 8).map((row) => {
       const c = buildItemCommand(row);
-      c._rank = (row.title || '').trim().toLowerCase() === q ? 0 : 1;
+      c._rank = q && (row.title || '').trim().toLowerCase() === q ? 0 : 1;
       return c;
     });
     mergeSorted();
@@ -206,21 +219,27 @@ export function initCommandPalette({ openQuickCapture }) {
 
   function filterCommands(keyword) {
     searchGeneration += 1;
-    const q = keyword.trim().toLowerCase();
-    queryActive = !!q;
+    const parsed = parseQuery(keyword, categoryNames);
+    const scoped = !!(parsed.type || parsed.tag);
+    currentScope = describeScope(parsed);
+    const q = parsed.text.toLowerCase();
+    queryActive = !!q || scoped;
     const all = allStaticCommands();
-    if (!q) {
+    if (!q && !scoped) {
       commandMatches = all.map((c) => ({ ...c, _rank: 2 }));
       itemMatchesCache = [];
       mergeSorted();
       return;
     }
-    commandMatches = all
-      .filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q))
-      .map((c) => ({ ...c, _rank: commandRank(c, q) }));
+    // 프리픽스로 좁혔으면(메모 …, #재활 …) 화면·명령은 빼고 항목만 — "그 범위에서 찾기"가 의도.
+    commandMatches = scoped
+      ? []
+      : all
+          .filter((c) => `${c.label} ${c.keywords || ''}`.toLowerCase().includes(q))
+          .map((c) => ({ ...c, _rank: commandRank(c, q) }));
     itemMatchesCache = []; // 항목 결과는 debounce 뒤에 채워짐
     mergeSorted();
-    if (q.length >= 1) debouncedItemSearch(q, searchGeneration);
+    debouncedItemSearch(parsed, searchGeneration);
   }
 
   function run(index) {
@@ -238,7 +257,7 @@ export function initCommandPalette({ openQuickCapture }) {
       <div class="cmdk-card">
         <div class="cmdk-input-row">
           <span class="cmdk-input-icon">${SEARCH_ICON}</span>
-          <input type="text" id="cmdk-input" placeholder="무엇을 할까요?" autocomplete="off" />
+          <input type="text" id="cmdk-input" placeholder="찾기 · 실행  (예: 메모 김부수, #재활)" autocomplete="off" />
         </div>
         <div class="cmdk-list" id="cmdk-list"></div>
         <div class="cmdk-hint-row">↑↓ 이동 · Enter 실행 · Esc 닫기</div>

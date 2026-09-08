@@ -82,13 +82,35 @@ function applyMetaFilters(db, rows, { dateFrom, dateTo, status }) {
   });
 }
 
+// 태그(카테고리) 필터 — search_index엔 category_id가 없어 원본 테이블에서 후처리로 좁힌다.
+// 태그명은 대소문자 무관. inbox엔 태그가 없어 태그 필터가 걸리면 통째로 빠진다.
+function applyTagFilter(db, rows, tagName) {
+  if (!tagName) return rows;
+  const cat = db.prepare('SELECT id FROM categories WHERE name = ? COLLATE NOCASE').get(String(tagName));
+  if (!cat) return [];
+  const byType = {};
+  rows.forEach((r) => {
+    (byType[r.entity_type] = byType[r.entity_type] || []).push(r.entity_id);
+  });
+  const ok = new Set();
+  for (const [t, ids] of Object.entries(byType)) {
+    const tbl = META_TABLE[t];
+    if (!tbl || t === 'inbox') continue;
+    const ph = ids.map(() => '?').join(',');
+    db.prepare(`SELECT id FROM ${tbl} WHERE category_id = ? AND id IN (${ph})`)
+      .all(cat.id, ...ids)
+      .forEach((x) => ok.add(`${t}:${x.id}`));
+  }
+  return rows.filter((r) => ok.has(`${r.entity_type}:${r.entity_id}`));
+}
+
 module.exports = function createSearchRepository(db) {
   const repo = {
     // 통합검색. 랭킹: 제목 정확 > 제목 시작 > 제목 포함 > 초성(제목) > 본문 포함.
     // 반환: [{ entity_type, entity_id, title, content, matchedIn: 'title'|'chosung'|'content' }]
     // (entity_type/entity_id 이름은 예전 FTS 결과와 동일 — 기존 소비자 호환)
-    // dateFrom/dateTo('YYYY-MM-DD') · status('done'|'open')는 원본 테이블 조회로 후처리 필터.
-    query(rawQuery, { types = null, limit = 40, dateFrom = null, dateTo = null, status = null } = {}) {
+    // dateFrom/dateTo('YYYY-MM-DD') · status('done'|'open') · tag(카테고리명)는 원본 테이블 조회로 후처리 필터.
+    query(rawQuery, { types = null, tag = null, limit = 40, dateFrom = null, dateTo = null, status = null } = {}) {
       const q = normalizeQuery(rawQuery);
       if (!q) return [];
       const { tokens, flat } = queryForms(q);
@@ -154,8 +176,43 @@ module.exports = function createSearchRepository(db) {
       });
       // 매치 품질(_rank)이 먼저 — 그 안에서 최근에 고친 것 위로 → 제목 짧은 것 순.
       scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
-      const filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
+      let filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
+      filtered = applyTagFilter(db, filtered, tag);
       return filtered.slice(0, limit).map(({ _rank, _recency, ...rest }) => rest);
+    },
+
+    // 검색어 없이 타입/태그 프리픽스만 입력했을 때("메모 ", "#재활") — 그 범위의 최근 항목을 나열.
+    browse({ type = null, tag = null, limit = 20 } = {}) {
+      const types = type ? [type] : ['todo', 'event', 'memo', 'postit'];
+      const catId = tag
+        ? (db.prepare('SELECT id FROM categories WHERE name = ? COLLATE NOCASE').get(String(tag)) || {}).id
+        : null;
+      if (tag && !catId) return [];
+      const rows = [];
+      for (const t of types) {
+        const tbl = META_TABLE[t];
+        if (!tbl || t === 'inbox') continue;
+        const titleExpr = t === 'memo' || t === 'postit' ? "coalesce(nullif(title,''), substr(content,1,120))" : 'title';
+        let sql = `SELECT '${t}' AS entity_type, id AS entity_id, ${titleExpr} AS title, updated_at
+                   FROM ${tbl} WHERE deleted_at IS NULL`;
+        const params = [];
+        if (catId) {
+          sql += ' AND category_id = ?';
+          params.push(catId);
+        }
+        sql += ' ORDER BY updated_at DESC LIMIT ?';
+        params.push(limit);
+        rows.push(...db.prepare(sql).all(...params));
+      }
+      rows.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+      return rows.slice(0, limit).map((r) => ({
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        title: r.title || '',
+        content: '',
+        snippet: '',
+        matchedIn: 'title',
+      }));
     },
 
     // "@검색" 빠른 연결 후보 (inbox 제외, 상위 8건) — 예전 links.repository.searchCandidates.

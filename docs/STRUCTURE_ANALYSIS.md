@@ -398,7 +398,19 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 - **배경 이미지 버튼**: OS 기본 회색 `<input type=file>` → `.btn-secondary` 스타일 버튼 + 파일명 표시.
   배경 종류 드롭다운 순서 재배치(없음 → 이미지 → 단색 → 패턴들), 이미지 관련 행을 위로.
 
-**보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화, Spotlight 병합.
+**보류**: 오타 보정(FTS trigram 필요, 큰 변경), 검색소스 플러그인 추상화.
+
+## 빠른 찾기 통합 + 프리픽스 (v2.61.0)
+- **이름 통일**: `commandPalette`(잇다 안, Ctrl+Shift+P) / `globalQuickFind`(어디서든, Ctrl+Shift+Space)
+  둘 다 설정에서 "빠른 찾기"로 표기 — "빠른 입력"이 앱/전역 쌍인 것과 같은 구조. 창은 둘 유지
+  (Spotlight = 독립 창 / 팔레트 = 본체 DOM 접근 가능 → "새 메모 만들기"류 명령 실행 보너스).
+- **공용 코어** `renderer/shared/quick-find-core.js`: `parseQuery(raw, tagNames)` + 타입 상수 + `describeScope`.
+  두 창이 같은 파싱/스코프 규칙을 씀(렌더 DOM은 각자). 파서 회귀 = `test/quick-find-parse.test.js`(⚠ 1:1 복사).
+- **B. 타입/태그 프리픽스** (Raycast식, 팝업 없이 키보드만): `메모 김부수` → memo만, `#재활 김부수`/`@재활` → 재활 태그만.
+  맨 앞 토큰 + 공백일 때만 프리픽스(그냥 `메모`는 검색어). 존재하는 태그명만 인정. 프리픽스만 입력 시 그 범위 최근목록.
+- **F. 범위 검색**: `search.query`에 `tag`(카테고리명, 대소문자 무관, 원본테이블 category_id 후처리 필터, inbox 제외) +
+  `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
+- 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
 ## 빠른찾기(Spotlight) 개선 (S4 전 별건, v2.58.36)
 - **세부항목 검색**: SCREEN_COMMANDS에 설정 세부 탭 10개(`#/settings/<탭>`) + 카테고리 태그(`window.itda.categories.list`) 추가. router.js가 `#/base/sub` 파싱 → `mount(root, sub)`, settings.js가 `initialTab`으로 그 탭을 바로 연다.

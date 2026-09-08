@@ -155,6 +155,38 @@ test('recentItems: updated_at 최신순으로 타입 섞어 반환, 소프트삭
   assert.ok(new Set(items.map((i) => i.entity_type)).size >= 2, '타입이 섞여있음');
 });
 
+test('태그 필터: tag 옵션 주면 그 카테고리 항목만 (대소문자 무관, inbox 제외)', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const cat = repos.categories.insert({ name: '재활ZZ', colorHex: '#123456' });
+  const m1 = repos.memos.insert({ title: '김부수 재활 메모', content: 'x' });
+  repos.memos.insert({ title: '김부수 무관 메모', content: 'y' }); // 태그 없음
+  db.prepare('UPDATE memos SET category_id = ? WHERE id = ?').run(cat.id, m1.id);
+  const hits = repos.search.query('김부수', { tag: '재활zz' });
+  assert.deepEqual(hits.map((h) => h.entity_id), [m1.id]);
+  assert.equal(repos.search.query('김부수', { tag: '없는태그' }).length, 0);
+});
+
+test('browse: 검색어 없이 타입/태그로만 최근순 나열', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const cat = repos.categories.insert({ name: '프로젝트ZZ', colorHex: '#abcdef' });
+  const t1 = repos.todos.insert({ title: '태그된 할일' });
+  repos.todos.insert({ title: '태그 없는 할일' });
+  const mm = repos.memos.insert({ title: '태그된 메모', content: '' });
+  db.prepare('UPDATE todos SET category_id = ? WHERE id = ?').run(cat.id, t1.id);
+  db.prepare('UPDATE memos SET category_id = ? WHERE id = ?').run(cat.id, mm.id);
+
+  const onlyMemo = repos.search.browse({ type: 'memo' });
+  assert.ok(onlyMemo.length >= 1 && onlyMemo.every((r) => r.entity_type === 'memo'));
+
+  const byTag = repos.search.browse({ tag: '프로젝트ZZ' });
+  const keys = byTag.map((r) => `${r.entity_type}:${r.entity_id}`).sort();
+  assert.deepEqual(keys, [`memo:${mm.id}`, `todo:${t1.id}`].sort());
+
+  assert.deepEqual(repos.search.browse({ tag: '없음' }), []);
+});
+
 test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㄱㅂㅅ'), true);
   assert.equal(isChosungQuery('ㄱ ㅂㅅ'), true);

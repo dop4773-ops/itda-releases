@@ -2,6 +2,7 @@
 // main/spotlight/window-manager.js 가 이 페이지를 frameless 창에 띄운다.
 import { debounce } from './shared/ui-utils.js';
 import { stripHtmlToPlainText } from './shared/rich-text.js';
+import { parseQuery, describeScope, TYPE_EMOJI, TYPE_LABEL, ITEM_ROUTE } from './shared/quick-find-core.js';
 
 // 이 작은 팝업에는 다크모드 + UI 테마 팔레트만 맞춰준다(배율/폰트는 굳이 안 함 — shell.js
 // 전체 테마 로직을 끌어오면 의존성이 커진다).
@@ -25,8 +26,8 @@ let resultsEl = null;
 let items = []; // { icon, label, sub?, _rank, _section, run }
 let active = 0;
 
-const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
 const ITEM_LIMIT = 20;
+let currentScope = ''; // 활성 타입/태그 프리픽스 표시("메모", "#재활")
 
 // "큰 카테고리" — 화면 + 설정 세부 탭. route에 '#/settings/<탭>'을 주면 본체가 그 탭을 바로 연다(router.js).
 const SCREEN_COMMANDS = [
@@ -50,8 +51,8 @@ const SCREEN_COMMANDS = [
   { icon: '💾', label: '설정 · 데이터 & 백업', kw: '설정 데이터 백업 복원 내보내기 가져오기', route: '#/settings/data' },
   { icon: '🔄', label: '설정 · 업데이트', kw: '설정 업데이트 버전 최신', route: '#/settings/update' },
 ];
-const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
 let tagCommands = []; // 카테고리 태그 → '#/settings/tags'
+let tagNames = []; // 태그 프리픽스(#재활) 해석용 — 존재하는 태그명만 프리픽스로 인정
 
 function close() {
   window.itda.spotlight.close();
@@ -62,7 +63,6 @@ function openRoute(route) {
   close();
 }
 
-const ITEM_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit' };
 function openItem(row) {
   window.itda.search?.recordOpen?.({ type: row.entity_type, id: row.entity_id }); // "최근 연 항목" 기록
   if (row.entity_type === 'inbox') {
@@ -103,7 +103,7 @@ function render() {
           ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'
           : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>'}</span>
         <input id="sp-input" type="text" autocomplete="off" spellcheck="false"
-          placeholder="${mode === 'find' ? '항목·화면 찾기…' : 'Inbox에 바로 저장할 내용…'}" />
+          placeholder="${mode === 'find' ? '찾기…  (예: 메모 김부수, #재활)' : 'Inbox에 바로 저장할 내용…'}" />
         <span class="sp-hint">${mode === 'find' ? 'Enter 열기 · Esc 닫기' : 'Enter 저장 · Esc 닫기'}</span>
       </div>
       <div id="sp-results"></div>
@@ -145,7 +145,8 @@ function renderResults() {
       let header = '';
       if (it._section && it._section !== lastSection) {
         lastSection = it._section;
-        const label = { open: '최근 연 항목', recent: '최근 항목', item: '항목', shortcut: '바로가기' }[it._section];
+        const base = { open: '최근 연 항목', recent: '최근 항목', item: '항목', shortcut: '바로가기' }[it._section];
+        const label = it._section === 'item' && currentScope ? `${currentScope} · 항목` : base;
         if (label && !(it._section === 'item' && !items.some((x) => x._section !== 'item'))) {
           header = `<div class="sp-section">${label}</div>`;
         }
@@ -217,33 +218,45 @@ function categoryRank(c, k) {
   return null;
 }
 
-const debouncedItemSearch = debounce(async (kw) => {
-  const k = kw.trim().toLowerCase();
+const samePar = (a, b) => a.type === b.type && a.tag === b.tag && a.text.trim() === b.text.trim();
+
+const debouncedItemSearch = debounce(async (parsed) => {
   let rows = [];
   try {
-    rows = await window.itda.search.query({ query: kw, limit: ITEM_LIMIT });
+    rows = await window.itda.search.query(
+      parsed.text
+        ? { query: parsed.text, type: parsed.type, tag: parsed.tag, limit: ITEM_LIMIT }
+        : { type: parsed.type, tag: parsed.tag, limit: ITEM_LIMIT }
+    );
   } catch (e) {
     rows = [];
   }
-  if (inputEl.value.trim() !== kw.trim()) return;
+  if (!samePar(parseQuery(inputEl.value, tagNames), parsed)) return; // 그 사이 입력이 바뀌었으면 버림
+  const k = parsed.text.trim().toLowerCase();
   rebuildItems(rows.slice(0, ITEM_LIMIT).map((row) => itemEntry(row, k)));
 }, 150);
 
-function refreshFind(kw) {
-  const k = kw.trim().toLowerCase();
-  if (!k) {
+function refreshFind(raw) {
+  const parsed = parseQuery(raw, tagNames);
+  const scoped = !!(parsed.type || parsed.tag);
+  currentScope = describeScope(parsed);
+  const k = parsed.text.toLowerCase();
+  if (!k && !scoped) {
     categoryEntries = [];
     items = [];
     renderResults();
     loadRecentStart(); // 최근 연 항목 + 최근 항목
     return;
   }
-  categoryEntries = [...SCREEN_COMMANDS, ...tagCommands]
-    .map((c) => ({ c, _rank: categoryRank(c, k) }))
-    .filter((x) => x._rank !== null)
-    .map(({ c, _rank }) => ({ icon: c.icon, label: c.label, _rank, _section: 'shortcut', run: () => openRoute(c.route) }));
+  // 프리픽스로 좁혔으면(메모 …, #재활 …) 화면·태그 바로가기는 빼고 항목만.
+  categoryEntries = scoped
+    ? []
+    : [...SCREEN_COMMANDS, ...tagCommands]
+        .map((c) => ({ c, _rank: categoryRank(c, k) }))
+        .filter((x) => x._rank !== null)
+        .map(({ c, _rank }) => ({ icon: c.icon, label: c.label, _rank, _section: 'shortcut', run: () => openRoute(c.route) }));
   rebuildItems([]);
-  debouncedItemSearch(kw);
+  debouncedItemSearch(parsed);
 }
 
 async function submitCapture() {
@@ -302,6 +315,7 @@ window.itda.spotlight.onSetMode?.((m) => {
 async function loadTagCommands() {
   try {
     const cats = await window.itda.categories.list();
+    tagNames = (cats || []).map((c) => c.name);
     tagCommands = (cats || []).map((c) => ({
       icon: '🏷️',
       label: `태그 · ${c.name}`,
@@ -310,6 +324,7 @@ async function loadTagCommands() {
     }));
   } catch (e) {
     tagCommands = [];
+    tagNames = [];
   }
 }
 
