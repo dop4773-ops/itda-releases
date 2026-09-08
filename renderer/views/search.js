@@ -1,11 +1,10 @@
 import { escapeHtml, toast, errorToast, emptyStateBlock } from '../shared/ui-utils.js';
 import { stripHtmlToPlainText } from '../shared/rich-text.js';
 import { TYPE_EMOJI } from '../shared/links-ui.js';
-import { todayStr, dateKey, startOfWeek } from '../shared/date-utils.js';
+import { todayStr, dateKey, startOfWeek, addDays } from '../shared/date-utils.js';
 import { attachContextMenu } from '../shared/context-menu.js';
-import { eventDateLabel } from '../shared/quick-find-core.js';
 
-const RECENT_KEY = 'search_recent'; // 최근 검색어 (JSON 배열, 최대 8개)
+const RECENT_KEY = 'search_recent'; // 최근 검색어 (JSON 배열, 최대 8개) — app_settings(로컬 SQLite)에만 저장
 async function getRecentQueries() {
   try {
     const raw = await window.itda.settings.get(RECENT_KEY);
@@ -29,16 +28,15 @@ async function recordRecentQuery(q) {
 
 const SEARCH_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
-const LIST_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
-const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="9" rx="1"/><rect x="19" y="4" width="2" height="5" rx="1"/></svg>`;
+const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+const EXTERNAL_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>`;
+const FILTER_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18M6 12h12M10 19h4"/></svg>`;
+const CHEVRON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>`;
 
 const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
-// 검색 결과가 왜 나왔는지 (search.repository의 matchedIn)
-const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치' };
+const TYPE_ORDER = ['todo', 'event', 'memo', 'postit', 'inbox'];
 const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
-// 클릭 시 그 항목까지 바로 열리도록 딥링크(#/type/id). inbox는 낱개 상세가 없어 목록으로.
 const itemHref = (type, id) => (type === 'inbox' ? '#/inbox' : `${TYPE_ROUTE[type] || '#/dashboard'}/${id}`);
-// 타입별로 실제 삭제 API가 다르다 (todo/event/memo/postit는 소프트 삭제=휴지통행, inbox는 하드 삭제)
 const DELETE_API = {
   todo: (id) => window.itda.todos.delete(id),
   event: (id) => window.itda.events.delete(id),
@@ -46,6 +44,30 @@ const DELETE_API = {
   postit: (id) => window.itda.postits.delete(id),
   inbox: (id) => window.itda.inbox.delete(id),
 };
+const PAGE = 40;
+
+// 'YYYY-MM-DD HH:MM:SS' → { date:'09/05', time:'오전 10:00' }
+function splitDT(raw) {
+  if (!raw) return { date: '', time: '' };
+  const s = String(raw).replace(' ', 'T');
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return { date: String(raw).slice(5, 10).replace('-', '/'), time: '' };
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  let h = d.getHours();
+  const ampm = h < 12 ? '오전' : '오후';
+  h = h % 12 || 12;
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return { date: `${mm}/${dd}`, time: `${ampm} ${String(h).padStart(2, '0')}:${min}` };
+}
+
+// escapeHtml 후 검색어 토큰을 <mark>로 감싼다(과한 형광색 X — CSS에서 brand 톤).
+function highlight(text, tokens) {
+  const safe = escapeHtml(text || '');
+  const pats = (tokens || []).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).filter(Boolean);
+  if (!pats.length) return safe;
+  return safe.replace(new RegExp(`(${pats.join('|')})`, 'gi'), '<mark class="s-hl">$1</mark>');
+}
 
 export async function mount(root) {
   root.innerHTML = `
@@ -55,18 +77,30 @@ export async function mount(root) {
         <div><h1>검색</h1><p>Todo, 일정, 메모, 포스트잇, Inbox 전체를 한 번에 검색합니다.</p></div>
       </div>
     </div>
+
     <div class="search-toolbar">
-      <input type="text" id="s-input" class="input" style="width:100%;max-width:420px;" placeholder="검색어를 입력하세요…" autofocus />
+      <div class="s-input-wrap">
+        <span class="s-input-icon">${SEARCH_ICON}</span>
+        <input type="text" id="s-input" class="input" placeholder="검색어를 입력하세요…" autocomplete="off" autofocus />
+        <button class="s-input-clear" id="s-clear" hidden title="지우기">${CLOSE_ICON}</button>
+      </div>
       <div class="search-filter-wrap">
-        <button class="btn-secondary" id="s-filterBtn">필터</button>
+        <button class="btn-secondary" id="s-filterBtn">${FILTER_ICON} 필터 <span class="s-filter-count" id="s-filterCount" hidden></span></button>
         <div class="search-filter-pop" id="s-filterPop" hidden>
+          <div class="sfp-section">
+            <div class="sfp-label">유형</div>
+            <div class="sfp-checks" id="s-typeChecks">
+              ${TYPE_ORDER.map((t) => `<label><input type="checkbox" data-type="${t}" /> ${TYPE_LABEL[t]}</label>`).join('')}
+            </div>
+          </div>
           <div class="sfp-section">
             <div class="sfp-label">기간</div>
             <div class="sfp-chips" id="s-periodChips">
               <button class="sfp-chip active" data-period="all">전체</button>
               <button class="sfp-chip" data-period="today">오늘</button>
-              <button class="sfp-chip" data-period="week">이번 주</button>
-              <button class="sfp-chip" data-period="custom">직접 지정</button>
+              <button class="sfp-chip" data-period="7d">최근 7일</button>
+              <button class="sfp-chip" data-period="30d">최근 30일</button>
+              <button class="sfp-chip" data-period="custom">직접 선택</button>
             </div>
             <div class="sfp-dates" id="s-customDates" hidden>
               <input type="date" id="s-dateFrom" class="input" /> ~ <input type="date" id="s-dateTo" class="input" />
@@ -80,41 +114,67 @@ export async function mount(root) {
               <button class="sfp-chip" data-status="done">완료</button>
             </div>
           </div>
-          <button class="btn-link sfp-reset" id="s-filterReset">필터 초기화</button>
+          <div class="sfp-section">
+            <div class="sfp-label">정렬</div>
+            <div class="sfp-chips" id="s-sortChips">
+              <button class="sfp-chip active" data-sort="recent">최신순</button>
+              <button class="sfp-chip" data-sort="relevance">관련도순</button>
+              <button class="sfp-chip" data-sort="oldest">오래된순</button>
+            </div>
+          </div>
+          <div class="sfp-actions">
+            <button class="btn-link" id="s-filterReset">초기화</button>
+            <button class="btn" id="s-filterApply">적용</button>
+          </div>
         </div>
-      </div>
-      <div class="view-toggle" id="s-viewToggle">
-        <button class="view-toggle-btn" data-view="list" title="목록">${LIST_VIEW_ICON}</button>
-        <button class="view-toggle-btn active" data-view="board" title="보드">${BOARD_VIEW_ICON}</button>
       </div>
     </div>
 
     <div class="search-type-tabs" id="s-typeTabs" hidden></div>
 
-    <div class="search-bulk-bar" id="s-bulkBar" style="display:none;">
-      <label class="checkbox-row"><input type="checkbox" id="s-selectAll" /> 전체선택</label>
-      <span class="search-selected-count" id="s-selectedCount"></span>
-      <button class="btn-secondary search-bulk-delete-btn" id="s-bulkDelete" disabled>${TRASH_ICON} 선택삭제</button>
+    <div class="s-layout" id="s-layout">
+      <div class="s-results-col">
+        <div id="s-results"></div>
+        <button class="s-loadmore" id="s-loadMore" hidden>더 불러오기 ${CHEVRON}</button>
+      </div>
+      <aside class="s-drawer" id="s-drawer"></aside>
     </div>
 
-    <div id="s-results" style="margin-top:14px;"></div>
+    <div class="search-bulk-bar" id="s-bulkBar" hidden>
+      <span class="search-selected-count" id="s-selectedCount"></span>
+      <button class="btn-secondary" id="s-bulkClear">선택 해제</button>
+      <button class="btn-secondary search-bulk-delete-btn" id="s-bulkDelete">${TRASH_ICON} 삭제</button>
+    </div>
   `;
 
   const $ = (id) => root.querySelector('#' + id);
   let debounceTimer = null;
-  let recordTimer = null; // 최근 검색어 기록 지연
+  let recordTimer = null;
   let lastKeyword = '';
-  let lastResults = { direct: [], related: [] }; // 뷰 전환(목록↔보드) 시 재검색 없이 다시 그림
-  let currentView = 'board'; // 결과가 많으면 목록은 스크롤이 너무 길어져서 보드를 기본값으로 (요청에 따름)
-  let selected = new Set(); // "type:id" 키 집합
-  let currentAllKeys = []; // 마지막 검색 결과의 전체 키 목록 (전체선택 체크박스가 참조)
-  // type은 클라에서 필터(재검색 X), dateFrom/dateTo/status는 서버 필터(재검색 O)
-  const filters = { type: null, period: 'all', dateFrom: null, dateTo: null, status: 'all' };
+  let tokens = [];
+  let results = []; // 누적된 결과 items
+  let total = 0;
+  let typeCounts = {};
+  let offset = 0;
+  let loading = false;
+  let selected = new Set(); // "type:id"
+  let drawerKey = null;
+  let categories = [];
+  const filters = { types: [], period: 'all', dateFrom: null, dateTo: null, status: 'all', sort: 'recent' };
 
-  // 검색어가 없을 때 뜨는 시작 화면 — 최근 검색어 + 최근 항목
+  try {
+    categories = await window.itda.categories.list();
+  } catch (e) {
+    categories = [];
+  }
+  const catName = (id) => categories.find((c) => c.id === id)?.name || null;
+
+  // ---------- 시작 화면(검색어 없음) ----------
   async function renderPrompt() {
-    $('s-bulkBar').style.display = 'none';
     $('s-typeTabs').hidden = true;
+    $('s-loadMore').hidden = true;
+    $('s-bulkBar').hidden = true;
+    closeDrawer();
     const resultsEl = $('s-results');
     const [recentQ, recentItems] = await Promise.all([
       getRecentQueries(),
@@ -123,8 +183,8 @@ export async function mount(root) {
     if (!recentQ.length && !recentItems.length) {
       resultsEl.innerHTML = emptyStateBlock({
         icon: SEARCH_ICON.replace('18', '32'),
-        title: '검색어를 입력해보세요',
-        subtitle: 'Todo·일정·메모·포스트잇·Inbox를 한 번에 찾아드려요',
+        title: '검색어를 입력하세요',
+        subtitle: 'Todo · 일정 · 메모 · 포스트잇 · Inbox에서 원하는 내용을 빠르게 찾을 수 있어요',
       });
       return;
     }
@@ -139,240 +199,78 @@ export async function mount(root) {
       ${recentItems.length ? `
         <div class="search-start-block">
           <div class="search-start-head">최근 항목</div>
-          <div>${recentItems.map(renderStartItemRow).join('')}</div>
+          <div>${recentItems.map((r) => startRow(r)).join('')}</div>
         </div>` : ''}
     `;
     resultsEl.querySelectorAll('.search-recent-chip').forEach((btn) => {
       btn.addEventListener('click', () => {
         $('s-input').value = btn.dataset.q;
+        $('s-clear').hidden = false;
         runSearch(btn.dataset.q);
       });
     });
-    const clearBtn = $('s-clearRecent');
-    if (clearBtn) clearBtn.addEventListener('click', async () => {
+    $('s-clearRecent')?.addEventListener('click', async () => {
       try { await window.itda.settings.set({ key: RECENT_KEY, value: '[]' }); } catch (e) { /* noop */ }
       renderPrompt();
     });
-    wireResultRows(resultsEl);
+    resultsEl.querySelectorAll('.s-row').forEach(wireRowOpen);
   }
 
-  function renderStartItemRow(r) {
-    const key = `${r.entity_type}:${r.entity_id}`;
-    const dateLbl = r.entity_type === 'event' ? eventDateLabel(r.eventStart, r.eventAllDay) : '';
-    const dateChip = dateLbl ? `<span class="search-date-chip">${escapeHtml(dateLbl)}</span>` : '';
+  function startRow(r) {
     return `
-      <div class="list-row search-related-row" data-key="${key}">
-        <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
-        <a class="main" href="${itemHref(r.entity_type, r.entity_id)}">
-          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}${dateChip}</b>
-        </a>
-      </div>`;
-  }
-  renderPrompt();
-
-  // 결과/시작화면의 각 행(.list-row / .search-card)에 우클릭 메뉴(열기·연결·전환·삭제)를 붙인다.
-  function wireResultRows(container) {
-    container.querySelectorAll('[data-key]').forEach((el) => {
-      const [type, idStr] = el.dataset.key.split(':');
-      const id = Number(idStr);
-      attachContextMenu(el, () => ({ type, id }), {
-        linkOnly: type === 'inbox', // inbox는 소프트삭제/위젯이 없어 연결·전환만
-        onDeleted: () => (lastKeyword ? runSearch(lastKeyword) : renderPrompt()),
-      });
-    });
-  }
-
-  function updateBulkBar(allKeys) {
-    const bar = $('s-bulkBar');
-    if (allKeys.length === 0) {
-      bar.style.display = 'none';
-      return;
-    }
-    bar.style.display = 'flex';
-    const selectAllCb = $('s-selectAll');
-    selectAllCb.checked = allKeys.length > 0 && allKeys.every((k) => selected.has(k));
-    selectAllCb.indeterminate = selected.size > 0 && !selectAllCb.checked;
-    $('s-selectedCount').textContent = selected.size > 0 ? `${selected.size}개 선택됨` : '';
-    $('s-bulkDelete').disabled = selected.size === 0;
-  }
-
-  function renderResultCard(type, i) {
-    const key = `${type}:${i.entity_id}`;
-    const badge = MATCH_LABEL[i.matchedIn] ? `<span class="search-match-badge" data-match="${i.matchedIn}">${MATCH_LABEL[i.matchedIn]}</span>` : '';
-    const dateLbl = type === 'event' ? eventDateLabel(i.eventStart, i.eventAllDay) : '';
-    const dateChip = dateLbl ? `<span class="search-date-chip">${escapeHtml(dateLbl)}</span>` : '';
-    const preview = escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 80));
-    if (currentView === 'board') {
-      return `
-        <div class="search-card" data-key="${key}">
-          <input type="checkbox" data-action="select" data-key="${key}" />
-          <a class="search-card-body" href="${itemHref(type, i.entity_id)}">
-            <b>${escapeHtml(i.title || '(제목 없음)')}${dateChip}${badge}</b>
-            <p>${preview}</p>
-          </a>
-        </div>`;
-    }
-    return `
-      <div class="list-row search-result-row" data-key="${key}">
-        <input type="checkbox" data-action="select" data-key="${key}" />
-        <a class="main" href="${itemHref(type, i.entity_id)}">
-          <b>${escapeHtml(i.title || '(제목 없음)')}${dateChip}${badge}</b>
-          <div class="meta">${escapeHtml(stripHtmlToPlainText(i.content || '').slice(0, 60))}</div>
-        </a>
+      <div class="s-row" data-key="${r.entity_type}:${r.entity_id}" data-type="${r.entity_type}" data-id="${r.entity_id}">
+        <span class="s-row-icon">${TYPE_EMOJI[r.entity_type] || '•'}</span>
+        <div class="s-row-main"><div class="s-row-title">${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 80) || '(제목 없음)')}</div></div>
+        <span class="s-row-badge s-row-badge-type">${TYPE_LABEL[r.entity_type] || ''}</span>
       </div>`;
   }
 
-  function renderRelatedRow(r) {
-    const key = `${r.entity_type}:${r.entity_id}`;
-    const reason =
-      r.relatedReason === 'tag'
-        ? `같은 태그${r.tagName ? ` · ${r.tagName}` : ''}`
-        : r.relatedReason === 'related'
-          ? '관련 있음'
-          : '연결된 항목';
-    return `
-      <div class="list-row search-related-row" data-key="${key}">
-        <span class="search-related-icon" data-type="${r.entity_type}">${TYPE_EMOJI[r.entity_type] || '•'}</span>
-        <a class="main" href="${itemHref(r.entity_type, r.entity_id)}">
-          <b>${escapeHtml(stripHtmlToPlainText(r.title || '').slice(0, 60) || '(제목 없음)')}<span class="search-match-badge" data-match="related">${reason}</span></b>
-        </a>
-      </div>`;
-  }
-
-  // 종류 탭: 전체 + 결과에 실제로 있는 타입만. filters.type로 좁혀 보여준다(재검색 없음).
-  function renderTypeTabs(directAll) {
-    const tabsEl = $('s-typeTabs');
-    if (!directAll.length) {
-      tabsEl.hidden = true;
-      return;
-    }
-    const counts = {};
-    directAll.forEach((r) => { counts[r.entity_type] = (counts[r.entity_type] || 0) + 1; });
-    const order = ['todo', 'event', 'memo', 'postit', 'inbox'].filter((t) => counts[t]);
-    tabsEl.hidden = false;
-    tabsEl.innerHTML =
-      `<button class="search-type-tab ${!filters.type ? 'active' : ''}" data-type="">전체 ${directAll.length}</button>` +
-      order.map((t) => `<button class="search-type-tab ${filters.type === t ? 'active' : ''}" data-type="${t}">${TYPE_LABEL[t]} ${counts[t]}</button>`).join('');
-    tabsEl.querySelectorAll('.search-type-tab').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        filters.type = btn.dataset.type || null;
-        renderResults(lastResults);
-      });
-    });
-  }
-
-  function renderResults(payload) {
-    // payload: { direct, related }  (구버전 배열도 방어적으로 허용)
-    const directAll = Array.isArray(payload) ? payload : payload.direct || [];
-    const related = Array.isArray(payload) ? [] : payload.related || [];
-    const resultsEl = $('s-results');
-    renderTypeTabs(directAll);
-    const direct = filters.type ? directAll.filter((r) => r.entity_type === filters.type) : directAll;
-    if (directAll.length === 0) {
-      resultsEl.innerHTML = emptyStateBlock({
-        icon: SEARCH_ICON.replace('18', '32'),
-        title: `"${escapeHtml(lastKeyword)}"에 대한 결과가 없어요`,
-        subtitle: hasActiveFilter() ? '필터를 바꾸거나 초기화해 보세요' : '다른 검색어로 시도해보세요',
-      });
-      $('s-bulkBar').style.display = 'none';
-      return;
-    }
-
-    const grouped = {};
-    direct.forEach((r) => {
-      grouped[r.entity_type] = grouped[r.entity_type] || [];
-      grouped[r.entity_type].push(r);
-    });
-
-    const allKeys = direct.map((r) => `${r.entity_type}:${r.entity_id}`);
-    currentAllKeys = allKeys;
-
-    const listClass = currentView === 'board' ? 'search-board-grid' : '';
-    const directHtml = Object.entries(grouped)
-      .map(
-        ([type, items]) => `
-        <div class="search-group">
-          <h4>${TYPE_LABEL[type] || type} (${items.length})</h4>
-          <div class="${listClass}">
-            ${items.map((i) => renderResultCard(type, i)).join('')}
-          </div>
-        </div>`
-      )
-      .join('');
-    const relatedHtml = related.length
-      ? `<div class="search-group search-related-group">
-           <h4>🔗 관련 항목 (${related.length})</h4>
-           <div>${related.map(renderRelatedRow).join('')}</div>
-         </div>`
-      : '';
-    resultsEl.innerHTML = directHtml + relatedHtml;
-
-    updateBulkBar(allKeys);
-
-    resultsEl.querySelectorAll('[data-action="select"]').forEach((cb) => {
-      cb.addEventListener('change', () => {
-        if (cb.checked) selected.add(cb.dataset.key);
-        else selected.delete(cb.dataset.key);
-        updateBulkBar(allKeys);
-      });
-    });
-    wireResultRows(resultsEl); // 각 행 우클릭 메뉴(열기·연결·전환·삭제)
-  }
-
-  function hasActiveFilter() {
-    return !!filters.type || filters.period !== 'all' || filters.status !== 'all';
-  }
-  function syncFilterBtn() {
-    $('s-filterBtn').classList.toggle('has-filter', filters.period !== 'all' || filters.status !== 'all');
-  }
-  // 기간 칩 → dateFrom/dateTo 계산 (서버 필터)
-  function resolvePeriod() {
-    if (filters.period === 'today') {
-      filters.dateFrom = filters.dateTo = todayStr();
-    } else if (filters.period === 'week') {
-      filters.dateFrom = dateKey(startOfWeek(new Date()));
-      filters.dateTo = todayStr();
-    } else if (filters.period === 'custom') {
-      filters.dateFrom = $('s-dateFrom').value || null;
-      filters.dateTo = $('s-dateTo').value || null;
-    } else {
-      filters.dateFrom = filters.dateTo = null;
-    }
-  }
-
-  async function runSearch(keyword) {
+  // ---------- 결과 조회 ----------
+  async function runSearch(keyword, { append = false } = {}) {
+    if (loading) return;
     lastKeyword = keyword;
-    const resultsEl = $('s-results');
     if (!keyword.trim()) {
       selected.clear();
-      lastResults = { direct: [], related: [] };
-      $('s-typeTabs').hidden = true;
+      results = [];
       renderPrompt();
       return;
     }
-    resolvePeriod();
-    syncFilterBtn();
-    let results;
+    if (!append) {
+      offset = 0;
+      results = [];
+      selected.clear();
+    }
+    tokens = keyword.trim().split(/\s+/).filter(Boolean);
+    loading = true;
+    let res;
     try {
-      results = await window.itda.search.query({
+      res = await window.itda.search.query({
         query: keyword,
-        related: true,
+        paged: true,
+        types: filters.types.length ? filters.types : undefined,
         dateFrom: filters.dateFrom,
         dateTo: filters.dateTo,
         status: filters.status === 'all' ? null : filters.status,
+        sort: filters.sort,
+        limit: PAGE,
+        offset,
       });
     } catch (e) {
+      loading = false;
       errorToast(e, '검색하지 못했어요');
-      resultsEl.innerHTML = emptyStateBlock({ title: '검색 중 오류가 발생했어요', subtitle: '잠시 후 다시 시도해주세요' });
-      $('s-bulkBar').style.display = 'none';
+      $('s-results').innerHTML = emptyStateBlock({ title: '검색 중 오류가 발생했어요', subtitle: '잠시 후 다시 시도해주세요' });
       return;
     }
-    // 검색어가 바뀔 때마다 선택은 초기화 (이전 검색 결과의 선택 상태를 새 결과에 들고 오면 혼란스러움)
-    selected.clear();
-    lastResults = results;
-    renderResults(results);
-    // 결과가 있으면 최근 검색어로 기록 — 타이핑 중간값("김","김부")이 안 쌓이게 잠깐 뒤에
-    if ((results.direct || []).length) {
+    loading = false;
+    if (append) results.push(...(res.items || []));
+    else {
+      results = res.items || [];
+      typeCounts = res.typeCounts || {};
+    }
+    total = res.total || 0;
+    offset = results.length;
+    render();
+    if (!append && results.length) {
       clearTimeout(recordTimer);
       recordTimer = setTimeout(() => {
         if ($('s-input').value.trim() === keyword.trim()) recordRecentQuery(keyword);
@@ -380,70 +278,257 @@ export async function mount(root) {
     }
   }
 
-  root.querySelectorAll('#s-viewToggle .view-toggle-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.view === currentView) return;
-      root.querySelectorAll('#s-viewToggle .view-toggle-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentView = btn.dataset.view;
-      if (lastResults.direct?.length) renderResults(lastResults); // 재검색 없이 같은 결과를 다른 모양으로만 다시 그림
+  // ---------- 렌더 ----------
+  function render() {
+    renderTypeTabs();
+    const resultsEl = $('s-results');
+    if (!results.length) {
+      resultsEl.innerHTML = emptyStateBlock({
+        icon: SEARCH_ICON.replace('18', '32'),
+        title: '검색 결과가 없습니다',
+        subtitle: `"${escapeHtml(lastKeyword)}"에 대한 결과를 찾지 못했어요. 다른 검색어나 필터를 사용해보세요.`,
+      });
+      $('s-loadMore').hidden = true;
+      $('s-bulkBar').hidden = true;
+      return;
+    }
+    const grouped = {};
+    results.forEach((r) => {
+      (grouped[r.entity_type] = grouped[r.entity_type] || []).push(r);
     });
-  });
+    resultsEl.innerHTML = TYPE_ORDER.filter((t) => grouped[t])
+      .map((t) => {
+        const fullCount = typeCounts[t] || grouped[t].length;
+        return `
+        <div class="s-group">
+          <div class="s-group-head">
+            <span>${TYPE_EMOJI[t]} ${TYPE_LABEL[t]} <span class="s-group-count">${fullCount}</span></span>
+            ${!filters.types.length && fullCount > grouped[t].length ? `<button class="s-group-more" data-type="${t}">전체 보기 ${CHEVRON}</button>` : ''}
+          </div>
+          ${grouped[t].map((r) => resultRow(r)).join('')}
+        </div>`;
+      })
+      .join('');
 
-  // ---------- 필터 popover (기간 / 상태 — 둘 다 서버 필터라 바뀌면 재검색) ----------
-  const filterPop = $('s-filterPop');
-  const closeFilterPop = () => { filterPop.hidden = true; document.removeEventListener('mousedown', onFilterOutside); };
-  function onFilterOutside(e) {
-    if (!filterPop.contains(e.target) && e.target !== $('s-filterBtn')) closeFilterPop();
+    $('s-loadMore').hidden = results.length >= total;
+    resultsEl.querySelectorAll('.s-row').forEach((row) => {
+      wireRowOpen(row);
+      row.querySelector('.s-row-check')?.addEventListener('change', (e) => {
+        e.stopPropagation();
+        const key = row.dataset.key;
+        if (e.target.checked) selected.add(key);
+        else selected.delete(key);
+        row.classList.toggle('selected', e.target.checked);
+        updateBulkBar();
+      });
+    });
+    resultsEl.querySelectorAll('.s-group-more').forEach((btn) => {
+      btn.addEventListener('click', () => setTypeFilter(btn.dataset.type));
+    });
+    resultsEl.querySelectorAll('.s-row').forEach((row) => {
+      const t = row.dataset.type;
+      const id = Number(row.dataset.id);
+      attachContextMenu(row, () => ({ type: t, id }), {
+        linkOnly: t === 'inbox',
+        onDeleted: () => runSearch(lastKeyword),
+      });
+    });
+    updateBulkBar();
+    // 드로어가 열려있던 항목이 새 결과에도 있으면 선택 표시 유지
+    if (drawerKey) resultsEl.querySelector(`.s-row[data-key="${drawerKey}"]`)?.classList.add('active');
   }
-  $('s-filterBtn').addEventListener('click', () => {
-    if (filterPop.hidden) {
-      filterPop.hidden = false;
-      setTimeout(() => document.addEventListener('mousedown', onFilterOutside), 0);
-    } else closeFilterPop();
-  });
-  $('s-periodChips').querySelectorAll('.sfp-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      $('s-periodChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.remove('active'));
-      chip.classList.add('active');
-      filters.period = chip.dataset.period;
-      $('s-customDates').hidden = filters.period !== 'custom';
-      if (filters.period !== 'custom' && lastKeyword) runSearch(lastKeyword);
-    });
-  });
-  const onCustomDate = () => { if (filters.period === 'custom' && lastKeyword) runSearch(lastKeyword); };
-  $('s-dateFrom').addEventListener('change', onCustomDate);
-  $('s-dateTo').addEventListener('change', onCustomDate);
-  $('s-statusChips').querySelectorAll('.sfp-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      $('s-statusChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.remove('active'));
-      chip.classList.add('active');
-      filters.status = chip.dataset.status;
-      if (lastKeyword) runSearch(lastKeyword);
-    });
-  });
-  $('s-filterReset').addEventListener('click', () => {
-    filters.type = null;
-    filters.period = 'all';
-    filters.status = 'all';
-    filters.dateFrom = filters.dateTo = null;
-    $('s-periodChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.toggle('active', c.dataset.period === 'all'));
-    $('s-statusChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.toggle('active', c.dataset.status === 'all'));
-    $('s-customDates').hidden = true;
-    closeFilterPop();
-    if (lastKeyword) runSearch(lastKeyword);
-  });
 
-  // 전체선택 체크박스는 s-results 바깥(고정 DOM)에 있어서 runSearch가 재실행돼도 같은 엘리먼트를 계속 쓴다.
-  // runSearch 안에서 매번 addEventListener 하면 호출될 때마다 리스너가 쌓이므로, 여기서 딱 한 번만 바인딩하고
-  // 최신 목록은 currentAllKeys를 통해 참조한다.
-  $('s-selectAll').addEventListener('change', (e) => {
-    if (e.target.checked) currentAllKeys.forEach((k) => selected.add(k));
-    else selected.clear();
-    $('s-results').querySelectorAll('[data-action="select"]').forEach((cb) => {
-      cb.checked = selected.has(cb.dataset.key);
+  function resultRow(r) {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    const dt = splitDT(r.entity_type === 'event' ? r.eventStart : r.updated_at);
+    const rawTitle = stripHtmlToPlainText(r.title || '').replace(/\s+/g, ' ').trim() || '(제목 없음)';
+    const previewSrc = r.snippet || stripHtmlToPlainText(r.content || '').replace(/\s+/g, ' ').trim();
+    const badge = r.categoryName
+      ? `<span class="s-row-badge" style="background:${r.categoryColor || 'var(--text-soft)'};color:#fff;">${escapeHtml(r.categoryName)}</span>`
+      : `<span class="s-row-badge s-row-badge-type">${TYPE_LABEL[r.entity_type] || ''}</span>`;
+    return `
+      <div class="s-row ${selected.has(key) ? 'selected' : ''} ${drawerKey === key ? 'active' : ''}" data-key="${key}" data-type="${r.entity_type}" data-id="${r.entity_id}">
+        <input type="checkbox" class="s-row-check" ${selected.has(key) ? 'checked' : ''} />
+        <span class="s-row-date">${dt.date}</span>
+        <div class="s-row-main">
+          <div class="s-row-title">${highlight(rawTitle.slice(0, 120), tokens)}</div>
+          ${previewSrc ? `<div class="s-row-preview">${highlight(previewSrc.slice(0, 160), tokens)}</div>` : ''}
+        </div>
+        ${badge}
+        <span class="s-row-time">${dt.time}</span>
+      </div>`;
+  }
+
+  function wireRowOpen(row) {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('input,button,a')) return;
+      openDrawer(row.dataset.type, Number(row.dataset.id));
     });
-    updateBulkBar(currentAllKeys);
+  }
+
+  function renderTypeTabs() {
+    const el = $('s-typeTabs');
+    el.hidden = false;
+    const present = TYPE_ORDER.filter((t) => (typeCounts[t] || 0) > 0);
+    const grandTotal = Object.values(typeCounts).reduce((a, b) => a + b, 0);
+    const isAll = filters.types.length === 0;
+    el.innerHTML =
+      `<button class="search-type-tab ${isAll ? 'active' : ''}" data-type="">전체 ${grandTotal}</button>` +
+      present
+        .map(
+          (t) =>
+            `<button class="search-type-tab ${filters.types.length === 1 && filters.types[0] === t ? 'active' : ''}" data-type="${t}">${TYPE_LABEL[t]} ${typeCounts[t]}</button>`
+        )
+        .join('');
+    el.querySelectorAll('.search-type-tab').forEach((btn) => {
+      btn.addEventListener('click', () => setTypeFilter(btn.dataset.type || null));
+    });
+  }
+
+  function setTypeFilter(type) {
+    filters.types = type ? [type] : [];
+    syncTypeChecks();
+    runSearch(lastKeyword);
+  }
+
+  // ---------- 상세 드로어 ----------
+  async function openDrawer(type, id) {
+    const key = `${type}:${id}`;
+    drawerKey = key;
+    $('s-layout').classList.add('drawer-open');
+    $('s-results').querySelectorAll('.s-row').forEach((r) => r.classList.toggle('active', r.dataset.key === key));
+    const drawer = $('s-drawer');
+    drawer.innerHTML = `<div class="s-drawer-body"><div class="empty">불러오는 중…</div></div>`;
+    try {
+      const detail = await loadDetail(type, id);
+      if (drawerKey !== key) return;
+      if (!detail) {
+        drawer.innerHTML = `<div class="s-drawer-body"><div class="empty">항목을 찾을 수 없어요(삭제되었을 수 있어요)</div></div>
+          <div class="s-drawer-foot"><button class="btn-secondary" id="s-drawerClose">닫기</button></div>`;
+      } else {
+        renderDrawer(type, id, detail);
+      }
+    } catch (e) {
+      drawer.innerHTML = `<div class="s-drawer-body"><div class="empty">상세를 불러오지 못했어요</div></div>
+        <div class="s-drawer-foot"><button class="btn-secondary" id="s-drawerClose">닫기</button></div>`;
+    }
+    $('s-drawerClose')?.addEventListener('click', closeDrawer);
+  }
+
+  function closeDrawer() {
+    drawerKey = null;
+    $('s-layout')?.classList.remove('drawer-open');
+    $('s-results')?.querySelectorAll('.s-row.active').forEach((r) => r.classList.remove('active'));
+    const d = $('s-drawer');
+    if (d) d.innerHTML = '';
+  }
+
+  async function loadDetail(type, id) {
+    if (type === 'todo') return window.itda.todos.get(id);
+    if (type === 'event') return window.itda.events.get(id);
+    if (type === 'memo') return window.itda.memos.get(id);
+    if (type === 'postit') return window.itda.postits.get(id);
+    if (type === 'inbox') return results.find((r) => r.entity_type === 'inbox' && r.entity_id === id) || null;
+    return null;
+  }
+
+  async function renderDrawer(type, id, d) {
+    const drawer = $('s-drawer');
+    const title = stripHtmlToPlainText(d.title || d.content || '').slice(0, 200) || '(제목 없음)';
+    const catNm = d.category_name || catName(d.category_id);
+    const catColor = d.color_hex || null;
+    let dateLine = '';
+    if (type === 'event' && d.start_at) {
+      const s = splitDT(d.start_at);
+      dateLine = `${d.start_at.slice(0, 10)} ${d.all_day ? '(종일)' : s.time}`;
+    } else if (type === 'todo' && d.due_date) {
+      dateLine = `마감 ${d.due_date}${d.due_time ? ` ${d.due_time}` : ''}`;
+    } else if (d.updated_at) {
+      dateLine = `수정 ${d.updated_at.slice(0, 16)}`;
+    }
+    const bodyText = stripHtmlToPlainText(d.memo || d.content || '').trim();
+
+    let related = [];
+    try {
+      related = (await window.itda.links.listFor({ type, id })) || [];
+    } catch (e) {
+      related = [];
+    }
+    let attachments = [];
+    if (type === 'memo') {
+      try {
+        attachments = (await window.itda.memoAttachments.list(id)) || [];
+      } catch (e) {
+        attachments = [];
+      }
+    }
+    if (drawerKey !== `${type}:${id}`) return;
+
+    drawer.innerHTML = `
+      <div class="s-drawer-head">
+        <span class="s-drawer-eyebrow">${TYPE_EMOJI[type] || ''} ${TYPE_LABEL[type] || ''}</span>
+        <button class="btn-icon" id="s-drawerX" title="닫기">${CLOSE_ICON}</button>
+      </div>
+      <div class="s-drawer-body">
+        <h3 class="s-drawer-title">${escapeHtml(title)}</h3>
+        ${dateLine ? `<div class="s-drawer-meta">${escapeHtml(dateLine)}</div>` : ''}
+        ${type === 'event' && d.location ? `<div class="s-drawer-meta">📍 ${escapeHtml(d.location)}</div>` : ''}
+        ${catNm ? `<span class="s-row-badge" style="background:${catColor || 'var(--text-soft)'};color:#fff;">${escapeHtml(catNm)}</span>` : ''}
+        ${bodyText ? `<div class="s-drawer-text">${escapeHtml(bodyText.slice(0, 600))}${bodyText.length > 600 ? '…' : ''}</div>` : ''}
+
+        ${related.length ? `
+          <div class="s-drawer-section">
+            <div class="s-drawer-section-head">연관 항목 (${related.length})</div>
+            ${related.slice(0, 8).map((r) => `
+              <div class="s-drawer-rel" data-type="${r.type}" data-id="${r.id}">
+                <span>${TYPE_EMOJI[r.type] || '•'}</span>
+                <span class="s-drawer-rel-title">${escapeHtml(stripHtmlToPlainText(r.title || r.label || '').slice(0, 60) || '(제목 없음)')}</span>
+                <span class="s-drawer-rel-go">${CHEVRON}</span>
+              </div>`).join('')}
+          </div>` : ''}
+
+        ${attachments.length ? `
+          <div class="s-drawer-section">
+            <div class="s-drawer-section-head">첨부 파일 (${attachments.length})</div>
+            ${attachments.slice(0, 6).map((a) => `
+              <button class="s-drawer-attach" data-attach="${a.id}">
+                📎 <span class="s-drawer-attach-name">${escapeHtml(a.file_name || a.filename || '첨부')}</span>
+              </button>`).join('')}
+          </div>` : ''}
+      </div>
+      <div class="s-drawer-foot">
+        <a class="btn" href="${itemHref(type, id)}" id="s-drawerGo">원본으로 이동 ${EXTERNAL_ICON}</a>
+        <button class="btn-secondary" id="s-drawerClose2">닫기</button>
+      </div>`;
+
+    $('s-drawerX').addEventListener('click', closeDrawer);
+    $('s-drawerClose2').addEventListener('click', closeDrawer);
+    drawer.querySelectorAll('.s-drawer-rel').forEach((el) => {
+      el.addEventListener('click', () => openDrawer(el.dataset.type, Number(el.dataset.id)));
+    });
+    drawer.querySelectorAll('.s-drawer-attach').forEach((el) => {
+      el.addEventListener('click', () => window.itda.memoAttachments.open(Number(el.dataset.attach)).catch((e) => errorToast(e, '파일을 열지 못했어요')));
+    });
+  }
+
+  // ---------- 벌크 선택/삭제 ----------
+  function updateBulkBar() {
+    const bar = $('s-bulkBar');
+    if (selected.size === 0) {
+      bar.hidden = true;
+      return;
+    }
+    bar.hidden = false;
+    $('s-selectedCount').textContent = `${selected.size}개 선택됨`;
+  }
+
+  $('s-bulkClear').addEventListener('click', () => {
+    selected.clear();
+    $('s-results').querySelectorAll('.s-row-check').forEach((cb) => {
+      cb.checked = false;
+    });
+    $('s-results').querySelectorAll('.s-row.selected').forEach((r) => r.classList.remove('selected'));
+    updateBulkBar();
   });
 
   $('s-bulkDelete').addEventListener('click', async () => {
@@ -454,26 +539,139 @@ export async function mount(root) {
     });
     $('s-bulkDelete').disabled = true;
     try {
-      // 타입이 섞여있어도(Todo+메모 동시선택 등) 각자 맞는 삭제 API로 병렬 처리
       await Promise.all(targets.map((t) => DELETE_API[t.type]?.(t.id)));
       toast(`${targets.length}개 삭제했어요`);
       selected.clear();
+      if (drawerKey && targets.some((t) => `${t.type}:${t.id}` === drawerKey)) closeDrawer();
       await runSearch(lastKeyword);
     } catch (e) {
       errorToast(e, '일부 항목을 삭제하지 못했어요');
-      await runSearch(lastKeyword); // 실패했더라도 최신 상태로 다시 맞춤
+      await runSearch(lastKeyword);
+    } finally {
+      $('s-bulkDelete').disabled = false;
     }
   });
 
+  // ---------- 필터 popover ----------
+  const filterPop = $('s-filterPop');
+  const closeFilterPop = () => {
+    filterPop.hidden = true;
+    document.removeEventListener('mousedown', onFilterOutside);
+  };
+  function onFilterOutside(e) {
+    if (!filterPop.contains(e.target) && !$('s-filterBtn').contains(e.target)) closeFilterPop();
+  }
+  $('s-filterBtn').addEventListener('click', () => {
+    if (filterPop.hidden) {
+      syncFilterUI();
+      filterPop.hidden = false;
+      setTimeout(() => document.addEventListener('mousedown', onFilterOutside), 0);
+    } else closeFilterPop();
+  });
+
+  function syncTypeChecks() {
+    $('s-typeChecks').querySelectorAll('input[data-type]').forEach((cb) => {
+      cb.checked = filters.types.includes(cb.dataset.type);
+    });
+  }
+  function syncFilterUI() {
+    syncTypeChecks();
+    $('s-periodChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.toggle('active', c.dataset.period === filters.period));
+    $('s-statusChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.toggle('active', c.dataset.status === filters.status));
+    $('s-sortChips').querySelectorAll('.sfp-chip').forEach((c) => c.classList.toggle('active', c.dataset.sort === filters.sort));
+    $('s-customDates').hidden = filters.period !== 'custom';
+    $('s-dateFrom').value = filters.dateFrom || '';
+    $('s-dateTo').value = filters.dateTo || '';
+  }
+  function chipGroup(elId, attr, onPick) {
+    $(elId).querySelectorAll('.sfp-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        $(elId).querySelectorAll('.sfp-chip').forEach((c) => c.classList.remove('active'));
+        chip.classList.add('active');
+        onPick(chip.dataset[attr]);
+      });
+    });
+  }
+  $('s-typeChecks').querySelectorAll('input[data-type]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      filters.types = [...$('s-typeChecks').querySelectorAll('input[data-type]:checked')].map((x) => x.dataset.type);
+    });
+  });
+  chipGroup('s-periodChips', 'period', (v) => {
+    filters.period = v;
+    $('s-customDates').hidden = v !== 'custom';
+  });
+  chipGroup('s-statusChips', 'status', (v) => (filters.status = v));
+  chipGroup('s-sortChips', 'sort', (v) => (filters.sort = v));
+  $('s-dateFrom').addEventListener('change', (e) => (filters.dateFrom = e.target.value || null));
+  $('s-dateTo').addEventListener('change', (e) => (filters.dateTo = e.target.value || null));
+
+  function resolvePeriod() {
+    const t = todayStr();
+    if (filters.period === 'today') filters.dateFrom = filters.dateTo = t;
+    else if (filters.period === '7d') { filters.dateFrom = dateKey(addDays(new Date(), -7)); filters.dateTo = t; }
+    else if (filters.period === '30d') { filters.dateFrom = dateKey(addDays(new Date(), -30)); filters.dateTo = t; }
+    else if (filters.period === 'week') { filters.dateFrom = dateKey(startOfWeek(new Date())); filters.dateTo = t; }
+    else if (filters.period === 'custom') { filters.dateFrom = $('s-dateFrom').value || null; filters.dateTo = $('s-dateTo').value || null; }
+    else { filters.dateFrom = filters.dateTo = null; }
+  }
+  function activeFilterCount() {
+    let n = 0;
+    if (filters.types.length) n++;
+    if (filters.period !== 'all') n++;
+    if (filters.status !== 'all') n++;
+    if (filters.sort !== 'recent') n++;
+    return n;
+  }
+  function applyFilters() {
+    resolvePeriod();
+    const n = activeFilterCount();
+    const badge = $('s-filterCount');
+    badge.hidden = n === 0;
+    badge.textContent = n;
+    closeFilterPop();
+    if (lastKeyword.trim()) runSearch(lastKeyword);
+  }
+  $('s-filterApply').addEventListener('click', applyFilters);
+  $('s-filterReset').addEventListener('click', () => {
+    filters.types = [];
+    filters.period = 'all';
+    filters.status = 'all';
+    filters.sort = 'recent';
+    filters.dateFrom = filters.dateTo = null;
+    syncFilterUI();
+    applyFilters();
+  });
+
+  // ---------- 입력 ----------
   $('s-input').addEventListener('input', (e) => {
-    clearTimeout(debounceTimer);
     const value = e.target.value;
+    $('s-clear').hidden = !value;
+    clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => runSearch(value), 250);
   });
+  $('s-clear').addEventListener('click', () => {
+    $('s-input').value = '';
+    $('s-clear').hidden = true;
+    $('s-input').focus();
+    runSearch('');
+  });
+  $('s-loadMore').addEventListener('click', () => runSearch(lastKeyword, { append: true }));
+
+  document.addEventListener('keydown', onEsc);
+  function onEsc(e) {
+    if (e.key === 'Escape' && drawerKey) {
+      e.preventDefault();
+      closeDrawer();
+    }
+  }
+
+  renderPrompt();
 
   return () => {
     clearTimeout(debounceTimer);
     clearTimeout(recordTimer);
     document.removeEventListener('mousedown', onFilterOutside);
+    document.removeEventListener('keydown', onEsc);
   };
 }

@@ -73,16 +73,23 @@ function registerSearchIpc(ipcMain, repos) {
 
   ipcMain.handle('search:query', (event, arg) => {
     // 하위호환: 예전엔 검색어 문자열만 넘겼음.
-    // 지금은 { query, type|types, tag, limit, dateFrom, dateTo, status, related }도 받는다.
-    const { query, type, types, tag, limit, dateFrom, dateTo, status, related } =
+    // 지금은 { query, type|types, tag, limit, offset, sort, dateFrom, dateTo, status, related, paged }도 받는다.
+    const { query, type, types, tag, limit, offset, sort, dateFrom, dateTo, status, related, paged } =
       typeof arg === 'string' ? { query: arg } : arg || {};
     const typeList = type ? [type] : types;
+
+    // 통합검색 화면(paged): { items, total, typeCounts } — 검색어 없으면 빈 결과.
+    if (paged) {
+      if (!query || !String(query).trim()) return { items: [], total: 0, typeCounts: {} };
+      return repos.search.searchPaged(query, { types: typeList, tag, limit, offset, sort, dateFrom, dateTo, status });
+    }
+
     if (!query || !String(query).trim()) {
       // 검색어 없이 타입/태그 프리픽스만 왔으면 그 범위의 최근 목록을 준다("메모 ", "#재활").
       if ((type || tag) && !related) return repos.search.browse({ type, tag, limit });
       return related ? { direct: [], related: [] } : [];
     }
-    const direct = repos.search.query(query, { types: typeList, tag, limit, dateFrom, dateTo, status });
+    const direct = repos.search.query(query, { types: typeList, tag, limit, offset, sort, dateFrom, dateTo, status });
     if (!related) return direct; // 기본: 예전과 동일하게 평평한 배열
     return { direct, related: relatedFor(repos, direct) };
   });

@@ -200,6 +200,57 @@ test('일정 결과에 start_at/all_day가 붙는다 (목록에서 날짜 표시
   assert.equal(repos.search.browse({ type: 'event' })[0].eventStart, '2026-09-10 14:00');
 });
 
+test('searchPaged: items + total + typeCounts, 페이지네이션(offset/limit)', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  for (let i = 0; i < 25; i++) repos.memos.insert({ title: `그랜드라운딩 메모 ${i}`, content: 'x' });
+  repos.todos.insert({ title: '그랜드라운딩 명단' });
+  repos.events.insert({ title: '그랜드라운딩 회의', startAt: '2026-09-05 10:00', endAt: '2026-09-05 11:00' });
+
+  const p1 = repos.search.searchPaged('그랜드라운딩', { limit: 10, offset: 0 });
+  assert.equal(p1.items.length, 10);
+  assert.equal(p1.total, 27);
+  assert.equal(p1.typeCounts.memo, 25);
+  assert.equal(p1.typeCounts.todo, 1);
+  assert.equal(p1.typeCounts.event, 1);
+
+  const p2 = repos.search.searchPaged('그랜드라운딩', { limit: 10, offset: 20 });
+  assert.equal(p2.items.length, 7);
+});
+
+test('searchPaged: 유형탭 개수는 필터와 무관하게 전체 기준', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  repos.memos.insert({ title: '회의록 A', content: 'x' });
+  repos.memos.insert({ title: '회의록 B', content: 'y' });
+  repos.todos.insert({ title: '회의록 준비' });
+
+  const onlyTodo = repos.search.searchPaged('회의록', { types: ['todo'] });
+  assert.equal(onlyTodo.items.length, 1);
+  assert.equal(onlyTodo.total, 1, 'total은 필터 적용 후');
+  assert.equal(onlyTodo.typeCounts.memo, 2, 'typeCounts는 필터 무관 전체');
+  assert.equal(onlyTodo.typeCounts.todo, 1);
+});
+
+test('searchPaged: sort recent/oldest는 updated_at 기준, 결과 행에 카테고리 붙음', () => {
+  const db = freshDb();
+  const repos = createRepositories(db);
+  const cat = repos.categories.insert({ name: '행정ZZ', colorHex: '#334455' });
+  const a = repos.memos.insert({ title: '보고 예전', content: 'x' });
+  const b = repos.memos.insert({ title: '보고 최근', content: 'y' });
+  db.prepare('UPDATE memos SET category_id = ? WHERE id = ?').run(cat.id, b.id);
+  db.prepare("UPDATE memos SET updated_at = '2020-01-01 00:00:00' WHERE id = ?").run(a.id);
+  db.prepare("UPDATE memos SET updated_at = '2026-09-01 00:00:00' WHERE id = ?").run(b.id);
+
+  const recent = repos.search.searchPaged('보고', { sort: 'recent' });
+  assert.equal(recent.items[0].entity_id, b.id);
+  assert.equal(recent.items[0].categoryName, '행정ZZ');
+  assert.equal(recent.items[0].categoryColor, '#334455');
+
+  const oldest = repos.search.searchPaged('보고', { sort: 'oldest' });
+  assert.equal(oldest.items[0].entity_id, a.id);
+});
+
 test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㅎㄱㄷ'), true);
   assert.equal(isChosungQuery('ㄱ ㅂㅅ'), true);

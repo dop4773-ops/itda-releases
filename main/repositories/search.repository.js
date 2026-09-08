@@ -121,81 +121,132 @@ function attachEventMeta(db, rows) {
   return rows;
 }
 
+// 결과 행에 카테고리(이름/색)를 붙인다 — 통합검색 목록의 유형/태그 배지용. inbox는 카테고리 없음.
+const CAT_TABLE = { todo: 'todos', event: 'events', memo: 'memos', postit: 'postits' };
+function attachCategory(db, rows) {
+  const byType = {};
+  rows.forEach((r) => {
+    if (CAT_TABLE[r.entity_type]) (byType[r.entity_type] = byType[r.entity_type] || []).push(r.entity_id);
+  });
+  for (const [t, ids] of Object.entries(byType)) {
+    const ph = ids.map(() => '?').join(',');
+    const m = {};
+    db.prepare(
+      `SELECT s.id, c.name AS category_name, c.color_hex
+       FROM ${CAT_TABLE[t]} s LEFT JOIN categories c ON c.id = s.category_id WHERE s.id IN (${ph})`
+    )
+      .all(...ids)
+      .forEach((x) => {
+        m[x.id] = { categoryName: x.category_name || null, categoryColor: x.color_hex || null };
+      });
+    rows.forEach((r) => {
+      if (r.entity_type === t && m[r.entity_id]) Object.assign(r, m[r.entity_id]);
+    });
+  }
+  return rows;
+}
+
+// 통합검색 코어 — LIKE 스캔 → JS 랭킹/매치이유 → 정렬 → 기간·상태·태그 후처리 필터.
+// 슬라이스/메타부착 전의 "전체 매치 배열"을 돌려준다(페이지네이션·개수집계는 호출부 몫).
+function runScored(db, rawQuery, { types = null, tag = null, dateFrom = null, dateTo = null, status = null, sort = 'relevance' } = {}) {
+  const q = normalizeQuery(rawQuery);
+  if (!q) return { q: '', tokens: [], rows: [] };
+  const { tokens, flat } = queryForms(q);
+  const useChosung = isChosungQuery(q);
+
+  const titleC = columnLike('title', tokens, flat);
+  const contentC = columnLike('content', tokens, flat);
+  const clauses = [titleC.sql, contentC.sql];
+  const params = [...titleC.params, ...contentC.params];
+  if (useChosung) {
+    clauses.push('chosung LIKE ?');
+    params.push(`%${flat}%`);
+  }
+
+  let typeClause = '';
+  const valid = Array.isArray(types) ? types.filter((t) => ALL_TYPES.includes(t)) : [];
+  if (valid.length) {
+    typeClause = ` AND entity_type IN (${valid.map(() => '?').join(',')})`;
+    params.push(...valid);
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT entity_type, entity_id, title, content, chosung, updated_at
+       FROM search_index
+       WHERE (${clauses.join(' OR ')})${typeClause}`
+    )
+    .all(...params);
+
+  const qLower = q.toLowerCase();
+  const flatLower = flat.toLowerCase();
+  const scored = rows.map((r) => {
+    const t = (r.title || '').toLowerCase();
+    let rank;
+    let matchedIn;
+    if (t && (t === qLower || t === flatLower)) {
+      rank = 0;
+      matchedIn = 'title';
+    } else if (t && (t.startsWith(flatLower) || t.startsWith(qLower))) {
+      rank = 1;
+      matchedIn = 'title';
+    } else if (t && (t.includes(flatLower) || tokens.every((tok) => t.includes(tok.toLowerCase())))) {
+      rank = 2;
+      matchedIn = 'title';
+    } else if (useChosung && (r.chosung || '').includes(flatLower)) {
+      rank = 3;
+      matchedIn = 'chosung';
+    } else {
+      rank = 4;
+      matchedIn = 'content';
+    }
+    return {
+      entity_type: r.entity_type,
+      entity_id: r.entity_id,
+      title: r.title,
+      content: r.content,
+      matchedIn,
+      snippet: matchedIn === 'content' ? makeSnippet(r.content, tokens) : '',
+      updated_at: r.updated_at || '',
+      _rank: rank,
+      _recency: recencyBoost(r.updated_at),
+    };
+  });
+
+  if (sort === 'recent') scored.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  else if (sort === 'oldest') scored.sort((a, b) => a.updated_at.localeCompare(b.updated_at));
+  // 관련도순(기본): 매치 품질 → 최근 고친 것 → 제목 짧은 것.
+  else scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
+
+  let filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
+  filtered = applyTagFilter(db, filtered, tag);
+  return { q, tokens, rows: filtered };
+}
+
+const stripInternal = ({ _rank, _recency, ...rest }) => rest;
+
 module.exports = function createSearchRepository(db) {
   const repo = {
-    // 통합검색. 랭킹: 제목 정확 > 제목 시작 > 제목 포함 > 초성(제목) > 본문 포함.
-    // 반환: [{ entity_type, entity_id, title, content, matchedIn: 'title'|'chosung'|'content' }]
-    // (entity_type/entity_id 이름은 예전 FTS 결과와 동일 — 기존 소비자 호환)
-    // dateFrom/dateTo('YYYY-MM-DD') · status('done'|'open') · tag(카테고리명)는 원본 테이블 조회로 후처리 필터.
-    query(rawQuery, { types = null, tag = null, limit = 40, dateFrom = null, dateTo = null, status = null } = {}) {
-      const q = normalizeQuery(rawQuery);
-      if (!q) return [];
-      const { tokens, flat } = queryForms(q);
-      const useChosung = isChosungQuery(q);
+    // 통합검색(평평한 배열). 랭킹: 제목 정확 > 제목 시작 > 제목 포함 > 초성(제목) > 본문 포함.
+    // dateFrom/dateTo('YYYY-MM-DD') · status('done'|'open') · tag(카테고리명) 후처리 필터. sort: relevance|recent|oldest.
+    query(rawQuery, { types = null, tag = null, limit = 40, offset = 0, dateFrom = null, dateTo = null, status = null, sort = 'relevance' } = {}) {
+      const { rows } = runScored(db, rawQuery, { types, tag, dateFrom, dateTo, status, sort });
+      return attachEventMeta(db, rows.slice(offset, offset + limit).map(stripInternal));
+    },
 
-      const titleC = columnLike('title', tokens, flat);
-      const contentC = columnLike('content', tokens, flat);
-      const clauses = [titleC.sql, contentC.sql];
-      const params = [...titleC.params, ...contentC.params];
-      if (useChosung) {
-        clauses.push('chosung LIKE ?');
-        params.push(`%${flat}%`);
-      }
-
-      let typeClause = '';
-      const valid = Array.isArray(types) ? types.filter((t) => ALL_TYPES.includes(t)) : [];
-      if (valid.length) {
-        typeClause = ` AND entity_type IN (${valid.map(() => '?').join(',')})`;
-        params.push(...valid);
-      }
-
-      const rows = db
-        .prepare(
-          `SELECT entity_type, entity_id, title, content, chosung, updated_at
-           FROM search_index
-           WHERE (${clauses.join(' OR ')})${typeClause}`
-        )
-        .all(...params);
-
-      // 랭크/일치이유는 JS에서 계산(SQL CASE로 짜면 파라미터가 폭증). 결과가 수십 건 수준이라 부담 없음.
-      const qLower = q.toLowerCase();
-      const flatLower = flat.toLowerCase();
-      const scored = rows.map((r) => {
-        const t = (r.title || '').toLowerCase();
-        let rank;
-        let matchedIn;
-        if (t && (t === qLower || t === flatLower)) {
-          rank = 0;
-          matchedIn = 'title';
-        } else if (t && (t.startsWith(flatLower) || t.startsWith(qLower))) {
-          rank = 1;
-          matchedIn = 'title';
-        } else if (t && (t.includes(flatLower) || tokens.every((tok) => t.includes(tok.toLowerCase())))) {
-          rank = 2;
-          matchedIn = 'title';
-        } else if (useChosung && (r.chosung || '').includes(flatLower)) {
-          rank = 3;
-          matchedIn = 'chosung';
-        } else {
-          rank = 4;
-          matchedIn = 'content';
-        }
-        return {
-          entity_type: r.entity_type,
-          entity_id: r.entity_id,
-          title: r.title,
-          content: r.content,
-          matchedIn,
-          snippet: matchedIn === 'content' ? makeSnippet(r.content, tokens) : '',
-          _rank: rank,
-          _recency: recencyBoost(r.updated_at),
-        };
+    // 통합검색 화면 전용 — 페이지(items) + (유형필터 적용 후)전체 개수(total) + 유형별 개수(typeCounts, 필터 무관).
+    // items 행엔 일정 날짜(eventStart)와 카테고리(categoryName/categoryColor)가 붙는다.
+    searchPaged(rawQuery, { types = null, tag = null, limit = 40, offset = 0, dateFrom = null, dateTo = null, status = null, sort = 'recent' } = {}) {
+      // 유형탭 개수는 항상 전체 기준이라 runScored엔 types를 안 넘기고, 필터는 여기서 건다.
+      const { rows: allRows } = runScored(db, rawQuery, { types: null, tag, dateFrom, dateTo, status, sort });
+      const typeCounts = {};
+      allRows.forEach((r) => {
+        typeCounts[r.entity_type] = (typeCounts[r.entity_type] || 0) + 1;
       });
-      // 매치 품질(_rank)이 먼저 — 그 안에서 최근에 고친 것 위로 → 제목 짧은 것 순.
-      scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
-      let filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
-      filtered = applyTagFilter(db, filtered, tag);
-      return attachEventMeta(db, filtered.slice(0, limit).map(({ _rank, _recency, ...rest }) => rest));
+      const valid = Array.isArray(types) ? types.filter((t) => ALL_TYPES.includes(t)) : [];
+      const rows = valid.length ? allRows.filter((r) => valid.includes(r.entity_type)) : allRows;
+      const page = attachCategory(db, attachEventMeta(db, rows.slice(offset, offset + limit).map(stripInternal)));
+      return { items: page, total: rows.length, typeCounts };
     },
 
     // 검색어 없이 타입/태그 프리픽스만 입력했을 때("메모 ", "#재활") — 그 범위의 최근 항목을 나열.

@@ -412,6 +412,23 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
 - 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
+## 통합검색 UI 컴팩트 리스트 개편 (v2.63.0)
+검색 결과가 큰 카드로 쌓여 100건+ 누적 시 비효율 → "밀도 높은 업무용 리스트 + 상세 드로어"로.
+**스키마 변경 없음.**
+
+- **repo**: `runScored()`로 스코어링 코어 분리(전체 매치 배열). `query()`는 그대로(하위호환, 스포트라이트/빠른찾기/candidates),
+  `searchPaged({limit,offset,sort})` 신설 → `{items, total, typeCounts}`. typeCounts는 유형필터와 무관한 전체 기준.
+  `sort`: relevance(기존 랭킹) / recent / oldest (updated_at 기준). `attachCategory()`로 행에 카테고리 이름/색.
+- **IPC** `search:query`에 `paged` 분기 추가. 나머지 경로(빠른찾기 등)는 그대로 배열 반환.
+- **search.js 재작성**: 큰 카드 + board/list 토글 제거 → 한 줄 행(`체크 · 날짜 · 제목 · 미리보기 · 유형/카테고리 배지 · 시간`).
+  검색어 하이라이트(`<mark class="s-hl">`, brand 톤). 유형별 그룹 헤더 + "전체 보기". "더 불러오기"(40개씩, DOM/응답 페이지네이션 — SQL은 랭킹 때문에 전체 스캔 유지).
+- **상세 드로어**(우측, 읽기전용): 제목·날짜·위치·카테고리·본문 미리보기 + 연관 항목(`links.listFor`, 클릭 시 그 항목 드로어) +
+  첨부(메모만, `memoAttachments`) + `원본으로 이동`(#/type/id) + 닫기. ESC/X로 닫힘. 좁은 화면(<900px)에선 전체화면.
+- **필터 popover 확장**: 유형 체크박스 + 기간(전체/오늘/최근7일/최근30일/직접) + 상태(Todo) + 정렬. `적용` 버튼 방식. 버튼에 활성필터 수 배지.
+- **벌크바**: 선택 0이면 숨김, 1개+ 선택 시 하단 플로팅으로 등장(선택 해제 / 삭제).
+- 최근 검색어는 기존대로 `app_settings.search_recent`(로컬) 유지 — 개인정보 이슈 없음.
+- `test/search.test.js` +3(searchPaged 페이지네이션/typeCounts/sort+카테고리). 63/63, lint 0. CDP: 그룹·하이라이트·드로어·필터·벌크·연관항목·ESC·빠른찾기 회귀 검증.
+
 ## Todo 완료 기록 분리 (v2.62.0)
 완료 Todo가 메인에 무한 누적되던 문제 → "메인 = 현재 업무 / 완료 기록 = 과거 업무 검색" 분리.
 **스키마 변경 없음** — 기존 `todos.completed_at` 활용, 완료 데이터는 읽기만.
