@@ -181,9 +181,13 @@ function openMenu(x, y, item, opts) {
     <button class="ctx-menu-item" data-action="lock">${item.isLocked ? '🔓 잠금 해제' : '🔒 잠금'}</button>`
     : '';
 
-  // linkOnly: 위젯/삭제를 지원하지 않는 항목(예: Inbox)용 — "연결"(+ 전환 가능하면 전환)만 있는 축소 메뉴
+  // linkOnly: 위젯/소프트삭제(휴지통)를 지원하지 않는 항목(예: Inbox)용 — "연결"(+ 전환) 축소 메뉴.
+  //   opts.onDelete(item)이 있으면 그 항목 전용 삭제(예: Inbox 하드삭제)를 마지막에 붙인다.
   if (opts.linkOnly) {
-    if (convertTargets.length === 0) {
+    const delBtn = opts.onDelete
+      ? `<div class="ctx-menu-divider"></div><button class="ctx-menu-item ctx-menu-danger" data-action="hard-delete">🗑 삭제</button>`
+      : '';
+    if (convertTargets.length === 0 && !delBtn) {
       openLinkPopover(x, y, item);
       return;
     }
@@ -192,6 +196,7 @@ function openMenu(x, y, item, opts) {
     menu.innerHTML = `
       ${convertTargets.map((c) => `<button class="ctx-menu-item" data-convert="${c.type}">${c.label}</button>`).join('')}
       <button class="ctx-menu-item" data-action="link">🔗 연결</button>
+      ${delBtn}
     `;
     activeEl = menu;
     const pos = placeAt(menu, x, y);
@@ -199,6 +204,14 @@ function openMenu(x, y, item, opts) {
       menu.querySelector(`[data-convert="${c.type}"]`).addEventListener('click', () => convertItem(item, c));
     });
     menu.querySelector('[data-action="link"]').addEventListener('click', () => openLinkPopover(pos.left, pos.top, item));
+    menu.querySelector('[data-action="hard-delete"]')?.addEventListener('click', async () => {
+      closeMenu();
+      try {
+        await opts.onDelete(item);
+      } catch (e) {
+        errorToast(e, '삭제하지 못했어요');
+      }
+    });
     return;
   }
 
@@ -360,7 +373,8 @@ function openMenu(x, y, item, opts) {
  *
  * @param {HTMLElement} el - 우클릭을 감지할 엘리먼트(카드/행 전체)
  * @param {() => ({type:'todo'|'event'|'memo'|'postit', id:number}|null)} getItem - 클릭 시점의 최신 항목 정보
- * @param {{onDeleted?: (item: {type:string,id:number}) => void, openAnywhere?: boolean}} [opts]
+ * @param {{onDeleted?: (item) => void, onDelete?: (item) => Promise<void>, openAnywhere?: boolean, linkOnly?: boolean}} [opts]
+ *   onDelete: linkOnly 메뉴에서 항목 전용 삭제(예: Inbox 하드삭제). 있으면 "🗑 삭제"가 붙는다.
  *   openAnywhere: contenteditable(본문) 위에서도 커스텀 메뉴를 연다(포스트잇 — "어느 부분이든 우클릭").
  *   input/textarea(체크박스 등)는 openAnywhere여도 항상 예외로 둔다.
  * @returns {() => void} 리스너 해제 함수

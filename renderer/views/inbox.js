@@ -131,6 +131,10 @@ export async function mount(root) {
   function render() {
     $('i-count').textContent = allItems.filter((i) => !i.is_processed).length || '';
     renderTabs();
+    // 삭제/전환/필터 전환으로 selected가 바뀌었을 수 있으니 매 렌더마다 벌크바를 최신 상태로.
+    // (이게 없어서 "N개 선택됨" 팝업이 삭제 후에도 안 사라졌음)
+    for (const id of [...selected]) if (!allItems.some((i) => i.id === id)) selected.delete(id);
+    updateBulk();
     const list = filtered();
     const listEl = $('i-list');
     if (!list.length) {
@@ -221,7 +225,16 @@ export async function mount(root) {
           errorToast(err, '별표를 바꾸지 못했어요');
         }
       });
-      attachContextMenu(el, () => ({ type: 'inbox', id }), { linkOnly: true, onDeleted: load });
+      attachContextMenu(el, () => ({ type: 'inbox', id }), {
+        linkOnly: true,
+        onDelete: async () => {
+          await window.itda.inbox.delete(id);
+          toast('삭제했어요');
+          if (drawerId === id) closeDrawer();
+          selected.delete(id);
+          await load();
+        },
+      });
     });
   }
 
@@ -454,11 +467,23 @@ export async function mount(root) {
     const typing = isUserTyping();
     if (e.key === 'Escape') {
       if (drawerId) { e.preventDefault(); closeDrawer(); }
+      else if (selected.size) { e.preventDefault(); selected.clear(); render(); }
       return;
     }
     if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       $('i-input').focus();
+      return;
+    }
+    // Tab / Shift+Tab = 유형 탭 순회 (입력창·드롭다운에 포커스가 있을 땐 기본 동작 유지)
+    if (e.key === 'Tab' && !typing && document.activeElement?.tagName !== 'SELECT') {
+      e.preventDefault();
+      const cur = TAB_ORDER.indexOf(tab);
+      tab = TAB_ORDER[(cur + (e.shiftKey ? -1 : 1) + TAB_ORDER.length) % TAB_ORDER.length];
+      selected.clear();
+      kbdIdx = -1;
+      render();
+      $('i-tabs').querySelector('.search-type-tab.active')?.focus({ preventScroll: true });
       return;
     }
     if (typing) return;
@@ -481,11 +506,11 @@ export async function mount(root) {
   document.addEventListener('keydown', onKey);
   setScreenShortcuts('Inbox', [
     { label: '입력창', keys: '/' },
-    { label: '이동', keys: '↑↓' },
-    { label: 'Todo 전환', keys: 'T' },
-    { label: '일정', keys: 'E' },
-    { label: '메모', keys: 'M' },
+    { label: '탭 이동', keys: 'Tab' },
+    { label: '행 이동', keys: '↑↓' },
+    { label: 'Todo/일정/메모 전환', keys: 'T E M' },
     { label: '삭제', keys: 'Del' },
+    { label: '닫기·선택해제', keys: 'Esc' },
   ]);
 
   bindWidgetLaunchButton(root, 'i-widgetBtn', 'inbox');
