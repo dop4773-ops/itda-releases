@@ -6,11 +6,27 @@ module.exports = function registerInboxIpc(ipcMain, repos, { deleteLinksFor } = 
   const { inbox } = repos;
 
   ipcMain.handle('inbox:add', (event, content) => {
-    assertNonEmpty(content, '내용을 입력해주세요.');
-    const trimmed = content.trim();
-    const { id } = inbox.insert(trimmed);
-    broadcastDataChanged('inbox', id);
-    return { id, content: trimmed };
+    // 문자열(한 건) 또는 여러 줄 문자열/배열(줄마다 한 건).
+    const raw = Array.isArray(content) ? content : String(content ?? '').split(/\r?\n/);
+    const lines = raw.map((s) => String(s).trim()).filter(Boolean);
+    assertNonEmpty(lines.join(''), '내용을 입력해주세요.');
+    if (lines.length === 1) {
+      const { id } = inbox.insert(lines[0]);
+      broadcastDataChanged('inbox', id);
+      return { id, content: lines[0] };
+    }
+    const { ids } = inbox.insertMany(lines);
+    broadcastDataChanged('inbox');
+    return { ids, count: ids.length };
+  });
+
+  ipcMain.handle('inbox:setFavorite', (event, id) => {
+    const cur = inbox.list(false).find((x) => x.id === Number(id));
+    if (!cur) return null;
+    const next = cur.is_favorite ? 0 : 1;
+    inbox.setFavorite(Number(id), next);
+    broadcastDataChanged('inbox', Number(id));
+    return { id: Number(id), is_favorite: next };
   });
 
   ipcMain.handle('inbox:list', (event, { onlyUnprocessed = true } = {}) => {

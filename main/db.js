@@ -11,7 +11,8 @@ const { chosung } = require('./shared/hangul');
 //   v2: item_links 고아 연결(상대 항목이 완전삭제됨) 1회성 청소
 //   v3: search_index를 FTS5 → 일반 테이블로 재구축(한글 부분일치·초성검색 지원) + chosung 컬럼
 //   v4: search_index에 updated_at 컬럼 (검색 랭킹의 "최신도" 가산용)
-const SCHEMA_VERSION = 4;
+//   v5: inbox_items에 is_favorite 컬럼 (Inbox 별표)
+const SCHEMA_VERSION = 5;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -147,6 +148,11 @@ function applyLightweightMigrations(db) {
     // 포스트잇만 category_id가 없었다(원래 색상만 자유 팔레트로 개인화). 뒤늦게 추가.
     db.exec(`ALTER TABLE postits ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL`);
     console.log('[itda] 마이그레이션: postits.category_id 컬럼 추가');
+  }
+  if (!hasColumn('inbox_items', 'is_favorite')) {
+    // v5: Inbox 개편 — "먼저 처리할 항목" 별표. 기존 항목은 전부 0(별표 없음)으로 시작.
+    db.exec(`ALTER TABLE inbox_items ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0`);
+    console.log('[itda] 마이그레이션: inbox_items.is_favorite 컬럼 추가');
   }
   {
     // 포스트잇 기본 크기를 220x160 → 288x288 → 295x295(실제 포스트잇 7.8cm 정사각형, 96dpi 기준)로

@@ -37,6 +37,7 @@ CREATE TABLE inbox_items (
   is_processed    INTEGER NOT NULL DEFAULT 0,   -- 사용자가 todo/일정/메모로 정리했는지
   processed_type  TEXT,                          -- 'todo' | 'event' | 'memo' | NULL
   processed_ref_id INTEGER,                      -- 위 타입 테이블의 id
+  is_favorite     INTEGER NOT NULL DEFAULT 0,    -- 별표(먼저 처리할 항목 표시)
   created_at      TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   processed_at    TEXT
 );

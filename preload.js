@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('itda', {
   inbox: {
     add: (content) => ipcRenderer.invoke('inbox:add', content),
     list: (opts) => ipcRenderer.invoke('inbox:list', opts),
+    setFavorite: (id) => ipcRenderer.invoke('inbox:setFavorite', id),
     markProcessed: (payload) => ipcRenderer.invoke('inbox:markProcessed', payload),
     delete: (id) => ipcRenderer.invoke('inbox:delete', id),
   },

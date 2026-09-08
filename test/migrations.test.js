@@ -20,6 +20,7 @@ function oldDb() {
   db.exec('ALTER TABLE memos DROP COLUMN folder_id');
   db.exec('ALTER TABLE memos DROP COLUMN is_locked');
   db.exec('ALTER TABLE postits DROP COLUMN category_id');
+  db.exec('ALTER TABLE inbox_items DROP COLUMN is_favorite');
   // v3 이전: search_index가 FTS5였음 — 옛 형태로 되돌려 v3 마이그레이션이 실제로 돌게
   db.exec(`DROP TABLE IF EXISTS search_index`);
   db.exec(`CREATE VIRTUAL TABLE search_index USING fts5(entity_type, entity_id UNINDEXED, title, content, tokenize='unicode61')`);
@@ -43,6 +44,7 @@ test('구버전 DB → 마이그레이션 → 누락분 전부 복구 + 버전 �
   assert.ok(hasCol(db, 'memos', 'folder_id'));
   assert.ok(hasCol(db, 'memos', 'is_locked'));
   assert.ok(hasCol(db, 'postits', 'category_id'));
+  assert.ok(hasCol(db, 'inbox_items', 'is_favorite'), 'v5: inbox_items.is_favorite');
   assert.equal(version(db), SCHEMA_VERSION);
   db.close();
 });

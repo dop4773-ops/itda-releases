@@ -412,6 +412,20 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
 - 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
+## Inbox UI/UX 개편 (v2.65.0)
+검색·Todo 개편과 같은 방향(밀도↑, 상세는 드로어). **스키마 v5**: `inbox_items.is_favorite` 컬럼 추가(마이그레이션 확인 완료).
+
+- **빠른 입력**: `<textarea>` 자동 높이 + 여러 줄 붙여넣기 → 서버(`inbox:add`)가 줄 단위로 분리(`insertMany`, 한 트랜잭션).
+  Enter=저장(포커스 유지, 연속 입력), Shift+Enter=줄바꿈.
+- **유형 탭**: `전체 / 미분류 / Todo / 일정 / 메모 / 포스트잇` — 미분류=미처리, 나머지=processed_type. 기본 탭 **미분류**(mockup의 전체 대신 워크리스트 우선).
+- **컴팩트 행 + 날짜 그룹**: `체크 · 아이콘 · 내용 · 상태배지 · 시간 · ★`. 오늘/어제/그 이전 3버킷. 별표 항목이 그룹 내 최상단.
+  정렬 오래된 순(기본)/최신 순.
+- **상세 드로어**(우측, 검색과 같은 `.s-drawer`): 내용·생성일·상태 + 연관 항목(`links.listFor`) + 전환 버튼(Todo/일정/메모) 또는 (처리된 경우) 원본으로 이동 + 삭제 + 별표.
+- **벌크**: 선택 시 하단바 — 일괄 Todo 전환 / 삭제.
+- **단축키**: `/`=입력창, `↑↓`=행 커서, `Enter`=드로어, `T/E/M`=전환, `Del`=삭제, `Esc`=닫기. 상단바 힌트.
+- repo: `insertMany` / `setFavorite`. IPC: `inbox:add`(문자열·배열·여러 줄), `inbox:setFavorite`. preload 동일.
+- `test/inbox.test.js` +3, migrations +1. 66/66, lint 0. CDP: v4→v5 마이그레이션 / 여러 줄 추가 / 별표 / 드로어 / 전환 검증.
+
 ## 검색 단축키 + 설정 수치 미세조정 + 인사말 글자색 (v2.64.0)
 - **검색 화면 단축키**: `/` 또는 Ctrl/Cmd+F·K = 검색창 포커스, `↑↓` = 결과 행 커서(`.s-row.kbd`),
   `Enter` = 커서 행 드로어 열기, `Esc` = 드로어 닫기 / (드로어 없으면) 검색어 지우기. `setScreenShortcuts`로 상단바 힌트.
