@@ -15,6 +15,11 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     return todos.list(filter);
   });
 
+  // 완료 기록 화면 — 완료된 Todo만 (completed_at 기준 기간/검색). count는 "완료 N건" 배지용.
+  ipcMain.handle('todos:listCompleted', (event, opts = {}) => {
+    return { items: todos.listCompleted(opts), total: todos.countCompleted() };
+  });
+
   ipcMain.handle('todos:get', (event, id) => {
     const todo = todos.getById(id);
     if (!todo) return null;

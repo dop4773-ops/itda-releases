@@ -72,6 +72,43 @@ module.exports = function createTodosRepository(db) {
         .get(id);
     },
 
+    // 완료 기록 화면 전용 — 완료된 Todo만, completed_at 기준 기간/검색 필터.
+    // completed_at이 비어있는 옛 데이터는 updated_at 날짜로 대체해 정렬/그룹핑한다("날짜 미상"은 UI 몫).
+    // from/to는 'YYYY-MM-DD'(포함). keyword는 제목·메모·카테고리명 부분일치.
+    listCompleted({ keyword = null, from = null, to = null, order = 'recent' } = {}) {
+      const clauses = ['t.deleted_at IS NULL', 't.is_done = 1'];
+      const params = [];
+      const dateExpr = "date(COALESCE(t.completed_at, t.updated_at))";
+      if (from) {
+        clauses.push(`${dateExpr} >= ?`);
+        params.push(from);
+      }
+      if (to) {
+        clauses.push(`${dateExpr} <= ?`);
+        params.push(to);
+      }
+      if (keyword) {
+        clauses.push('(t.title LIKE ? OR t.memo LIKE ? OR c.name LIKE ?)');
+        const k = `%${keyword}%`;
+        params.push(k, k, k);
+      }
+      const dir = order === 'oldest' ? 'ASC' : 'DESC';
+      return db
+        .prepare(
+          `SELECT t.*, c.name AS category_name, c.color_hex,
+                  COALESCE(t.completed_at, t.updated_at) AS archived_at
+           FROM todos t LEFT JOIN categories c ON c.id = t.category_id
+           WHERE ${clauses.join(' AND ')}
+           ORDER BY COALESCE(t.completed_at, t.updated_at) ${dir}`
+        )
+        .all(...params);
+    },
+
+    // 완료 건수 (메인 화면 "완료 N건" 배지용). deleted 제외.
+    countCompleted() {
+      return db.prepare("SELECT COUNT(*) AS n FROM todos WHERE deleted_at IS NULL AND is_done = 1").get().n;
+    },
+
     insert({ title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, recurrenceParentId }) {
       const info = db
         .prepare(

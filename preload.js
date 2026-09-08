@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('itda', {
   todos: {
     today: () => ipcRenderer.invoke('todos:today'),
     list: (filter) => ipcRenderer.invoke('todos:list', filter),
+    listCompleted: (opts) => ipcRenderer.invoke('todos:listCompleted', opts),
     get: (id) => ipcRenderer.invoke('todos:get', id),
     add: (payload) => ipcRenderer.invoke('todos:add', payload),
     update: (payload) => ipcRenderer.invoke('todos:update', payload),

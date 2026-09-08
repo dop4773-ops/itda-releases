@@ -844,9 +844,46 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .kanban-card.collapsed .kanban-card-badges,.kanban-card.collapsed .kanban-card-bottom{display:none;}
 .todo-card.collapsed .meta{display:none;}
 
-/* ---- '완료' 탭: 카테고리별로 묶어볼 때의 그룹 헤더 ---- */
-.todo-done-group{margin-bottom:16px;}
-.todo-done-group h4{font-size:12px;color:var(--text-faint);margin:0 0 8px;text-transform:uppercase;letter-spacing:.03em;font-weight:600;}
+/* ---- 메인 "최근 완료" (보드 컬럼 / 목록뷰 섹션 공통) ---- */
+.kanban-column-more{margin-left:auto;font-size:11px;color:var(--text-faint);white-space:nowrap;}
+.kanban-column-more:hover{color:var(--brand);}
+.todo-done-row{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--radius-sm);font-size:12px;color:var(--text-soft);}
+.todo-done-row:hover{background:var(--surface);}
+.todo-done-row input{accent-color:var(--success);flex-shrink:0;cursor:pointer;}
+.todo-done-row-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.todo-done-row-when{font-size:10.5px;color:var(--text-faint);flex-shrink:0;}
+.todo-done-more{display:block;margin-top:8px;padding:7px 8px;font-size:11.5px;color:var(--text-faint);text-align:center;border-radius:var(--radius-sm);background:var(--surface);}
+.todo-done-more:hover{color:var(--brand);}
+.kanban-column.collapsed .todo-done-more{display:none;}
+
+.todo-recent-done{margin-top:18px;padding-top:14px;border-top:1px solid var(--divider);}
+.todo-recent-done-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:var(--fs-section-title);font-weight:600;color:var(--text);}
+
+/* 메인 하단: "완료된 업무는 완료 기록에서" 안내 바 */
+.todo-archive-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px;padding:10px 14px;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);font-size:12px;color:var(--text-faint);}
+.todo-archive-bar:hover{border-color:var(--brand);}
+.todo-archive-bar-link{color:var(--brand);font-weight:600;white-space:nowrap;}
+
+/* ================= 완료 기록 화면 ================= */
+.todo-archive{display:flex;flex-direction:column;gap:12px;}
+.todo-archive-head{display:flex;align-items:flex-start;gap:10px;}
+.todo-archive-head-text{flex:1;min-width:0;}
+.todo-archive-head-text h2{margin:0;font-size:17px;font-weight:700;}
+.todo-archive-head-text p{margin:2px 0 0;font-size:12px;color:var(--text-faint);}
+.todo-archive-range{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-faint);}
+.todo-archive-range .input{padding:4px 8px;font-size:12px;}
+.todo-archive-count{font-size:11.5px;color:var(--text-faint);padding:4px 2px;}
+.todo-archive-group{margin-bottom:14px;}
+.todo-archive-group-head{display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:4px 2px 8px;cursor:pointer;
+  font-size:12.5px;font-weight:600;color:var(--text-soft);border-bottom:1px solid var(--divider);}
+.todo-archive-group.collapsed .todo-archive-group-body{display:none;}
+.todo-archive-group-body{display:flex;flex-direction:column;gap:2px;padding-top:4px;}
+.todo-archive-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--text);cursor:pointer;}
+.todo-archive-row:hover{background:var(--bg);}
+.todo-archive-row input{accent-color:var(--success);flex-shrink:0;}
+.todo-archive-row-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-soft);}
+.todo-archive-row-time{font-size:10.5px;color:var(--text-faint);flex-shrink:0;}
 
 @media (max-width: 900px){
   .kanban-board{grid-template-columns:1fr;}

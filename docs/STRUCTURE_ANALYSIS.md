@@ -412,6 +412,21 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
 - 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
+## Todo 완료 기록 분리 (v2.62.0)
+완료 Todo가 메인에 무한 누적되던 문제 → "메인 = 현재 업무 / 완료 기록 = 과거 업무 검색" 분리.
+**스키마 변경 없음** — 기존 `todos.completed_at` 활용, 완료 데이터는 읽기만.
+
+- **메인 보드**: `[해야 할 일] [진행 중] [완료]` → `[해야 할 일] [진행 중] [최근 완료]`.
+  `applyFilters`가 완료 항목 전부 제외(전체/오늘/예정/중요 탭), "최근 완료"는 `completed_at` 최신순 최대 5개
+  + `완료 N건 · 완료 기록 보기 →` 푸터. 목록뷰는 '전체' 탭에서만 하단에 "최근 완료" 섹션.
+- **완료 기록 화면**: todo.js 내부 `screen='archive'` 토글(라우트 `#/todo/archive`도 지원). 검색창 +
+  기간칩(전체/오늘/이번주/이번달/기간선택) + 최신/오래된순 + 날짜별 그룹(오래된 그룹 접기). 항목 클릭 → 상세 패널.
+- **repo**: `todos.listCompleted({keyword,from,to,order})` (completed_at 없으면 updated_at 대체, `archived_at` 별칭) +
+  `todos.countCompleted()`. IPC `todos:listCompleted` → `{items,total}`.
+- **설정 · 편의 기능**: "완료 항목 관리" 라디오 4개(`todo_archive_mode`: immediate/7d/30d/never, 기본 immediate).
+  로직은 "최근 완료" 컬럼에 보일 날짜 컷오프만 제어(immediate=오늘, never=최대 50개).
+- `test/todos-completed.test.js` +4. CDP: 완료→최근완료 이동 / 완료탭→아카이브 / 검색·날짜그룹 / 뒤로가기 검증.
+
 ## 검색 결과에 일정 날짜 + 필터 팝오버 버그 (v2.61.1)
 - **일정 날짜 표시**: `search.repository`가 event 결과 행에 `eventStart`/`eventAllDay`를 붙임
   (`attachEventMeta`, query/browse/recentItems/indexedByKeys 공통). `quick-find-core.eventDateLabel()`

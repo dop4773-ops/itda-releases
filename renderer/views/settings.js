@@ -350,6 +350,29 @@ export async function mount(root, initialTab) {
               </label>
             </div>
             <div class="update-row" style="margin-top:12px;display:block;">
+              <div class="settings-row-title">완료 항목 관리</div>
+              <div class="settings-row-desc">완료한 Todo를 메인 화면 "최근 완료"에 며칠치까지 남길지 정해요. <b>삭제가 아니라</b> 화면에서만 정리되고, 지난 완료 업무는 "완료 기록"에서 언제든 검색·확인할 수 있어요.</div>
+              <div style="margin-top:8px;">
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>완료 즉시 보관 <span class="badge badge-neutral">기본값</span></b><span>오늘 완료한 것만 "최근 완료"에 표시</span></div>
+                  <input type="radio" name="todo-archive-mode" value="immediate" />
+                </label>
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>7일 후 자동 보관</b><span>최근 7일 안에 완료한 것까지 표시</span></div>
+                  <input type="radio" name="todo-archive-mode" value="7d" />
+                </label>
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>30일 후 자동 보관</b><span>최근 30일 안에 완료한 것까지 표시</span></div>
+                  <input type="radio" name="todo-archive-mode" value="30d" />
+                </label>
+                <label class="data-action-row" style="cursor:pointer;">
+                  <div><b>자동 보관하지 않음</b><span>완료 항목을 "최근 완료"에 계속 쌓아둬요(최대 50개)</span></div>
+                  <input type="radio" name="todo-archive-mode" value="never" />
+                </label>
+              </div>
+            </div>
+
+            <div class="update-row" style="margin-top:12px;display:block;">
               <div class="settings-row-title">연결된 항목 내용 동기화</div>
               <div class="settings-row-desc">연결된 두 항목 중 하나의 제목·본문을 고치면 다른 쪽도 같이 맞춰줘요. 메모↔포스트잇끼리는 체크박스·서식·사진까지 그대로 옮겨져요. 날짜·완료 여부처럼 타입마다 다른 값은 건드리지 않아요.</div>
               <div style="margin-top:8px;">
@@ -1050,6 +1073,20 @@ export async function mount(root, initialTab) {
         errorToast(e, '저장하지 못했어요');
         hideDoneTodoToggle.checked = !hideDoneTodoToggle.checked;
       }
+    });
+
+    // 완료 항목 보관 모드 (immediate=기본 / 7d / 30d / never). Todo 화면 "최근 완료"에 보일 기간만 제어.
+    const archiveMode = (await window.itda.settings.get('todo_archive_mode')) || 'immediate';
+    root.querySelectorAll('input[name="todo-archive-mode"]').forEach((radio) => {
+      radio.checked = radio.value === archiveMode;
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        try {
+          await window.itda.settings.set({ key: 'todo_archive_mode', value: radio.value });
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+        }
+      });
     });
 
     // 연결된 항목 내용 동기화 (ask=기본 / auto / off). "다시 묻지 않기"로 고른 답은 main이 auto/off로 승격한다.
