@@ -30,7 +30,7 @@ function ensureModal() {
         <input type="datetime-local" id="cem-start" class="input" style="flex:1;" />
         <input type="datetime-local" id="cem-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
       </div>
-      <div class="form-row"><textarea id="cem-memo" class="input" rows="3" style="flex:1;resize:vertical;" placeholder="내용 (선택)"></textarea></div>
+      <div class="form-row"><textarea id="cem-memo" class="input" rows="6" style="flex:1;resize:vertical;min-height:120px;" placeholder="내용 (선택)"></textarea></div>
       <div class="modal-actions">
         <button class="btn-secondary" id="cem-cancel">취소</button>
         <button class="btn" id="cem-submit">일정 등록</button>

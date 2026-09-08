@@ -438,7 +438,7 @@ export async function mount(root, deepLinkId) {
           </label>
         </div>
         <div class="form-row">
-          <textarea id="c-memo" class="input" rows="3" style="flex:1;resize:vertical;" placeholder="내용 (선택)"></textarea>
+          <textarea id="c-memo" class="input" rows="6" style="flex:1;resize:vertical;min-height:120px;" placeholder="내용 (선택)"></textarea>
         </div>
         <div class="modal-actions">
           <button class="btn-secondary" id="c-cancelAdd">취소</button>
