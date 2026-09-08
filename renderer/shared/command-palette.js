@@ -259,7 +259,7 @@ export function initCommandPalette({ openQuickCapture }) {
       <div class="cmdk-card">
         <div class="cmdk-input-row">
           <span class="cmdk-input-icon">${SEARCH_ICON}</span>
-          <input type="text" id="cmdk-input" placeholder="찾기 · 실행  (예: 메모 김부수, #재활)" autocomplete="off" />
+          <input type="text" id="cmdk-input" placeholder="찾기 · 실행  ('메모 ', '#태그 '로 범위 좁히기)" autocomplete="off" />
         </div>
         <div class="cmdk-list" id="cmdk-list"></div>
         <div class="cmdk-hint-row">↑↓ 이동 · Enter 실행 · Esc 닫기</div>

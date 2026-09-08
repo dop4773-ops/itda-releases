@@ -35,8 +35,8 @@ function parseQuery(raw, tagNames = []) {
   return { type, tag, text: text.trim() };
 }
 
-test('타입 프리픽스: "메모 김부수" → memo + 김부수', () => {
-  assert.deepEqual(parseQuery('메모 김부수'), { type: 'memo', tag: null, text: '김부수' });
+test('타입 프리픽스: "메모 회의록" → memo + 회의록', () => {
+  assert.deepEqual(parseQuery('메모 회의록'), { type: 'memo', tag: null, text: '회의록' });
   assert.deepEqual(parseQuery('할일 정리'), { type: 'todo', tag: null, text: '정리' });
   assert.deepEqual(parseQuery('todo foo'), { type: 'todo', tag: null, text: 'foo' });
 });
@@ -52,13 +52,13 @@ test('공백 없이 "메모"만 = 프리픽스 아님(검색어)', () => {
 
 test('태그 프리픽스: #재활 / @재활 둘 다, 존재하는 태그명일 때만', () => {
   const tags = ['재활', '프로젝트'];
-  assert.deepEqual(parseQuery('#재활 김부수', tags), { type: null, tag: '재활', text: '김부수' });
+  assert.deepEqual(parseQuery('#재활 회의록', tags), { type: null, tag: '재활', text: '회의록' });
   assert.deepEqual(parseQuery('@재활', tags), { type: null, tag: '재활', text: '' });
-  assert.deepEqual(parseQuery('#없는거 김부수', tags), { type: null, tag: null, text: '#없는거 김부수' });
+  assert.deepEqual(parseQuery('#없는거 회의록', tags), { type: null, tag: null, text: '#없는거 회의록' });
 });
 
-test('태그 + 타입 같이: "#재활 메모 김부수"', () => {
-  assert.deepEqual(parseQuery('#재활 메모 김부수', ['재활']), { type: 'memo', tag: '재활', text: '김부수' });
+test('태그 + 타입 같이: "#재활 메모 회의록"', () => {
+  assert.deepEqual(parseQuery('#재활 메모 회의록', ['재활']), { type: 'memo', tag: '재활', text: '회의록' });
 });
 
 test('태그명 대소문자 무관', () => {

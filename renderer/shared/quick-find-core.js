@@ -6,7 +6,7 @@ export const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '�
 export const TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
 export const ITEM_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
 
-// 맨 앞 토큰이 타입 이름이고 뒤에 공백이 오면 그 타입으로 좁힌다("메모 김부수").
+// 맨 앞 토큰이 타입 이름이고 뒤에 공백이 오면 그 타입으로 좁힌다("메모 회의록").
 // 그냥 "메모"만 치면 프리픽스가 아니라 검색어(제목이 "메모"인 항목 / 메모 화면 몫).
 const TYPE_PREFIX = {
   메모: 'memo', 노트: 'memo', memo: 'memo',
@@ -16,10 +16,10 @@ const TYPE_PREFIX = {
   인박스: 'inbox', inbox: 'inbox',
 };
 
-// "메모 김부수"        → { type:'memo',  tag:null,   text:'김부수' }
-// "#재활 김부수"/"@재활" → { type:null,   tag:'재활',  text:'김부수' | '' }   (존재하는 태그명일 때만)
-// "#재활 메모 김부수"   → { type:'memo',  tag:'재활',  text:'김부수' }
-// "김부수"             → { type:null,   tag:null,   text:'김부수' }
+// "메모 회의록"        → { type:'memo',  tag:null,   text:'회의록' }
+// "#재활 회의록"/"@재활" → { type:null,   tag:'재활',  text:'회의록' | '' }   (존재하는 태그명일 때만)
+// "#재활 메모 회의록"   → { type:'memo',  tag:'재활',  text:'회의록' }
+// "회의록"             → { type:null,   tag:null,   text:'회의록' }
 export function parseQuery(raw, tagNames = []) {
   let text = String(raw || '').replace(/^\s+/, '');
   let type = null;

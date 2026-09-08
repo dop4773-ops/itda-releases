@@ -406,7 +406,7 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   (Spotlight = 독립 창 / 팔레트 = 본체 DOM 접근 가능 → "새 메모 만들기"류 명령 실행 보너스).
 - **공용 코어** `renderer/shared/quick-find-core.js`: `parseQuery(raw, tagNames)` + 타입 상수 + `describeScope`.
   두 창이 같은 파싱/스코프 규칙을 씀(렌더 DOM은 각자). 파서 회귀 = `test/quick-find-parse.test.js`(⚠ 1:1 복사).
-- **B. 타입/태그 프리픽스** (Raycast식, 팝업 없이 키보드만): `메모 김부수` → memo만, `#재활 김부수`/`@재활` → 재활 태그만.
+- **B. 타입/태그 프리픽스** (Raycast식, 팝업 없이 키보드만): `메모 회의록` → memo만, `#재활 회의록`/`@재활` → 재활 태그만.
   맨 앞 토큰 + 공백일 때만 프리픽스(그냥 `메모`는 검색어). 존재하는 태그명만 인정. 프리픽스만 입력 시 그 범위 최근목록.
 - **F. 범위 검색**: `search.query`에 `tag`(카테고리명, 대소문자 무관, 원본테이블 category_id 후처리 필터, inbox 제외) +
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
