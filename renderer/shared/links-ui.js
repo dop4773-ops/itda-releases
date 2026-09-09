@@ -63,6 +63,8 @@ export async function mountLinksWidget(container, self) {
   let discovered = { related: [] };
   let pickerOpen = false;
   let pickerType = 'todo';
+  let pickerQuery = '';
+  let pickerResults = [];
   let hideDoneTodos = false; // 설정 > 편의 기능: 완료한 Todo는 연결 목록에서 숨기기
   const selectedDiscover = new Set(); // "type:id" — 관련 항목에서 체크한 것들(한 번에 연결)
 
@@ -100,14 +102,16 @@ export async function mountLinksWidget(container, self) {
       .slice(0, 2)
       .map((r) => `<span class="link-reason" data-kind="${r.kind}">${REASON_ICON[r.kind] || ''} ${escapeHtml(reasonText(r))}</span>`)
       .join('');
+    const dateLbl = d.type === 'event' && d.refDate ? eventDateLabel(d.refDate) : '';
     return `
       <div class="link-item link-item-suggested" data-type="${d.type}" data-id="${d.id}">
         <input type="checkbox" class="link-discover-check" data-key="${key}" ${selectedDiscover.has(key) ? 'checked' : ''} title="선택" />
         <a class="link-item-main" href="${TYPE_ROUTE[d.type]}/${d.id}">
-          <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
-          <span class="link-item-label">${escapeHtml(plainLabel(d.label))}</span>
-          ${d.type === 'event' && d.refDate ? `<span class="link-item-sub">${escapeHtml(eventDateLabel(d.refDate))}</span>` : ''}
-          ${badges ? `<span class="link-reasons">${badges}</span>` : ''}
+          <span class="link-item-row1">
+            <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
+            <span class="link-item-label">${escapeHtml(stripHtmlToPlainText(d.label || '').replace(/\s+/g, ' ').trim().slice(0, 90) || '(제목 없음)')}</span>
+          </span>
+          ${dateLbl || badges ? `<span class="link-item-row2">${dateLbl ? `<span class="link-item-sub">${escapeHtml(dateLbl)}</span>` : ''}${badges}</span>` : ''}
         </a>
         <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>
       </div>`;
@@ -149,12 +153,14 @@ export async function mountLinksWidget(container, self) {
           pickerOpen
             ? `
           <div class="link-picker" id="lw-picker">
-            <select id="lw-typeSelect" class="select">
-              ${linkableTypes.map((t) => `<option value="${t}" ${t === pickerType ? 'selected' : ''}>${LINK_TYPE_LABEL[t]}</option>`).join('')}
-            </select>
-            <select id="lw-targetSelect" class="select"><option value="">불러오는 중…</option></select>
-            <button class="btn-icon" id="lw-confirm" title="연결">${PLUS_ICON}</button>
-            <button class="btn-icon" id="lw-cancel" title="취소">${SMALL_X_ICON}</button>
+            <div class="link-picker-top">
+              <select id="lw-typeSelect" class="select">
+                ${linkableTypes.map((t) => `<option value="${t}" ${t === pickerType ? 'selected' : ''}>${LINK_TYPE_LABEL[t]}</option>`).join('')}
+              </select>
+              <input type="text" id="lw-search" class="input" placeholder="제목·내용으로 찾기…" value="${escapeHtml(pickerQuery)}" autocomplete="off" />
+              <button class="btn-icon" id="lw-cancel" title="취소">${SMALL_X_ICON}</button>
+            </div>
+            <div class="link-picker-results" id="lw-results"></div>
           </div>`
             : `<button class="link-add-btn" id="lw-addBtn">${PLUS_ICON} 항목 연결</button>`
         }
@@ -174,23 +180,60 @@ export async function mountLinksWidget(container, self) {
       </div>
     `;
     bind();
+    if (pickerOpen) renderPickerResults(); // 다시 그려진 DOM에 캐시된 결과 재부착
   }
 
-  async function populateTargetSelect() {
-    const select = container.querySelector('#lw-targetSelect');
-    if (!select) return;
-    select.innerHTML = `<option value="">불러오는 중…</option>`;
-    let candidates = [];
+  // 연결 대상 찾기 — 검색어가 있으면 통합검색(제목·내용), 없으면 그 타입의 최근 항목.
+  async function runPickerSearch() {
+    const resultsEl = container.querySelector('#lw-results');
+    if (!resultsEl) return;
+    const q = pickerQuery.trim();
+    let rows = [];
     try {
-      candidates = await fetchCandidates(pickerType, hideDoneTodos);
+      if (q) {
+        const hits = await window.itda.search.query({ query: q, type: pickerType, limit: 20 });
+        rows = hits.map((h) => ({ id: h.entity_id, label: h.title || h.content || '(제목 없음)' }));
+      } else {
+        rows = (await fetchCandidates(pickerType, hideDoneTodos)).slice(0, 15);
+      }
     } catch (e) {
       errorToast(e, '목록을 불러오지 못했어요');
     }
     const linkedIds = new Set(links.filter((l) => l.type === pickerType).map((l) => String(l.id)));
-    const filtered = candidates.filter((c) => !(pickerType === self.type && c.id === self.id) && !linkedIds.has(String(c.id)));
-    select.innerHTML = filtered.length
-      ? filtered.map((c) => `<option value="${c.id}">${escapeHtml(c.label)}</option>`).join('')
-      : `<option value="">연결할 수 있는 항목이 없어요</option>`;
+    pickerResults = rows.filter((c) => !(pickerType === self.type && c.id === self.id) && !linkedIds.has(String(c.id)));
+    renderPickerResults();
+  }
+
+  function renderPickerResults() {
+    const el = container.querySelector('#lw-results');
+    if (!el) return;
+    if (!pickerResults.length) {
+      el.innerHTML = `<div class="link-picker-empty">${pickerQuery.trim() ? '검색 결과가 없어요' : '연결할 수 있는 항목이 없어요'}</div>`;
+      return;
+    }
+    el.innerHTML = pickerResults
+      .map(
+        (c) => `<button class="link-picker-row" data-id="${c.id}" type="button">
+          <span class="link-type-icon">${TYPE_EMOJI[pickerType]}</span>
+          <span class="link-picker-row-label">${escapeHtml(plainLabel(c.label))}</span>
+        </button>`
+      )
+      .join('');
+    el.querySelectorAll('.link-picker-row').forEach((b) => {
+      b.addEventListener('click', () => linkTo(Number(b.dataset.id)));
+    });
+  }
+
+  async function linkTo(id) {
+    try {
+      await window.itda.links.add({ aType: self.type, aId: self.id, bType: pickerType, bId: id });
+      toast('연결했어요');
+      pickerOpen = false;
+      pickerQuery = '';
+      await load();
+    } catch (e) {
+      errorToast(e, '연결하지 못했어요');
+    }
   }
 
   function bind() {
@@ -260,8 +303,10 @@ export async function mountLinksWidget(container, self) {
       addBtn.addEventListener('click', () => {
         pickerOpen = true;
         pickerType = Object.keys(LINK_TYPE_LABEL)[0];
+        pickerQuery = '';
         render();
-        populateTargetSelect();
+        runPickerSearch();
+        container.querySelector('#lw-search')?.focus();
       });
     }
 
@@ -269,6 +314,7 @@ export async function mountLinksWidget(container, self) {
     if (cancelBtn) {
       cancelBtn.addEventListener('click', () => {
         pickerOpen = false;
+        pickerQuery = '';
         render();
       });
     }
@@ -277,26 +323,27 @@ export async function mountLinksWidget(container, self) {
     if (typeSelect) {
       typeSelect.addEventListener('change', (e) => {
         pickerType = e.target.value;
-        populateTargetSelect();
+        runPickerSearch();
+        container.querySelector('#lw-search')?.focus();
       });
     }
 
-    const confirmBtn = container.querySelector('#lw-confirm');
-    if (confirmBtn) {
-      confirmBtn.addEventListener('click', async () => {
-        const targetSelect = container.querySelector('#lw-targetSelect');
-        const targetId = targetSelect?.value;
-        if (!targetId) {
-          toast('연결할 항목을 선택해주세요.');
-          return;
-        }
-        try {
-          await window.itda.links.add({ aType: self.type, aId: self.id, bType: pickerType, bId: Number(targetId) });
-          toast('연결했어요');
+    const searchInput = container.querySelector('#lw-search');
+    if (searchInput) {
+      const debouncedPick = debounce(runPickerSearch, 180);
+      searchInput.addEventListener('input', (e) => {
+        pickerQuery = e.target.value;
+        debouncedPick();
+      });
+      // Enter → 결과가 하나뿐이면 바로 연결
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && pickerResults.length === 1) {
+          e.preventDefault();
+          linkTo(pickerResults[0].id);
+        } else if (e.key === 'Escape') {
           pickerOpen = false;
-          await load();
-        } catch (err) {
-          errorToast(err, '연결하지 못했어요');
+          pickerQuery = '';
+          render();
         }
       });
     }

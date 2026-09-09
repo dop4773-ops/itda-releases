@@ -973,8 +973,15 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .link-item-sub{flex-shrink:0;font-size:10px;color:var(--text-faint);}
 .link-add-btn{display:flex;align-items:center;gap:5px;justify-content:center;border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:7px;font-size:11.5px;color:var(--text-faint);background:none;cursor:pointer;}
 .link-add-btn:hover{border-color:var(--brand);color:var(--brand);}
-.link-picker{display:flex;gap:5px;align-items:center;}
-.link-picker .select{flex:1;min-width:0;font-size:11.5px;padding:6px 8px;}
+.link-picker{display:flex;flex-direction:column;gap:6px;}
+.link-picker-top{display:flex;gap:5px;align-items:center;}
+.link-picker-top .select{flex-shrink:0;width:88px;font-size:11.5px;padding:6px 6px;}
+.link-picker-top .input{flex:1;min-width:0;font-size:12px;padding:6px 9px;}
+.link-picker-results{display:flex;flex-direction:column;gap:2px;max-height:210px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:3px;background:var(--surface);}
+.link-picker-row{display:flex;align-items:center;gap:7px;width:100%;padding:7px 8px;border:none;background:none;border-radius:var(--radius-sm);cursor:pointer;text-align:left;font-size:12px;color:var(--text);}
+.link-picker-row:hover{background:var(--brand-soft);color:var(--brand);}
+.link-picker-row-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link-picker-empty{padding:14px 8px;text-align:center;font-size:11.5px;color:var(--text-faint);}
 /* ================= 자동 관련 항목 발견 — "연결을 관리"가 아니라 "발견하게" 해주는 추천 섹션.
    확정된 직접연결(.link-item)과 시각적으로 명확히 구분되도록 점선 테두리 + 옅은 배경을 쓴다(오탐 오인 방지, 문서 6번 요구사항). ================= */
 .links-discover{margin-top:10px;padding-top:10px;border-top:1px dashed var(--divider);display:flex;flex-direction:column;gap:8px;}
@@ -982,8 +989,13 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .links-discover-hint{font-size:10px;font-weight:400;color:var(--text-faint);opacity:.75;}
 .links-discover-group{display:flex;flex-direction:column;gap:4px;}
 .links-discover-group-label{font-size:10.5px;color:var(--text-faint);padding:0 2px;}
-.link-item-suggested .link-item-main{background:transparent;border:1px dashed var(--border);}
+.link-item-suggested .link-item-main{background:transparent;border:1px dashed var(--border);flex-direction:column;align-items:stretch;gap:4px;}
 .link-item-suggested .link-item-main:hover{background:var(--brand-soft);border-color:var(--brand);}
+.link-item-row1{display:flex;align-items:flex-start;gap:6px;}
+.link-item-suggested .link-item-label{white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4;}
+.link-item-row2{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding-left:23px;}
+.link-item-suggested .link-reasons{margin-left:0;}
+.link-item-suggested .link-item-sub{flex-shrink:0;}
 .link-discover-check{flex-shrink:0;width:13px;height:13px;accent-color:var(--brand);cursor:pointer;}
 .link-discover-connect{margin-left:auto;font-size:10.5px;}
 .link-reasons{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:auto;flex-shrink:0;}
@@ -1191,9 +1203,9 @@ a.local-path-link::before{content:"📁 ";text-decoration:none;display:inline-bl
 }
 .date-quick-chip:hover{background:var(--brand-soft);color:var(--brand);border-color:transparent;}
 .ctx-link-popover{
-  position:fixed;z-index:200;width:280px;max-height:340px;overflow-y:auto;
+  position:fixed;z-index:200;width:min(370px, 92vw);max-height:min(440px, 80vh);overflow-y:auto;
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  box-shadow:var(--pop-shadow);padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+  box-shadow:var(--pop-shadow);padding:12px 14px;display:flex;flex-direction:column;gap:8px;
   animation:popIn .11s ease both;transform-origin:top left;
 }
 
