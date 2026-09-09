@@ -43,7 +43,7 @@ function showLockOverlay() {
     overlay.className = 'lock-screen';
     overlay.innerHTML = `
       <div class="lock-card">
-        <div class="lock-logo">잇</div>
+        <img class="lock-logo" src="../build/icons/app-icon.png" alt="잇다" />
         <h2>잠겨 있어요</h2>
         <p>비밀번호를 입력하면 잇다를 열 수 있어요.</p>
         <input type="password" id="lock-passwordInput" class="input" placeholder="비밀번호" autocomplete="current-password" />
