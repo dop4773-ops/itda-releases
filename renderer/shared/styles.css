@@ -207,28 +207,25 @@ html[data-density="comfortable"] .nav-item{padding:11px 12px;}
 .layout-prev-focus i.on{background:var(--brand);opacity:1;}
 .layout-prev-focus i.dim{opacity:.25;}
 
-/* ── "현재 스타일" 라이브 미리보기 — 앱의 실제 토큰(var(--*))을 그대로 써서 테마 변경 시 자동 반영 ── */
-.tlp-frame{display:flex;height:132px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:4px;}
-.tlp-side{width:52px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--divider);padding:9px 7px;display:flex;flex-direction:column;gap:6px;}
-.tlp-logo{width:20px;height:20px;border-radius:var(--radius-sm);background:var(--brand-soft);margin-bottom:2px;}
-.tlp-nav{height:7px;border-radius:var(--radius-xs);background:var(--divider);}
-.tlp-nav.on{background:var(--brand-soft);box-shadow:inset 2px 0 0 var(--brand);}
-.tlp-main{flex:1;min-width:0;padding:10px;display:flex;gap:9px;}
-.tlp-card{flex:1;min-width:0;padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);}
-.tlp-cal{flex:0 0 84px;}
-.tlp-title{height:8px;width:52%;border-radius:var(--radius-xs);background:var(--text);opacity:.82;}
-.tlp-title.s{width:38%;}
-.tlp-todo{display:flex;align-items:center;gap:6px;}
-.tlp-chk{width:9px;height:9px;flex-shrink:0;border-radius:3px;border:1.5px solid var(--border);}
+/* ── "현재 스타일" 라이브 미리보기 — 앱의 실제 토큰(var(--*))을 그대로 써서 테마 변경 시 자동 반영.
+   실제 글자가 들어간 축소판 "할 일" 화면 한 장. */
+.tlp-frame{display:flex;height:118px;max-width:440px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:4px;font-size:9px;line-height:1.3;color:var(--text);}
+.tlp-side{width:60px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--divider);padding:9px 6px;display:flex;flex-direction:column;gap:4px;}
+.tlp-logo{width:18px;height:18px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;margin-bottom:3px;}
+.tlp-nav{padding:3px 5px;border-radius:var(--radius-xs);color:var(--text-faint);font-weight:600;}
+.tlp-nav.on{background:var(--brand-soft);color:var(--brand);box-shadow:inset 2px 0 0 var(--brand);}
+.tlp-main{flex:1;min-width:0;padding:10px;display:flex;}
+.tlp-card{flex:1;min-width:0;padding:9px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:5px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);}
+.tlp-h{font-size:10px;font-weight:800;margin-bottom:1px;}
+.tlp-todo{display:flex;align-items:center;gap:5px;}
+.tlp-chk{width:10px;height:10px;flex-shrink:0;border-radius:3px;border:1.5px solid var(--border);position:relative;}
 .tlp-chk.on{background:var(--brand);border-color:var(--brand);}
-.tlp-txt{flex:1;height:6px;border-radius:var(--radius-xs);background:var(--divider);}
-.tlp-txt.s{max-width:56%;}
-.tlp-actions{display:flex;align-items:center;gap:6px;margin-top:auto;}
-.tlp-input{flex:1;height:15px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);}
-.tlp-btn{width:36px;height:15px;border-radius:var(--radius-sm);background:var(--brand);}
-.tlp-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:2px;}
-.tlp-cal-grid i{aspect-ratio:1;border-radius:2px;background:var(--divider);}
-.tlp-cal-grid i:nth-child(10){background:var(--brand);}
+.tlp-chk.on::after{content:"";position:absolute;left:2.5px;top:1px;width:3px;height:5px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg);}
+.tlp-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tlp-t.done{color:var(--text-faint);text-decoration:line-through;}
+.tlp-actions{display:flex;align-items:center;gap:5px;margin-top:auto;}
+.tlp-input{flex:1;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);color:var(--text-faint);overflow:hidden;white-space:nowrap;}
+.tlp-btn{flex-shrink:0;padding:3px 8px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;font-weight:700;border:0;font-size:9px;}
 .tlp-label{margin-top:9px;font-size:11.5px;font-weight:600;color:var(--text-soft);}
 .tlp-label b{color:var(--brand);}
 
@@ -1539,7 +1536,7 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-widget[data-cardtheme="dark"]{--card-bg:#26262e;--surface:#26262e;--bg:#1f1f26;--border:#3a3a44;--divider:#33333d;--text:#e8e8ee;--text-soft:#b6b6c2;--text-faint:#83838f;color:#e8e8ee;}
 .dash-widget[data-cardtheme="dark"] h3,.dash-widget[data-cardtheme="dark"] h4,.dash-widget[data-cardtheme="dark"] b,
 .dash-widget[data-cardtheme="dark"] a,.dash-widget[data-cardtheme="dark"] .btn-icon,.dash-widget[data-cardtheme="dark"] .txt{color:#e8e8ee;}
-.dash-block[data-cardtheme="dark"] .dash-block-body,.dash-block[data-cardtheme="dark"] .link-block-row,.dash-block[data-cardtheme="dark"] .link-block-title{color:#e8e8ee;}
+.dash-block[data-cardtheme="dark"] .dash-block-body,.dash-block[data-cardtheme="dark"] .link-card,.dash-block[data-cardtheme="dark"] .link-block-title{color:#e8e8ee;}
 .dash-widget[data-cardtheme="glass"]{--dash-op:.45;}
 .dash-widget[data-cardtheme="yellow"]{--card-bg:#fff6d9;--surface:#fff6d9;--bg:#fdefc4;--border:#efe0a4;--divider:#f2e6b8;}
 .dash-widget[data-cardtheme="blue"]{--card-bg:#e8f0ff;--surface:#e8f0ff;--bg:#dae7fb;--border:#c6d8f4;--divider:#d5e2f7;}
@@ -1826,18 +1823,28 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-block[data-block="progressRing"]{overflow:hidden;}
 .link-block::-webkit-scrollbar{width:0;height:0;}
 .link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:8px;}
-.link-block-list{display:flex;flex-direction:column;gap:2px;}
-.link-block-row{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;text-decoration:none;color:var(--text);font-size:12.5px;}
-.link-block-row:hover{background:var(--bg);}
-.link-block-icon{font-size:16px;flex-shrink:0;line-height:1;}
-.link-block-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.link-block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(60px,1fr));gap:8px;}
-.link-tile{display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px;border-radius:12px;text-decoration:none;color:var(--text-soft);font-size:10.5px;text-align:center;background:var(--bg);border:1px solid var(--border);}
-.link-tile:hover{border-color:var(--brand);color:var(--brand);}
-/* href 없는 로컬 경로 바로가기(a.is-local-path)도 링크처럼 손 커서 */
-.link-block-row.is-local-path,.link-tile.is-local-path{cursor:pointer;}
-.lt-icon{font-size:24px;line-height:1;}
-.lt-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+.link-block-list{display:flex;flex-direction:column;gap:6px;}
+.link-block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;}
+/* 링크 카드: 컬러 아이콘 타일 + 제목 + 부제(도메인/경로) + 우상단 외부링크 표시 */
+.link-card{position:relative;display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:12px;text-decoration:none;color:var(--text);background:var(--bg);border:1px solid var(--border);transition:border-color .12s,background .12s;}
+.link-card:hover{background:var(--surface);border-color:var(--brand);}
+.link-card.is-local-path{cursor:pointer;}
+.lb-tile{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex-shrink:0;border-radius:9px;background:var(--lb-bg,#EAF0FF);color:var(--lb-fg,#3B6FE0);overflow:hidden;}
+.lb-tile .lb-ico{font-size:15px;font-weight:700;line-height:1;}
+.lb-fav{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
+.lb-body{display:flex;flex-direction:column;gap:1px;min-width:0;}
+.lb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-sub{font-size:10.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-ext{position:absolute;top:6px;right:8px;color:var(--text-faint);font-size:11px;opacity:0;transition:opacity .12s;}
+.lb-ext::before{content:"\2197";}
+.link-card:hover .lb-ext{opacity:.75;}
+/* 격자뷰: 세로 카드, 부제·외부표시 없음 */
+.lb-grid .link-card{flex-direction:column;gap:6px;padding:11px 6px;text-align:center;}
+.lb-grid .lb-tile{width:34px;height:34px;}
+.lb-grid .lb-tile .lb-ico{font-size:17px;}
+.lb-grid .lb-fav{width:20px;height:20px;}
+.lb-grid .lb-body{align-items:center;}
+.lb-grid .lb-ext{display:none;}
 
 /* 사진 블록 */
 .image-block{margin:0;width:100%;height:100%;display:flex;flex-direction:column;}
@@ -1860,16 +1867,12 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .clk-led-ghost{position:absolute;color:rgba(255,60,60,.12);}
 .clk-led-time{position:relative;color:#ff3b3b;text-shadow:0 0 10px rgba(255,59,59,.7),0 0 22px rgba(255,59,59,.35);}
 
-/* 링크 favicon — 대부분 흰 배경 전제로 디자인된 아이콘이라, 다크모드/어두운 카드에선
-   검은 로고가 배경에 묻혀 안 보인다. 항상 흰 칩 위에 얹어서 밝기와 무관하게 보이게 한다
-   (라이트모드에선 카드도 흰색이라 티가 안 남). */
-.lb-fav{width:16px;height:16px;object-fit:contain;flex-shrink:0;background:#fff;border-radius:4px;padding:1px;box-sizing:border-box;}
-.link-tile .lb-fav{width:24px;height:24px;padding:2px;}
 /* 이모지 아이콘(📁 🔗 등)은 윈도우에서 앱 폰트로 폴백하면 흑백 글리프로 나올 수 있어
    컬러 이모지 폰트를 명시(날씨 아이콘과 동일 처리). */
-.lt-icon,.link-block-icon,.lb-ico{display:inline-flex;align-items:center;justify-content:center;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;}
-/* 다크 카드 테마에서 격자뷰 라벨도 밝게(리스트뷰 .link-block-row는 이미 처리됨) */
-.dash-block[data-cardtheme="dark"] .link-tile,.dash-block[data-cardtheme="dark"] .lt-label{color:#e8e8ee;}
+.lb-ico{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",sans-serif;}
+/* 다크 카드 테마에서 카드 라벨도 밝게 */
+.dash-block[data-cardtheme="dark"] .link-card,.dash-block[data-cardtheme="dark"] .lb-name{color:#e8e8ee;}
+.dash-block[data-cardtheme="dark"] .link-card{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14);}
 /* 링크/바로가기 블록은 다크모드에서도 라이트모드처럼 보이게 — 디자인 토큰을 라이트값으로
    덮어써서 흰 카드 + 짙은 글자로. favicon(흰 배경 전제 아이콘)이 묻히는 문제를 근본적으로
    피한다. 사용자가 카드 테마를 직접 'dark'로 고른 경우는 예외(그건 의도한 것). */

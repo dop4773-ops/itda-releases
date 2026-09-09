@@ -68,18 +68,19 @@ export async function mount(root, initialTab) {
             <p class="settings-panel-desc">지금 적용된 테마·강조색·레이아웃이 실제로 어떻게 보이는지예요.</p>
             <div class="tlp-frame" id="theme-livePreview" aria-hidden="true">
               <div class="tlp-side">
-                <div class="tlp-logo"></div>
-                <span class="tlp-nav on"></span><span class="tlp-nav"></span><span class="tlp-nav"></span><span class="tlp-nav"></span>
+                <div class="tlp-logo">잇</div>
+                <span class="tlp-nav on">할 일</span>
+                <span class="tlp-nav">일정</span>
+                <span class="tlp-nav">메모</span>
               </div>
               <div class="tlp-main">
                 <div class="panel tlp-card">
-                  <div class="tlp-title"></div>
-                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-txt"></span></div>
-                  <div class="tlp-todo"><span class="tlp-chk on"></span><span class="tlp-txt s"></span></div>
-                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-txt"></span></div>
-                  <div class="tlp-actions"><span class="tlp-input"></span><span class="tlp-btn"></span></div>
+                  <div class="tlp-h">오늘 할 일</div>
+                  <div class="tlp-todo"><span class="tlp-chk on"></span><span class="tlp-t done">회의 자료 정리</span></div>
+                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-t">비품 신청서 제출</span></div>
+                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-t">교육 일정 확인</span></div>
+                  <div class="tlp-actions"><span class="tlp-input">할 일 추가…</span><span class="tlp-btn">추가</span></div>
                 </div>
-                <div class="panel tlp-card tlp-cal"><div class="tlp-title s"></div><div class="tlp-cal-grid">${'<i></i>'.repeat(21)}</div></div>
               </div>
             </div>
             <div class="tlp-label" id="theme-liveLabel"></div>

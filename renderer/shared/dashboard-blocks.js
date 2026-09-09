@@ -326,13 +326,34 @@ const PAINTERS = {
   link(c) {
     const layout = c.layout === 'grid' ? 'grid' : 'list';
     const items = Array.isArray(c.items) ? c.items : [];
-    const iconCell = (it) => {
-      // 아이콘을 안 넣었고 http(s) 주소면 사이트 favicon 자동 표시(로드 실패하면 기본 아이콘).
+    // 라벨+URL 해시로 카드 색(파스텔 배경 / 진한 아이콘색)을 고정 배정 — 아이콘이 없어도
+    // 카드마다 다른 색이 붙어 목록이 한눈에 구분된다.
+    const PALETTE = [
+      ['#EAF0FF', '#3B6FE0'], ['#E8F6EE', '#2E9E5B'], ['#FDEDE7', '#D9683B'],
+      ['#F1ECFB', '#7C4DD0'], ['#FCF3E1', '#B9832A'], ['#E5F5F6', '#2A939C'],
+    ];
+    const pick = (s) => {
+      let h = 0;
+      for (let i = 0; i < s.length; i += 1) h = (h * 31 + s.charCodeAt(i)) | 0;
+      return PALETTE[Math.abs(h) % PALETTE.length];
+    };
+    // 부제: 웹은 도메인, 로컬은 경로. 없으면 안 그림.
+    const subOf = (it) => {
+      const u = it.url || '';
+      if (/^https?:\/\//i.test(u)) {
+        try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; }
+      }
+      if (LOCAL_PATH_PATTERN.test(u)) return u.replace(/^file:\/\/\/?/i, '');
+      return u;
+    };
+    const iconGlyph = (it) => {
+      // 아이콘을 안 넣었고 http(s) 주소면 사이트 favicon 자동 표시(로드 실패하면 이니셜).
       const isWeb = /^https?:\/\//i.test(it.url || '');
       if (!it.icon && isWeb) {
         try {
           const host = new URL(it.url).hostname;
-          return `<span class="lb-ico">🔗</span><img class="lb-fav" data-fav="${escapeHtml(host)}" alt="" style="display:none" />`;
+          const initial = ((it.label || host).trim().charAt(0) || '·').toUpperCase();
+          return `<span class="lb-ico">${escapeHtml(initial)}</span><img class="lb-fav" data-fav="${escapeHtml(host)}" alt="" style="display:none" />`;
         } catch (e) {
           /* 잘못된 URL */
         }
@@ -343,19 +364,21 @@ const PAINTERS = {
     const rows = items
       .map((it) => {
         const url = it.url || '';
+        const [bg, fg] = pick(`${it.label || ''}|${url}`);
         const label = escapeHtml(it.label || url || '링크');
+        const sub = layout === 'list' ? escapeHtml(subOf(it)) : '';
+        const isLocal = LOCAL_PATH_PATTERN.test(url);
         const inner =
-          layout === 'grid'
-            ? `<span class="lt-icon">${iconCell(it)}</span><span class="lt-label">${label}</span>`
-            : `<span class="link-block-icon">${iconCell(it)}</span><span class="link-block-label">${label}</span>`;
-        const cls = layout === 'grid' ? 'link-tile' : 'link-block-row';
+          `<span class="lb-tile" style="--lb-bg:${bg};--lb-fg:${fg}">${iconGlyph(it)}</span>` +
+          `<span class="lb-body"><span class="lb-name">${label}</span>${sub ? `<span class="lb-sub">${sub}</span>` : ''}</span>` +
+          '<span class="lb-ext" aria-hidden="true"></span>';
         // 로컬 경로(C:\ · C:/ · \\서버 · file://)는 href에 넣으면 브라우저가 스킴 소문자화·
         // 퍼센트인코딩(한글!)으로 망가뜨려 열기가 실패한다 — data-local-path에 원문 그대로 담고
         // 클릭 시 IPC(app:openPath)로 연다. (메모/포스트잇 본문의 linkifyUrls와 동일한 방식.)
-        if (LOCAL_PATH_PATTERN.test(url)) {
-          return `<a class="${cls} is-local-path" role="link" data-local-path="${escapeHtml(url)}">${inner}</a>`;
+        if (isLocal) {
+          return `<a class="link-card is-local-path" role="link" data-local-path="${escapeHtml(url)}">${inner}</a>`;
         }
-        return `<a class="${cls}" href="${escapeHtml(url || '#')}" target="_blank" rel="noopener">${inner}</a>`;
+        return `<a class="link-card" href="${escapeHtml(url || '#')}" target="_blank" rel="noopener">${inner}</a>`;
       })
       .join('');
     return `<div class="link-block lb-${layout}">
