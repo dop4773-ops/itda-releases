@@ -448,7 +448,16 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
 - 우측 상시 프리뷰 패널(목업)은 설정 레이아웃 개편이 커서 안 함 — 상단 배치로 대체.
 - CDP: 프리뷰 존재 / Paper 선택 시 배경 변화 / 그린 강조색 시 버튼색 변화 / 라벨 갱신 검증. 66/66, lint 0.
 
-**Phase 3**(내 프리셋 저장/불러오기 + 기본 프리셋 원클릭) 예정.
+## 디자인 시스템 개편 Phase 3 — 내 프리셋 (v2.66.3)
+- 설정 > 화면에 "내 프리셋" 패널. 클릭 한 번으로 테마+강조색+레이아웃+세부디자인(border/radius/shadow/density) 전부 적용.
+- **기본 프리셋 4개**(저장 안 함, 상수): 업무 집중형(Pure·블루·Dense·약한그림자) / 편안한 업무공간(Soft·그린·Standard) /
+  개인 공간(Paper·오렌지·Spacious·여유) / 야간 집중(Midnight·블루·Dense·그림자없음).
+- **현재 설정 저장**: 인라인 이름 입력(`prompt()` 안 씀) → `app_settings.design_presets`(JSON 배열, 최대 12). 삭제 `✕`.
+- `applyPreset()`이 설정 키들 세팅 후 `setUiTheme`/`setUiAdjust`로 재적용 + 관련 패널 다시 그림.
+  현재 조합과 일치하는 프리셋은 하이라이트(`same()`).
+- CDP: 4프리셋 렌더 / 야간집중 적용 시 midnight+dark+dense+shadow:none 세팅 / 저장·삭제 플로우. 66/66, lint 0.
+
+**Phase 1~3으로 디자인 시스템 개편 완료.** 남은 것(선택): Soft/Paper/Studio의 다크 변형, 우측 상시 프리뷰 패널, 테마별 dark-accent 튜닝.
 
 ## 연결 위젯 인라인 미리보기 + 대시보드 방향키 (v2.65.7)
 - **연결/관련 항목 행 클릭 → 화면 이동 대신 그 자리에서 아코디언 미리보기** (`links-ui.js`).

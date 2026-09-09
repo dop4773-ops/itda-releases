@@ -130,6 +130,15 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>내 프리셋</h3></div>
+            <p class="settings-panel-desc">테마·강조색·레이아웃·세부 디자인을 한 번에 적용해요. 아래 "현재 설정 저장"으로 나만의 조합도 만들 수 있어요.</p>
+            <div class="preset-list" id="theme-presetList"></div>
+            <div class="preset-save-row" id="theme-presetSaveRow">
+              <button class="btn-secondary" id="theme-presetSaveBtn">＋ 현재 설정 저장</button>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>사이드바</h3></div>
             <p class="settings-panel-desc">프로그램 통일성을 유지하는 범위에서 사이드바를 개인화해요. 메뉴 순서 변경·즐겨찾기 고정은 준비 중이에요.</p>
             <div class="update-row">
@@ -815,6 +824,109 @@ export async function mount(root, initialTab) {
     });
   }
 
+  // ================= 내 프리셋 (테마+강조색+레이아웃+세부디자인 한 번에) =================
+  const PRESET_KEY = 'design_presets';
+  const BUILTIN_PRESETS = [
+    { name: '업무 집중형', theme: 'pure', accent: '', layout: 'dense', border: 'default', radius: 'default', shadow: 'soft', density: 'default' },
+    { name: '편안한 업무공간', theme: 'soft', accent: 'green', layout: 'standard', border: 'default', radius: 'round', shadow: 'default', density: 'default' },
+    { name: '개인 공간', theme: 'paper', accent: 'amber', layout: 'spacious', border: 'default', radius: 'default', shadow: 'default', density: 'comfortable' },
+    { name: '야간 집중', theme: 'midnight', accent: '', layout: 'dense', border: 'default', radius: 'default', shadow: 'none', density: 'default' },
+  ];
+  async function getSavedPresets() {
+    try {
+      const arr = JSON.parse((await window.itda.settings.get(PRESET_KEY)) || '[]');
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  async function currentDesign() {
+    return {
+      theme: await getUiTheme(),
+      accent: (await window.itda.settings.get('app_theme')) || '',
+      layout: DASH_STYLE_MIGRATE[(await window.itda.settings.get('dashboard_style_preset')) || 'standard'] || (await window.itda.settings.get('dashboard_style_preset')) || 'standard',
+      border: await getUiAdjust('border'),
+      radius: await getUiAdjust('radius'),
+      shadow: await getUiAdjust('shadow'),
+      density: await getUiAdjust('density'),
+    };
+  }
+  async function applyPreset(p) {
+    await window.itda.settings.set({ key: 'app_theme', value: p.accent || '' });
+    await window.itda.settings.set({ key: 'dashboard_style_preset', value: p.layout || 'standard' });
+    for (const k of ['border', 'radius', 'shadow', 'density']) {
+      if (p[k]) await setUiAdjust(k, p[k]);
+    }
+    await setUiTheme(p.theme || 'pure');
+    $('app-themeSwatches')?.querySelectorAll('[data-app-theme]').forEach((x) => x.classList.toggle('active', x.dataset.appTheme === (p.accent || '')));
+    const dt = $('theme-darkToggle');
+    if (dt) dt.checked = document.documentElement.dataset.theme === 'dark';
+    await initThemeDesignPanel(); // 테마 카드 · 세부 seg · 라이브 라벨 다시 그림
+    await initPresetPanel();
+    toast(`"${p.name}" 스타일을 적용했어요`);
+  }
+  async function initPresetPanel() {
+    const list = $('theme-presetList');
+    if (!list) return;
+    const saved = await getSavedPresets();
+    const cur = await currentDesign();
+    const same = (p) => p.theme === cur.theme && (p.accent || '') === cur.accent && (p.layout || 'standard') === cur.layout && p.border === cur.border && p.radius === cur.radius && p.shadow === cur.shadow && p.density === cur.density;
+    const chip = (p, i, custom) => `
+      <button type="button" class="preset-chip ${same(p) ? 'active' : ''}" data-preset="${custom ? 'c' : 'b'}:${i}">
+        <b>${escapeHtml(p.name)}</b>
+        <span>${escapeHtml((UI_THEMES.find((t) => t.id === p.theme) || {}).label || p.theme)} · ${escapeHtml((APP_THEMES.find((a) => a.id === (p.accent || '')) || APP_THEMES[0]).label)}</span>
+        ${custom ? `<i class="preset-del" data-del="${i}" title="삭제">✕</i>` : ''}
+      </button>`;
+    list.innerHTML =
+      BUILTIN_PRESETS.map((p, i) => chip(p, i, false)).join('') +
+      saved.map((p, i) => chip(p, i, true)).join('');
+    list.querySelectorAll('[data-preset]').forEach((b) => {
+      b.addEventListener('click', async (e) => {
+        if (e.target.closest('.preset-del')) return;
+        const [kind, idx] = b.dataset.preset.split(':');
+        const p = kind === 'b' ? BUILTIN_PRESETS[Number(idx)] : (await getSavedPresets())[Number(idx)];
+        if (p) await applyPreset(p);
+      });
+    });
+    list.querySelectorAll('.preset-del').forEach((x) => {
+      x.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const next = (await getSavedPresets()).filter((_, i) => i !== Number(x.dataset.del));
+        await window.itda.settings.set({ key: PRESET_KEY, value: JSON.stringify(next) });
+        await initPresetPanel();
+      });
+    });
+  }
+  function initPresetSave() {
+    const row = $('theme-presetSaveRow');
+    const btn = $('theme-presetSaveBtn');
+    if (!row || !btn) return;
+    btn.addEventListener('click', () => {
+      if (row.querySelector('input')) return;
+      btn.hidden = true;
+      const form = document.createElement('div');
+      form.className = 'preset-save-form';
+      form.innerHTML = `<input type="text" class="input" maxlength="16" placeholder="프리셋 이름" /><button class="btn" data-ok>저장</button><button class="btn-secondary" data-cancel>취소</button>`;
+      row.appendChild(form);
+      const input = form.querySelector('input');
+      input.focus();
+      const close = () => { form.remove(); btn.hidden = false; };
+      form.querySelector('[data-cancel]').addEventListener('click', close);
+      const save = async () => {
+        const name = input.value.trim();
+        if (!name) return input.focus();
+        const saved = await getSavedPresets();
+        saved.push({ name, ...(await currentDesign()) });
+        await window.itda.settings.set({ key: PRESET_KEY, value: JSON.stringify(saved.slice(0, 12)) });
+        close();
+        await initPresetPanel();
+        toast('프리셋을 저장했어요');
+      };
+      form.querySelector('[data-ok]').addEventListener('click', save);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') close(); });
+    });
+  }
+
   // "현재 스타일" 라벨 — 테마 · 강조색 · 레이아웃 이름
   async function refreshLiveLabel() {
     const el = $('theme-liveLabel');
@@ -872,14 +984,21 @@ export async function mount(root, initialTab) {
       });
     });
 
+    const onAdjust = (name) => async (v) => {
+      await setUiAdjust(name, v);
+      refreshLiveLabel();
+      initPresetPanel();
+    };
     segRow('theme-borderSeg', await getUiAdjust('border'),
-      [['default', '기본'], ['strong', '강조'], ['black', '검정']], (v) => setUiAdjust('border', v));
+      [['default', '기본'], ['strong', '강조'], ['black', '검정']], onAdjust('border'));
     segRow('theme-radiusSeg', await getUiAdjust('radius'),
-      [['sharp', '각지게'], ['default', '기본'], ['round', '둥글게']], (v) => setUiAdjust('radius', v));
+      [['sharp', '각지게'], ['default', '기본'], ['round', '둥글게']], onAdjust('radius'));
     segRow('theme-shadowSeg', await getUiAdjust('shadow'),
-      [['none', '없음'], ['soft', '약하게'], ['default', '기본'], ['strong', '강하게']], (v) => setUiAdjust('shadow', v));
+      [['none', '없음'], ['soft', '약하게'], ['default', '기본'], ['strong', '강하게']], onAdjust('shadow'));
     segRow('theme-densitySeg', await getUiAdjust('density'),
-      [['comfortable', '여유롭게'], ['default', '기본'], ['compact', '촘촘하게']], (v) => setUiAdjust('density', v));
+      [['comfortable', '여유롭게'], ['default', '기본'], ['compact', '촘촘하게']], onAdjust('density'));
+
+    initPresetPanel(); // 현재 조합에 맞는 프리셋 하이라이트
   }
 
   // ================= 사이드바 개인화 =================
@@ -2041,6 +2160,8 @@ export async function mount(root, initialTab) {
   await initUserPanel();
   await initDisplayPanel();
   await initThemeDesignPanel();
+  await initPresetPanel();
+  initPresetSave();
   await initSidebarPanel();
   await initDashboardCardsPanel();
   const unmountTagsPanel = await mountTagsPanel($('tags-panelRoot'));
