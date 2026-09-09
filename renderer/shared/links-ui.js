@@ -1,5 +1,6 @@
 import { escapeHtml, errorToast, toast, isUserTyping, debounce } from './ui-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
+import { eventDateLabel } from './quick-find-core.js';
 
 export const LINK_TYPE_LABEL = { todo: 'Todo', event: '일정', memo: '메모', postit: '포스트잇', inbox: 'Inbox' };
 export const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo', postit: '#/postit', inbox: '#/inbox' };
@@ -16,10 +17,10 @@ export function plainLabel(label) {
   return text ? text.slice(0, 40) : '(제목 없음)';
 }
 
-// 연결된 항목 미리보기에 붙일 부가 정보(마감일/시작시간 등). 타입별로 필드가 달라서 여기서 통일한다.
+// 연결된 항목 미리보기에 붙일 부가 정보(마감일/시작일 등). 타입별로 필드가 달라서 여기서 통일한다.
 function subtitleFor(item) {
   if (item.type === 'todo') return item.due_date ? `마감 ${item.due_date}` : '';
-  if (item.type === 'event') return item.start_at ? item.start_at.replace(' ', ' · ').slice(0, 16) : '';
+  if (item.type === 'event') return eventDateLabel(item.start_at); // "2026. 9. 10 (수) 14:00"
   return '';
 }
 
@@ -105,6 +106,7 @@ export async function mountLinksWidget(container, self) {
         <a class="link-item-main" href="${TYPE_ROUTE[d.type]}/${d.id}">
           <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
           <span class="link-item-label">${escapeHtml(plainLabel(d.label))}</span>
+          ${d.type === 'event' && d.refDate ? `<span class="link-item-sub">${escapeHtml(eventDateLabel(d.refDate))}</span>` : ''}
           ${badges ? `<span class="link-reasons">${badges}</span>` : ''}
         </a>
         <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>

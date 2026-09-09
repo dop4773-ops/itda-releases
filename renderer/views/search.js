@@ -15,16 +15,22 @@ async function getRecentQueries() {
     return [];
   }
 }
+async function saveRecent(list) {
+  try {
+    await window.itda.settings.set({ key: RECENT_KEY, value: JSON.stringify(list.slice(0, 8)) });
+  } catch (e) {
+    /* 저장 실패해도 검색엔 지장 없음 */
+  }
+}
 async function recordRecentQuery(q) {
   const t = q.trim();
   if (!t) return;
   const cur = await getRecentQueries();
-  const next = [t, ...cur.filter((s) => s.toLowerCase() !== t.toLowerCase())].slice(0, 8);
-  try {
-    await window.itda.settings.set({ key: RECENT_KEY, value: JSON.stringify(next) });
-  } catch (e) {
-    /* 저장 실패해도 검색엔 지장 없음 */
-  }
+  await saveRecent([t, ...cur.filter((s) => s.toLowerCase() !== t.toLowerCase())]);
+}
+async function removeRecentQuery(q) {
+  const cur = await getRecentQueries();
+  await saveRecent(cur.filter((s) => s !== q));
 }
 
 const SEARCH_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>`;
@@ -195,7 +201,7 @@ export async function mount(root) {
         <div class="search-start-block">
           <div class="search-start-head">최근 검색 <button class="btn-link" id="s-clearRecent">지우기</button></div>
           <div class="search-recent-chips">
-            ${recentQ.map((q) => `<button class="search-recent-chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('')}
+            ${recentQ.map((q) => `<span class="search-recent-chip" data-q="${escapeHtml(q)}"><span class="src-q">${escapeHtml(q)}</span><button class="src-x" data-del="${escapeHtml(q)}" title="이 검색어 삭제">${CLOSE_ICON}</button></span>`).join('')}
           </div>
         </div>` : ''}
       ${recentItems.length ? `
@@ -204,15 +210,23 @@ export async function mount(root) {
           <div>${recentItems.map((r) => startRow(r)).join('')}</div>
         </div>` : ''}
     `;
-    resultsEl.querySelectorAll('.search-recent-chip').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        $('s-input').value = btn.dataset.q;
+    resultsEl.querySelectorAll('.search-recent-chip').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
+        if (e.target.closest('.src-x')) return;
+        $('s-input').value = chip.dataset.q;
         $('s-clear').hidden = false;
-        runSearch(btn.dataset.q);
+        runSearch(chip.dataset.q);
+      });
+    });
+    resultsEl.querySelectorAll('.src-x').forEach((x) => {
+      x.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await removeRecentQuery(x.dataset.del);
+        renderPrompt();
       });
     });
     $('s-clearRecent')?.addEventListener('click', async () => {
-      try { await window.itda.settings.set({ key: RECENT_KEY, value: '[]' }); } catch (e) { /* noop */ }
+      await saveRecent([]);
       renderPrompt();
     });
     resultsEl.querySelectorAll('.s-row').forEach(wireRowOpen);

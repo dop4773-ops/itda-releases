@@ -2133,8 +2133,12 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .search-start-head{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text-soft);margin-bottom:9px;}
 .search-start-head .btn-link{font-size:11px;font-weight:500;margin-left:auto;}
 .search-recent-chips{display:flex;flex-wrap:wrap;gap:6px;}
-.search-recent-chip{font-size:12px;padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);cursor:pointer;}
-.search-recent-chip:hover{border-color:var(--brand);color:var(--brand);}
+.search-recent-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;padding:4px 5px 4px 11px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text);cursor:pointer;}
+.search-recent-chip:hover{border-color:var(--brand);}
+.search-recent-chip:hover .src-q{color:var(--brand);}
+.src-x{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border:none;background:none;color:var(--text-faint);cursor:pointer;border-radius:50%;padding:0;}
+.src-x svg{width:9px;height:9px;}
+.src-x:hover{background:var(--divider);color:var(--text);}
 
 /* 유형 탭 */
 .search-type-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;margin-bottom:6px;}

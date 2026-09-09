@@ -69,20 +69,21 @@ test('태그명 대소문자 무관', () => {
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 function eventDateLabel(startAt, allDay) {
   if (!startAt) return '';
-  const d = new Date(String(startAt).replace(' ', 'T'));
+  const s = String(startAt).replace(' ', 'T');
+  const hasTime = /T\d{2}:\d{2}/.test(s);
+  const d = new Date(hasTime ? s : s.slice(0, 10) + 'T00:00:00');
   if (isNaN(d.getTime())) return '';
-  const now = new Date();
-  const yr = d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}. ` : '';
-  const md = `${yr}${d.getMonth() + 1}/${d.getDate()} (${WD[d.getDay()]})`;
-  if (allDay) return md;
+  const md = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${WD[d.getDay()]})`;
+  if (allDay || !hasTime) return md;
   return `${md} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-test('eventDateLabel: 시간 있으면 HH:MM, 종일이면 날짜만, 다른 해면 연도', () => {
-  const thisYear = new Date().getFullYear();
-  assert.equal(eventDateLabel(`${thisYear}-09-10 14:05`, false), `9/10 (${WD[new Date(`${thisYear}-09-10T14:05`).getDay()]}) 14:05`);
-  assert.equal(eventDateLabel(`${thisYear}-09-10 00:00`, true), `9/10 (${WD[new Date(`${thisYear}-09-10T00:00`).getDay()]})`);
-  assert.ok(eventDateLabel('2099-01-02 09:00', false).startsWith('2099. 1/2 '));
+test('eventDateLabel: 연월일 + 요일, 시간 있으면 HH:MM, 날짜만이면 날짜만', () => {
+  const wd = (s) => WD[new Date(s).getDay()];
+  assert.equal(eventDateLabel('2026-09-10 14:05', false), `2026. 9. 10 (${wd('2026-09-10T14:05')}) 14:05`);
+  assert.equal(eventDateLabel('2026-09-10 00:00', true), `2026. 9. 10 (${wd('2026-09-10T00:00')})`);
+  assert.equal(eventDateLabel('2026-09-10', false), `2026. 9. 10 (${wd('2026-09-10T00:00:00')})`, '날짜만 주면 시간 없이');
+  assert.equal(eventDateLabel('2099-01-02 09:00', false), `2099. 1. 2 (${wd('2099-01-02T09:00')}) 09:00`);
   assert.equal(eventDateLabel('', false), '');
   assert.equal(eventDateLabel('nope', false), '');
 });

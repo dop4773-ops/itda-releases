@@ -48,16 +48,16 @@ export function parseQuery(raw, tagNames = []) {
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
-// 일정(event) 검색 결과에 곁들이는 날짜 라벨 — "9/10 (수)" / 시간 있으면 "9/10 (수) 14:00".
-// 다른 해면 "2027. 3/5 (금)".
+// 일정(event) 날짜 라벨 — 연월일 + 요일. "2026. 9. 10 (수)" / 시간이 있으면 "… 14:00".
+// startAt은 'YYYY-MM-DD HH:MM' 또는 날짜만('YYYY-MM-DD') 둘 다 받는다.
 export function eventDateLabel(startAt, allDay) {
   if (!startAt) return '';
-  const d = new Date(String(startAt).replace(' ', 'T'));
+  const s = String(startAt).replace(' ', 'T');
+  const hasTime = /T\d{2}:\d{2}/.test(s);
+  const d = new Date(hasTime ? s : s.slice(0, 10) + 'T00:00:00');
   if (isNaN(d.getTime())) return '';
-  const now = new Date();
-  const yr = d.getFullYear() !== now.getFullYear() ? `${d.getFullYear()}. ` : '';
-  const md = `${yr}${d.getMonth() + 1}/${d.getDate()} (${WD[d.getDay()]})`;
-  if (allDay) return md;
+  const md = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()} (${WD[d.getDay()]})`;
+  if (allDay || !hasTime) return md;
   return `${md} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 

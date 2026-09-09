@@ -212,6 +212,7 @@ module.exports = function createLinksRepository(db, search) {
             type: c.type,
             id: c.id,
             label: plain(c.title) || plain(c.content).slice(0, 60) || '(제목 없음)',
+            refDate: c.refDate || null, // 일정이면 시작일(YYYY-MM-DD) — UI가 "연월일 (요일)"로 표시
             score,
             reasons,
           });
