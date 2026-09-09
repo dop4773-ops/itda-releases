@@ -88,11 +88,35 @@ const TYPE_META = {
 };
 
 function greetingByHour(hour) {
-  // 윈도우 Segoe UI Emoji에서 흑백으로 렌더되던 ☀️/🌤️ 대신 항상 컬러로 나오는 이모지로 교체
-  if (hour < 6) return { icon: '🌙', text: '늦은 밤이네요' };
-  if (hour < 12) return { icon: '🌅', text: '좋은 아침입니다' };
-  if (hour < 18) return { icon: '🌞', text: '좋은 오후입니다' };
-  return { icon: '🌆', text: '수고 많으셨어요' };
+  // 윈도우 Segoe UI Emoji에서 흑백으로 렌더되던 ☀️/🌤️ 대신 항상 컬러로 나오는 이모지로 교체.
+  // subs: 상단 인사말 아래 한 줄 — 시간대별 여러 개 중 날짜로 골라 매일 바뀐다(하루 안에선 고정).
+  if (hour < 6) {
+    return {
+      icon: '🌙', text: '늦은 밤이네요',
+      subs: ['무리하지 말고 오늘은 여기까지 해요', '늦게까지 고생이 많아요', '잠깐 쉬어가도 괜찮아요'],
+    };
+  }
+  if (hour < 12) {
+    return {
+      icon: '🌅', text: '좋은 아침입니다',
+      subs: ['오늘 하루도 잘 부탁해요 💪', '가벼운 마음으로 시작해봐요', '커피 한 잔 하고 천천히 시작해요 ☕', '오늘도 좋은 하루 되세요'],
+    };
+  }
+  if (hour < 18) {
+    return {
+      icon: '🌞', text: '좋은 오후입니다',
+      subs: ['조금만 더 힘내요 💪', '여기까지 잘 오고 있어요', '한 숨 돌리고 계속해봐요', '남은 오후도 화이팅이에요'],
+    };
+  }
+  return {
+    icon: '🌆', text: '수고 많으셨어요',
+    subs: ['오늘도 고생 많으셨어요', '마무리 잘 하고 푹 쉬어요', '오늘 하루도 충분히 잘했어요', '내일은 내일의 몫이니 이제 쉬어요'],
+  };
+}
+
+// 올해 1월 1일 기준 며칠째 — 인사말 문구를 날짜로 고르는 데 쓴다.
+function dayOfYear(d) {
+  return Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
 }
 
 function formatDateLabel(d) {
@@ -108,6 +132,7 @@ function isSameDate(a, b) {
 export async function mount(root) {
   const now = new Date();
   const greeting = greetingByHour(now.getHours());
+  const greetingSub = greeting.subs[dayOfYear(now) % greeting.subs.length];
   let viewDate = new Date();
   viewDate.setHours(0, 0, 0, 0);
 
@@ -125,7 +150,7 @@ export async function mount(root) {
             <div class="dash-greeting-icon">${greeting.icon}</div>
             <div>
               <h1 id="d-greetingText">${greeting.text}님!</h1>
-              <p>오늘도 화이팅하세요 💪</p>
+              <p>${greetingSub}</p>
             </div>
           </div>
           <div class="dash-header-actions">

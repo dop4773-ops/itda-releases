@@ -1814,7 +1814,7 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
    셀과 정확히 같아져서 어느 OS에서도 옆 칸과 어긋나지 않는다. 링크가 많으면 위젯을 키우면 됨.
    box-shadow도 제거 — 다른 꾸미기 블록(날씨·미니툴 등)은 테두리만이라 그림자 있는 링크 블록만
    깊이가 달라 보였다(정렬 어긋나 보임의 원인). */
-.link-block{width:100%;height:100%;padding:12px 14px;overflow-x:hidden;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-sizing:border-box;}
+.link-block{width:100%;height:100%;padding:9px 8px;overflow-x:hidden;overflow-y:auto;scrollbar-width:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-sizing:border-box;}
 /* 테두리만 있는(장식 튀어나옴 없는) 프레임 블록은 래퍼도 clip — 윈도우 서브픽셀로 1px 삐져나와
    옆 위젯을 침범/어긋나 보이던 것 방지. 폴라로이드·테이프·스티커처럼 그림자/장식이 밖으로
    나오는 블록은 제외(overflow:visible 유지). */
@@ -1822,27 +1822,27 @@ html[data-theme="dark"] .dash-bg.pat-paper{background-image:repeating-linear-gra
 .dash-block[data-block="miniTool"],.dash-block[data-block="progressBar"],
 .dash-block[data-block="progressRing"]{overflow:hidden;}
 .link-block::-webkit-scrollbar{width:0;height:0;}
-.link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:8px;}
-.link-block-list{display:flex;flex-direction:column;gap:6px;}
-.link-block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:6px;}
-/* 링크 카드: 컬러 아이콘 타일 + 제목 + 부제(도메인/경로) + 우상단 외부링크 표시 */
-.link-card{position:relative;display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:12px;text-decoration:none;color:var(--text);background:var(--bg);border:1px solid var(--border);transition:border-color .12s,background .12s;}
-.link-card:hover{background:var(--surface);border-color:var(--brand);}
+.link-block-title{font-size:12px;font-weight:700;color:var(--text-faint);margin-bottom:6px;}
+.link-block-list{display:flex;flex-direction:column;gap:1px;}
+.link-block-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:3px;}
+/* 링크 카드: 컬러 아이콘 타일 + 제목 + 부제. 카드 자체는 배경 없이(투명), hover 때만 옅게. */
+.link-card{position:relative;display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:8px;text-decoration:none;color:var(--text);background:transparent;border:1px solid transparent;transition:background .12s,border-color .12s;}
+.link-card:hover{background:var(--bg);border-color:var(--border);}
 .link-card.is-local-path{cursor:pointer;}
-.lb-tile{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;flex-shrink:0;border-radius:9px;background:var(--lb-bg,#EAF0FF);color:var(--lb-fg,#3B6FE0);overflow:hidden;}
-.lb-tile .lb-ico{font-size:15px;font-weight:700;line-height:1;}
-.lb-fav{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
-.lb-body{display:flex;flex-direction:column;gap:1px;min-width:0;}
-.lb-name{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.lb-sub{font-size:10.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.lb-ext{position:absolute;top:6px;right:8px;color:var(--text-faint);font-size:11px;opacity:0;transition:opacity .12s;}
+.lb-tile{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex-shrink:0;border-radius:7px;background:var(--lb-bg,#EAF0FF);color:var(--lb-fg,#3B6FE0);overflow:hidden;}
+.lb-tile .lb-ico{font-size:12px;font-weight:700;line-height:1;}
+.lb-fav{width:15px;height:15px;object-fit:contain;flex-shrink:0;}
+.lb-body{display:flex;flex-direction:column;gap:0;min-width:0;}
+.lb-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-sub{font-size:10px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lb-ext{position:absolute;top:5px;right:6px;color:var(--text-faint);font-size:10px;opacity:0;transition:opacity .12s;}
 .lb-ext::before{content:"\2197";}
 .link-card:hover .lb-ext{opacity:.75;}
 /* 격자뷰: 세로 카드, 부제·외부표시 없음 */
-.lb-grid .link-card{flex-direction:column;gap:6px;padding:11px 6px;text-align:center;}
-.lb-grid .lb-tile{width:34px;height:34px;}
-.lb-grid .lb-tile .lb-ico{font-size:17px;}
-.lb-grid .lb-fav{width:20px;height:20px;}
+.lb-grid .link-card{flex-direction:column;gap:4px;padding:7px 4px;text-align:center;}
+.lb-grid .lb-tile{width:28px;height:28px;}
+.lb-grid .lb-tile .lb-ico{font-size:14px;}
+.lb-grid .lb-fav{width:17px;height:17px;}
 .lb-grid .lb-body{align-items:center;}
 .lb-grid .lb-ext{display:none;}
 

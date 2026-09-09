@@ -57,7 +57,7 @@ export const BLOCK_TYPES = {
     label: '링크 / 바로가기',
     icon: '🔗',
     defaultSize: { w: 3, h: 3 },
-    defaultConfig: { title: '바로가기', layout: 'list', items: [{ label: '예시 링크', url: 'https://', icon: '🔗' }] },
+    defaultConfig: { title: '바로가기', layout: 'list', items: [{ label: '예시 링크', url: 'https://', icon: '' }] },
   },
   image: {
     label: '사진',
@@ -911,13 +911,14 @@ export function openBlockConfig(anchorEl, block, onChange) {
       list.innerHTML = (cfg.items || [])
         .map(
           (it, i) => `<div class="cfg-link-row">
-            <input class="input" data-li="${i}" data-f="icon" value="${escapeHtml(it.icon || '')}" placeholder="🔗" style="width:44px;text-align:center;" />
+            <input class="input" data-li="${i}" data-f="icon" value="${escapeHtml(it.icon || '')}" placeholder="😀" title="이모지를 넣으면 파비콘 대신 그 이모지가 표시돼요 (비우면 파비콘/이니셜)" style="width:44px;text-align:center;" />
             <input class="input" data-li="${i}" data-f="label" value="${escapeHtml(it.label || '')}" placeholder="이름" />
             <input class="input" data-li="${i}" data-f="url" value="${escapeHtml(it.url || '')}" placeholder="https://" />
             <button class="btn-icon" data-rm="${i}" title="삭제">✕</button>
           </div>`
         )
-        .join('');
+        .join('') +
+        '<p class="cfg-hint" style="margin:6px 2px 0;font-size:11px;color:var(--text-faint);">첫 칸에 이모지(😀 🏥 📁 등)를 넣으면 아이콘이 그 이모지로 바뀌어요. 비워두면 사이트 파비콘이 자동으로 표시돼요.</p>';
       list.querySelectorAll('input[data-li]').forEach((n) =>
         n.addEventListener('input', (e) => {
           cfg.items[Number(e.target.dataset.li)][e.target.dataset.f] = e.target.value;
@@ -935,7 +936,7 @@ export function openBlockConfig(anchorEl, block, onChange) {
     renderItems();
     pop.querySelector('[data-add-link]').addEventListener('click', () => {
       cfg.items = cfg.items || [];
-      cfg.items.push({ label: '', url: 'https://', icon: '🔗' });
+      cfg.items.push({ label: '', url: 'https://', icon: '' });
       emit();
       renderItems();
     });
