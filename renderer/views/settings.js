@@ -63,9 +63,10 @@ export async function mount(root, initialTab) {
             <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">사이드바와 대시보드 인사말에 반영돼요.</p>
           </div>
 
+          <div class="settings-group-label">디자인</div>
           <div class="panel" style="margin-bottom:16px;">
             <div class="panel-head"><h3>현재 스타일</h3></div>
-            <p class="settings-panel-desc">지금 적용된 테마·강조색·레이아웃이 실제로 어떻게 보이는지예요.</p>
+            <p class="settings-panel-desc">지금 적용된 테마·강조색·세부 디자인이 실제로 어떻게 보이는지예요.</p>
             <div class="tlp-frame" id="theme-livePreview" aria-hidden="true">
               <div class="tlp-side">
                 <div class="tlp-logo">잇</div>
@@ -131,8 +132,8 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>내 프리셋</h3></div>
-            <p class="settings-panel-desc">테마·강조색·레이아웃·세부 디자인을 한 번에 적용해요. 아래 "현재 설정 저장"으로 나만의 조합도 만들 수 있어요.</p>
+            <div class="panel-head"><h3>디자인 프리셋</h3></div>
+            <p class="settings-panel-desc">테마·강조색·세부 디자인을 한 번에 적용해요. 아래 "현재 설정 저장"으로 나만의 조합도 만들 수 있어요. (대시보드 카드 배치는 <b>대시보드 탭</b>의 "대시보드 배치 프리셋"에서 따로 관리해요.)</p>
             <div class="preset-list" id="theme-presetList"></div>
             <div class="preset-save-row" id="theme-presetSaveRow">
               <button class="btn-secondary" id="theme-presetSaveBtn">＋ 현재 설정 저장</button>
@@ -221,7 +222,7 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>기타</h3></div>
+            <div class="panel-head"><h3>화면 요소</h3></div>
             <div class="update-row">
               <div>
                 <div class="settings-row-title">빠른 입력(+) 버튼 숨기기</div>
@@ -247,11 +248,11 @@ export async function mount(root, initialTab) {
 
         <div class="settings-panel" data-panel="dashboard">
           <div class="panel">
-            <div class="panel-head"><h3>레이아웃 &amp; 표시</h3></div>
-            <p class="settings-panel-desc">대시보드에 정보를 얼마나 촘촘하게 보여줄지 정해요. <b>색·테마는 안 바뀌고</b> 여백과 정보량만 달라져요. 위젯 배치도 그대로예요.</p>
+            <div class="panel-head"><h3>레이아웃</h3></div>
+            <p class="settings-panel-desc">대시보드 카드 사이 간격과 "집중 모드"만 정해요. <b>색·테마·글자 크기는 안 바뀌어요</b> — 글자 크기(밀도)는 <b>화면 탭</b>의 "세부 디자인 &gt; UI 밀도"에서 바꿔요. 카드 배치도 그대로예요.</p>
             <div id="dash-stylePresetGrid" class="theme-card-grid"></div>
-            <label class="panel-section-label" style="margin-top:14px;">위젯 헤더 스타일</label>
-            <p class="settings-panel-desc" style="margin-top:2px;">업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 카드마다 다르게 하려면 대시보드에서 카드를 우클릭하세요.</p>
+            <label class="panel-section-label" style="margin-top:14px;">카드 헤더 스타일</label>
+            <p class="settings-panel-desc" style="margin-top:2px;">업무 카드(할 일·일정·메모 등)의 제목 표시 방식이에요. 카드마다 다르게 하려면 대시보드에서 카드를 우클릭하세요.</p>
             <div class="seg" id="dash-headerStyleSeg"></div>
           </div>
 
@@ -262,8 +263,8 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>배치 프리셋</h3></div>
-            <p class="settings-panel-desc">미리 만들어둔 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요.</p>
+            <div class="panel-head"><h3>대시보드 배치 프리셋</h3></div>
+            <p class="settings-panel-desc">미리 만들어둔 카드 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요. (테마·강조색 조합은 <b>화면 탭</b>의 "디자인 프리셋"에서 관리해요.)</p>
             <div class="form-row" id="dashboard-presetList"></div>
             <div class="form-row" style="margin-top:10px;">
               <button class="btn-secondary" id="dashboard-savePresetBtn">현재 배치를 프리셋으로 저장</button>
@@ -825,7 +826,7 @@ export async function mount(root, initialTab) {
     });
   }
 
-  // ================= 내 프리셋 (테마+강조색+레이아웃+세부디자인 한 번에) =================
+  // ================= 디자인 프리셋 (테마+강조색+세부디자인 한 번에) =================
   const PRESET_KEY = 'design_presets';
   const BUILTIN_PRESETS = [
     { name: '업무 집중형', theme: 'pure', accent: '', layout: 'dense', border: 'default', radius: 'default', shadow: 'soft', density: 'default' },
@@ -1602,7 +1603,7 @@ export async function mount(root, initialTab) {
 
   // ================= 대시보드 구성 =================
   async function initDashboardCardsPanel() {
-    // 레이아웃 & 표시 프리셋 — 대시보드가 열릴 때 .dash-layout[data-dashstyle]로 적용된다(색은 안 건드림).
+    // 레이아웃 프리셋(간격/집중) — 대시보드가 열릴 때 .dash-layout[data-dashstyle]로 적용된다(색·글자 크기는 안 건드림).
     const spGrid = $('dash-stylePresetGrid');
     if (spGrid) {
       const rawSp = (await window.itda.settings.get('dashboard_style_preset')) || 'standard';
@@ -1634,7 +1635,7 @@ export async function mount(root, initialTab) {
       });
     }
 
-    // 위젯 헤더 스타일 — 대시보드가 열릴 때 #d-widgetGrid[data-headerstyle]로 적용된다.
+    // 카드 헤더 스타일 — 대시보드가 열릴 때 #d-widgetGrid[data-headerstyle]로 적용된다.
     const hsCur = (await window.itda.settings.get('dashboard_header_style')) || 'standard';
     segRow('dash-headerStyleSeg', ['standard', 'minimal', 'accent', 'label', 'floating', 'hidden'].includes(hsCur) ? hsCur : 'standard',
       [['standard', '기본'], ['minimal', '미니멀'], ['accent', '악센트'], ['label', '라벨'], ['floating', '플로팅'], ['hidden', '숨김']],
@@ -1692,7 +1693,7 @@ export async function mount(root, initialTab) {
     await initPresetSection(visibleCardIds);
   }
 
-  // ================= 배치 프리셋: 목록 렌더링(기본 제공 + 내가 저장한 것) + 미리보기 + 저장/삭제 =================
+  // ================= 대시보드 배치 프리셋: 목록 렌더링(기본 제공 + 내가 저장한 것) + 미리보기 + 저장/삭제 =================
   const PREVIEW_W = 200;
   const PREVIEW_H = 120;
 

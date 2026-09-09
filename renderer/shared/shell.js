@@ -322,6 +322,16 @@ async function migrateUiTheme() {
   return cur;
 }
 
+// 구 대시보드 레이아웃 'dense'(옛 'command')는 글자 크기까지 줄였다 → 이제 밀도(ui_density) 축이 담당.
+// 밀도를 직접 고른 적 없는 dense 사용자만 1회 compact로 옮겨 체감이 유지되게 한다.
+// ui_density가 한 번이라도 저장되면 !dens가 거짓이라 다시 실행돼도 아무 일 없음(멱등).
+async function migrateDensityFromDashStyle() {
+  const sp = await window.itda.settings.get('dashboard_style_preset');
+  if (sp !== 'dense' && sp !== 'command') return;
+  const dens = await window.itda.settings.get('ui_density');
+  if (!dens) await window.itda.settings.set({ key: 'ui_density', value: 'compact' });
+}
+
 export async function applyTheme() {
   const uiTheme = await migrateUiTheme();
   const theme = await window.itda.settings.get('theme');
@@ -690,6 +700,7 @@ function initAltShortcutOverlay() {
 export async function initShell() {
   await preloadShortcuts(); // 아래 키다운 리스너들이 걸리기 전에 사용자가 바꾼 단축키를 먼저 읽어둠
   await applyTheme();
+  await migrateDensityFromDashStyle();
   await applyUiAdjusts();
   await applySidebarPersonalization();
   await applyFabVisibility();

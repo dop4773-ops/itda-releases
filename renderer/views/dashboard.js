@@ -39,13 +39,14 @@ const DASH_THEMES = [
   { id: 'pink', label: '핑크', swatch: '#fdeef2' },
 ];
 
-// 레이아웃 & 표시 (설정 > 대시보드) — "색이 아니라 정보량·여백"만 바꾼다.
-// 전역 테마(색)와 완전히 독립. 실제 스타일은 styles.css의 .dash-layout[data-dashstyle="<id>"].
+// 레이아웃 (설정 > 대시보드) — 위젯 간격·여백·집중 모드만 바꾼다.
+// 색도 글자 크기(밀도)도 안 건드림 — 글자 크기는 「화면 > 세부 디자인 > 밀도」가 담당.
+// 전역 테마와 완전히 독립. 실제 스타일은 styles.css의 .dash-layout[data-dashstyle="<id>"].
 export const DASHBOARD_STYLE_PRESETS = [
-  { id: 'standard', label: 'Standard', hint: '정보량과 여백의 균형 (기본)' },
-  { id: 'spacious', label: 'Spacious', hint: '넓은 여백 · 큰 카드' },
-  { id: 'dense', label: 'Dense', hint: '좁은 여백 · 많은 정보' },
-  { id: 'focus', label: 'Focus', hint: '보고 있는 위젯만 또렷하게' },
+  { id: 'standard', label: 'Standard', hint: '카드 간격 기본' },
+  { id: 'spacious', label: 'Spacious', hint: '카드 간격 넓게 · 여백 큼' },
+  { id: 'dense', label: 'Dense', hint: '카드 간격 좁게' },
+  { id: 'focus', label: 'Focus', hint: '보고 있는 카드만 또렷하게' },
 ];
 // 구 프리셋(색까지 바꾸던 7종) → 신 레이아웃 프리셋. 멱등.
 export const DASH_STYLE_MIGRATE = { default: 'standard', minimal: 'spacious', command: 'dense', soft: 'standard', glass: 'standard', paper: 'standard', cozy: 'standard' };
