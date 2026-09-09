@@ -189,9 +189,10 @@ html[data-density="comfortable"] .nav-item{padding:11px 12px;}
 .theme-card-prev-side{width:12px;flex-shrink:0;}
 .theme-card-prev-card{flex:1;margin:8px 8px 8px 6px;padding:6px;display:flex;flex-direction:column;gap:3px;}
 .theme-card-prev-card span{width:40%;height:5px;border-radius:2px;}
-.theme-card-prev-card i{height:3px;border-radius:2px;background:currentColor;opacity:.22;}
-.theme-card-prev-card i:nth-child(2){width:80%;}
-.theme-card-prev-card i:nth-child(3){width:55%;}
+.theme-card-prev-card em{display:flex;align-items:center;gap:4px;}
+.theme-card-prev-card em u{width:6px;height:6px;flex-shrink:0;border:1px solid #ccc;border-radius:2px;display:block;}
+.theme-card-prev-card em i{flex:1;height:3px;border-radius:2px;background:currentColor;opacity:.22;}
+.theme-card-prev-card em:nth-of-type(2) i{max-width:60%;}
 .theme-card[data-ui="midnight"] .theme-card-prev-card{color:#fff;}
 .theme-card>b{display:block;font-size:12px;font-weight:600;color:var(--text);}
 .theme-card.active>b{color:var(--brand);}
@@ -205,6 +206,31 @@ html[data-density="comfortable"] .nav-item{padding:11px 12px;}
 .layout-prev-focus i{margin:3px 0;}
 .layout-prev-focus i.on{background:var(--brand);opacity:1;}
 .layout-prev-focus i.dim{opacity:.25;}
+
+/* ── "현재 스타일" 라이브 미리보기 — 앱의 실제 토큰(var(--*))을 그대로 써서 테마 변경 시 자동 반영 ── */
+.tlp-frame{display:flex;height:132px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;margin-top:4px;}
+.tlp-side{width:52px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--divider);padding:9px 7px;display:flex;flex-direction:column;gap:6px;}
+.tlp-logo{width:20px;height:20px;border-radius:var(--radius-sm);background:var(--brand-soft);margin-bottom:2px;}
+.tlp-nav{height:7px;border-radius:var(--radius-xs);background:var(--divider);}
+.tlp-nav.on{background:var(--brand-soft);box-shadow:inset 2px 0 0 var(--brand);}
+.tlp-main{flex:1;min-width:0;padding:10px;display:flex;gap:9px;}
+.tlp-card{flex:1;min-width:0;padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);}
+.tlp-cal{flex:0 0 84px;}
+.tlp-title{height:8px;width:52%;border-radius:var(--radius-xs);background:var(--text);opacity:.82;}
+.tlp-title.s{width:38%;}
+.tlp-todo{display:flex;align-items:center;gap:6px;}
+.tlp-chk{width:9px;height:9px;flex-shrink:0;border-radius:3px;border:1.5px solid var(--border);}
+.tlp-chk.on{background:var(--brand);border-color:var(--brand);}
+.tlp-txt{flex:1;height:6px;border-radius:var(--radius-xs);background:var(--divider);}
+.tlp-txt.s{max-width:56%;}
+.tlp-actions{display:flex;align-items:center;gap:6px;margin-top:auto;}
+.tlp-input{flex:1;height:15px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg);}
+.tlp-btn{width:36px;height:15px;border-radius:var(--radius-sm);background:var(--brand);}
+.tlp-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:2px;}
+.tlp-cal-grid i{aspect-ratio:1;border-radius:2px;background:var(--divider);}
+.tlp-cal-grid i:nth-child(10){background:var(--brand);}
+.tlp-label{margin-top:9px;font-size:11.5px;font-weight:600;color:var(--text-soft);}
+.tlp-label b{color:var(--brand);}
 
 /* ================= 스크롤바 =================
    OS 기본 스크롤바는 테마와 무관하게 밝은 회색이라, 다크 모드에서 유독 튀어 보였다(특히

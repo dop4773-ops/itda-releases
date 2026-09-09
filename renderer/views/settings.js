@@ -63,6 +63,28 @@ export async function mount(root, initialTab) {
             <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">사이드바와 대시보드 인사말에 반영돼요.</p>
           </div>
 
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>현재 스타일</h3></div>
+            <p class="settings-panel-desc">지금 적용된 테마·강조색·레이아웃이 실제로 어떻게 보이는지예요.</p>
+            <div class="tlp-frame" id="theme-livePreview" aria-hidden="true">
+              <div class="tlp-side">
+                <div class="tlp-logo"></div>
+                <span class="tlp-nav on"></span><span class="tlp-nav"></span><span class="tlp-nav"></span><span class="tlp-nav"></span>
+              </div>
+              <div class="tlp-main">
+                <div class="panel tlp-card">
+                  <div class="tlp-title"></div>
+                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-txt"></span></div>
+                  <div class="tlp-todo"><span class="tlp-chk on"></span><span class="tlp-txt s"></span></div>
+                  <div class="tlp-todo"><span class="tlp-chk"></span><span class="tlp-txt"></span></div>
+                  <div class="tlp-actions"><span class="tlp-input"></span><span class="tlp-btn"></span></div>
+                </div>
+                <div class="panel tlp-card tlp-cal"><div class="tlp-title s"></div><div class="tlp-cal-grid">${'<i></i>'.repeat(21)}</div></div>
+              </div>
+            </div>
+            <div class="tlp-label" id="theme-liveLabel"></div>
+          </div>
+
           <div class="panel">
             <div class="panel-head"><h3>전체 테마</h3></div>
             <p class="settings-panel-desc">잇다의 전체적인 분위기를 골라요. 배경·카드·테두리·모서리·그림자가 함께 바뀌고, 강조색과 글자 크기는 그대로예요.</p>
@@ -650,6 +672,7 @@ export async function mount(root, initialTab) {
         try {
           await window.itda.settings.set({ key: 'app_theme', value: b.dataset.appTheme });
           await applyTheme();
+          refreshLiveLabel();
         } catch (e) {
           errorToast(e, '테마 색을 저장하지 못했어요');
         }
@@ -792,10 +815,25 @@ export async function mount(root, initialTab) {
     });
   }
 
+  // "현재 스타일" 라벨 — 테마 · 강조색 · 레이아웃 이름
+  async function refreshLiveLabel() {
+    const el = $('theme-liveLabel');
+    if (!el) return;
+    const uiId = await getUiTheme();
+    const themeLabel = (UI_THEMES.find((t) => t.id === uiId) || UI_THEMES[0]).label;
+    const accId = (await window.itda.settings.get('app_theme')) || '';
+    const accLabel = (APP_THEMES.find((t) => t.id === accId) || APP_THEMES[0]).label;
+    const rawSp = (await window.itda.settings.get('dashboard_style_preset')) || 'standard';
+    const spId = DASH_STYLE_MIGRATE[rawSp] || rawSp;
+    const spLabel = (DASHBOARD_STYLE_PRESETS.find((p) => p.id === spId) || DASHBOARD_STYLE_PRESETS[0]).label;
+    el.innerHTML = `<b>${escapeHtml(themeLabel)}</b> · ${escapeHtml(accLabel)} · ${escapeHtml(spLabel)}`;
+  }
+
   // ================= 테마 & 디자인 (전역 UI 테마 + 세부 조정) =================
   async function initThemeDesignPanel() {
     const grid = $('theme-cardGrid');
     if (!grid) return;
+    refreshLiveLabel();
     const curUi = await getUiTheme();
     // 미니 미리보기: 배경 · 카드 · 강조점 — 실제 팔레트 그대로
     const SW = {
@@ -811,7 +849,9 @@ export async function mount(root, initialTab) {
         <div class="theme-card-prev" style="background:${s.bg}">
           <div class="theme-card-prev-side" style="background:${s.card};border-right:1px solid ${s.bd}"></div>
           <div class="theme-card-prev-card" style="background:${s.card};border:1px solid ${s.bd};border-radius:${s.r}px">
-            <span style="background:var(--brand)"></span><i></i><i></i>
+            <span style="background:var(--brand)"></span>
+            <em><u style="border-color:${s.bd}"></u><i></i></em>
+            <em><u style="border-color:${s.bd};background:var(--brand);border-color:var(--brand)"></u><i></i></em>
           </div>
         </div>
         <b>${escapeHtml(t.label)}</b>
@@ -825,6 +865,7 @@ export async function mount(root, initialTab) {
           await setUiTheme(b.dataset.ui);
           const darkToggle = $('theme-darkToggle');
           if (darkToggle) darkToggle.checked = document.documentElement.dataset.theme === 'dark';
+          refreshLiveLabel();
         } catch (e) {
           errorToast(e, '테마를 저장하지 못했어요');
         }
