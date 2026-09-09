@@ -2789,7 +2789,7 @@ export async function mount(root) {
     { label: '위젯 추가', keys: 'W' },
     { label: '레이아웃 편집', keys: 'E' },
     { label: '사이드 패널', keys: 'S' },
-    { label: '이전 / 다음 날짜', keys: '← / →' },
+    { label: '이전 / 다음 (사이드 패널 열려 있으면 캘린더)', keys: '← / →' },
     { label: '오늘로', keys: 'T' },
   ]);
   function handleDashKeys(e) {
@@ -2815,8 +2815,9 @@ export async function mount(root) {
           guardWidget('업무센터', 'workCenter', loadWorkCenter),
         ]);
         break;
-      case 'ArrowLeft': e.preventDefault(); stepDate(-1); break;
-      case 'ArrowRight': e.preventDefault(); stepDate(1); break;
+      // ←/→ : 사이드 패널이 열려 있으면 사이드 캘린더를, 아니면 상단 날짜를 이동
+      case 'ArrowLeft': e.preventDefault(); ($('d-side')?.classList.contains('open') ? stepCal : stepDate)(-1); break;
+      case 'ArrowRight': e.preventDefault(); ($('d-side')?.classList.contains('open') ? stepCal : stepDate)(1); break;
       case 'Escape':
         if ($('d-addPanel')?.classList.contains('open')) break; // 위젯 추가 패널은 자체 ESC 처리
         // 열려있는 메뉴/팝오버가 있으면 그것부터 닫는다(각자의 바깥클릭 핸들러 재사용)

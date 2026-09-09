@@ -9,6 +9,8 @@ export const TYPE_ROUTE = { todo: '#/todo', event: '#/calendar', memo: '#/memo',
 export const TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌', inbox: '📥' };
 const SMALL_X_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const PLUS_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>`;
+const CARET_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></svg>`;
+const GO_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7M8 7h9v9"/></svg>`;
 
 // links:listFor가 넘겨주는 label은 memo/postit의 경우 HTML(볼드·글씨크기 서식)일 수 있어서,
 // 태그를 걷어내고 짧게 잘라야 "<span style=...>" 같은 게 그대로 노출되지 않는다.
@@ -66,7 +68,65 @@ export async function mountLinksWidget(container, self) {
   let pickerQuery = '';
   let pickerResults = [];
   let hideDoneTodos = false; // 설정 > 편의 기능: 완료한 Todo는 연결 목록에서 숨기기
+  let expandedKey = null; // 인라인 미리보기가 펼쳐진 행 "type:id" (한 번에 하나)
+  const previewCache = new Map(); // "type:id" → 상세 데이터(세션 캐시)
   const selectedDiscover = new Set(); // "type:id" — 관련 항목에서 체크한 것들(한 번에 연결)
+
+  // 행 클릭 → 화면 이동 대신 그 자리에서 내용 미리보기를 펼친다("이게 맞나" 확인용).
+  async function getPreviewData(type, id) {
+    const key = `${type}:${id}`;
+    if (previewCache.has(key)) return previewCache.get(key);
+    let d = null;
+    try {
+      if (type === 'todo') d = await window.itda.todos.get(id);
+      else if (type === 'event') d = await window.itda.events.get(id);
+      else if (type === 'memo') d = await window.itda.memos.get(id);
+      else if (type === 'postit') d = await window.itda.postits.get(id);
+      else if (type === 'inbox') d = (await window.itda.inbox.list({ onlyUnprocessed: false })).find((x) => x.id === id) || null;
+    } catch (e) {
+      d = null;
+    }
+    previewCache.set(key, d);
+    return d;
+  }
+
+  function previewBodyHtml(type, d) {
+    if (!d) return `<div class="link-preview-empty">항목을 찾을 수 없어요 (삭제되었을 수 있어요)</div>`;
+    let meta = LINK_TYPE_LABEL[type];
+    if (type === 'event' && d.start_at) meta += ` · ${eventDateLabel(d.start_at)}`;
+    else if (type === 'todo' && d.due_date) meta += ` · 마감 ${d.due_date}${d.due_time ? ` ${d.due_time}` : ''}`;
+    else if (d.updated_at) meta += ` · ${String(d.updated_at).slice(0, 10)}`;
+    else if (d.created_at) meta += ` · ${String(d.created_at).slice(0, 10)}`;
+    if (d.category_name) meta += ` · ${d.category_name}`;
+    const body = stripHtmlToPlainText(d.memo || d.content || '').replace(/\s+/g, ' ').trim();
+    return `
+      <div class="link-preview-meta">${escapeHtml(meta)}</div>
+      <div class="link-preview-body${body ? '' : ' link-preview-empty'}">${body ? escapeHtml(body.slice(0, 400)) + (body.length > 400 ? '…' : '') : '내용이 없어요'}</div>
+      <button class="btn-secondary link-preview-go" data-type="${type}" data-id="${d.id}">원본으로 이동 →</button>`;
+  }
+
+  async function togglePreview(rowEl, type, id) {
+    const key = `${type}:${id}`;
+    const panel = rowEl.querySelector('.link-item-preview');
+    const opening = panel.hidden;
+    // 다른 미리보기는 모두 접는다
+    container.querySelectorAll('.link-item-preview').forEach((p) => (p.hidden = true));
+    container.querySelectorAll('.link-item-main.open').forEach((b) => b.classList.remove('open'));
+    if (!opening) {
+      expandedKey = null;
+      return;
+    }
+    expandedKey = key;
+    rowEl.querySelector('.link-item-main').classList.add('open');
+    panel.hidden = false;
+    panel.innerHTML = `<div class="link-preview-empty">불러오는 중…</div>`;
+    const d = await getPreviewData(type, id);
+    if (expandedKey !== key || !panel.isConnected) return;
+    panel.innerHTML = previewBodyHtml(type, d);
+    panel.querySelector('.link-preview-go')?.addEventListener('click', () => {
+      location.hash = `${TYPE_ROUTE[type]}/${id}`;
+    });
+  }
 
   async function load() {
     if (!container.isConnected) return; // 위젯이 이미 DOM에서 떨어졌으면(다른 항목 선택 등) 조회 자체를 생략
@@ -104,16 +164,21 @@ export async function mountLinksWidget(container, self) {
       .join('');
     const dateLbl = d.type === 'event' && d.refDate ? eventDateLabel(d.refDate) : '';
     return `
-      <div class="link-item link-item-suggested" data-type="${d.type}" data-id="${d.id}">
-        <input type="checkbox" class="link-discover-check" data-key="${key}" ${selectedDiscover.has(key) ? 'checked' : ''} title="선택" />
-        <a class="link-item-main" href="${TYPE_ROUTE[d.type]}/${d.id}">
-          <span class="link-item-row1">
-            <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
-            <span class="link-item-label">${escapeHtml(stripHtmlToPlainText(d.label || '').replace(/\s+/g, ' ').trim().slice(0, 90) || '(제목 없음)')}</span>
-          </span>
-          ${dateLbl || badges ? `<span class="link-item-row2">${dateLbl ? `<span class="link-item-sub">${escapeHtml(dateLbl)}</span>` : ''}${badges}</span>` : ''}
-        </a>
-        <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>
+      <div class="link-row link-row-suggested ${expandedKey === key ? 'expanded' : ''}" data-type="${d.type}" data-id="${d.id}">
+        <div class="link-item link-item-suggested">
+          <input type="checkbox" class="link-discover-check" data-key="${key}" ${selectedDiscover.has(key) ? 'checked' : ''} title="선택" />
+          <button type="button" class="link-item-main ${expandedKey === key ? 'open' : ''}" data-action="peek">
+            <span class="link-item-row1">
+              <span class="link-type-icon">${TYPE_EMOJI[d.type]}</span>
+              <span class="link-item-label">${escapeHtml(stripHtmlToPlainText(d.label || '').replace(/\s+/g, ' ').trim().slice(0, 90) || '(제목 없음)')}</span>
+              <span class="link-item-caret">${CARET_ICON}</span>
+            </span>
+            ${dateLbl || badges ? `<span class="link-item-row2">${dateLbl ? `<span class="link-item-sub">${escapeHtml(dateLbl)}</span>` : ''}${badges}</span>` : ''}
+          </button>
+          <a class="link-item-go" href="${TYPE_ROUTE[d.type]}/${d.id}" title="원본 열기">${GO_ICON}</a>
+          <button class="btn-icon" data-action="confirm-discover" data-type="${d.type}" data-id="${d.id}" title="연결하기">${PLUS_ICON}</button>
+        </div>
+        <div class="link-item-preview" hidden></div>
       </div>`;
   }
 
@@ -125,14 +190,22 @@ export async function mountLinksWidget(container, self) {
     links.forEach((l) => {
       (grouped[l.type] = grouped[l.type] || []).push(l);
     });
-    const linkRow = (l) => `
-      <div class="link-item" data-type="${l.type}" data-id="${l.id}">
-        <a class="link-item-main" href="${TYPE_ROUTE[l.type]}/${l.id}">
-          <span class="link-item-label">${escapeHtml(plainLabel(l.label))}</span>
-          ${subtitleFor(l) ? `<span class="link-item-sub">${escapeHtml(subtitleFor(l))}</span>` : ''}
-        </a>
-        <button class="btn-icon" data-action="unlink" data-type="${l.type}" data-id="${l.id}" title="연결 해제">${SMALL_X_ICON}</button>
+    const linkRow = (l) => {
+      const key = `${l.type}:${l.id}`;
+      return `
+      <div class="link-row ${expandedKey === key ? 'expanded' : ''}" data-type="${l.type}" data-id="${l.id}">
+        <div class="link-item">
+          <button type="button" class="link-item-main ${expandedKey === key ? 'open' : ''}" data-action="peek">
+            <span class="link-item-label">${escapeHtml(plainLabel(l.label))}</span>
+            ${subtitleFor(l) ? `<span class="link-item-sub">${escapeHtml(subtitleFor(l))}</span>` : ''}
+            <span class="link-item-caret">${CARET_ICON}</span>
+          </button>
+          <a class="link-item-go" href="${TYPE_ROUTE[l.type]}/${l.id}" title="원본 열기">${GO_ICON}</a>
+          <button class="btn-icon" data-action="unlink" data-type="${l.type}" data-id="${l.id}" title="연결 해제">${SMALL_X_ICON}</button>
+        </div>
+        <div class="link-item-preview" hidden></div>
       </div>`;
+    };
     const groupsHtml = Object.keys(LINK_TYPE_LABEL)
       .filter((t) => grouped[t] && grouped[t].length)
       .map(
@@ -181,6 +254,25 @@ export async function mountLinksWidget(container, self) {
     `;
     bind();
     if (pickerOpen) renderPickerResults(); // 다시 그려진 DOM에 캐시된 결과 재부착
+    reopenPreview(); // 열려있던 인라인 미리보기를 새 DOM에 다시 붙인다
+  }
+
+  function reopenPreview() {
+    if (!expandedKey) return;
+    const [t, iStr] = expandedKey.split(':');
+    const row = container.querySelector(`.link-row[data-type="${t}"][data-id="${iStr}"]`);
+    if (!row) {
+      expandedKey = null;
+      return;
+    }
+    const panel = row.querySelector('.link-item-preview');
+    panel.hidden = false;
+    row.querySelector('.link-item-main')?.classList.add('open');
+    const d = previewCache.get(expandedKey);
+    panel.innerHTML = d !== undefined ? previewBodyHtml(t, d) : `<div class="link-preview-empty">불러오는 중…</div>`;
+    panel.querySelector('.link-preview-go')?.addEventListener('click', () => {
+      location.hash = `${TYPE_ROUTE[t]}/${iStr}`;
+    });
   }
 
   // 연결 대상 찾기 — 검색어가 있으면 통합검색(제목·내용), 없으면 그 타입의 최근 항목.
@@ -237,6 +329,14 @@ export async function mountLinksWidget(container, self) {
   }
 
   function bind() {
+    // 행 클릭 → 화면 이동 대신 인라인 미리보기 토글
+    container.querySelectorAll('[data-action="peek"]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const row = btn.closest('.link-row');
+        togglePreview(row, row.dataset.type, Number(row.dataset.id));
+      });
+    });
+
     container.querySelectorAll('[data-action="unlink"]').forEach((btn) => {
       btn.addEventListener('click', async (e) => {
         e.preventDefault();

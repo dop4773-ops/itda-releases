@@ -964,13 +964,25 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .link-group[data-type="memo"]{--link-tone:#E7B54F;}
 .link-group[data-type="postit"]{--link-tone:#E2686B;}
 .link-group[data-type="inbox"]{--link-tone:#8B93A7;}
-.link-group .link-item{margin-left:9px;}
-.link-item{display:flex;align-items:center;gap:4px;}
-.link-item-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:var(--radius-sm);background:var(--bg);text-decoration:none;color:inherit;font-size:12px;}
+.link-group .link-row{margin-left:9px;}
+.link-item{display:flex;align-items:center;gap:2px;}
+.link-item-main{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:6px 8px;border:none;border-radius:var(--radius-sm);background:var(--bg);text-align:left;color:inherit;font:inherit;font-size:12px;cursor:pointer;}
 .link-item-main:hover{background:var(--brand-soft);}
+.link-item-caret{flex-shrink:0;display:inline-flex;color:var(--text-faint);transition:transform .12s ease;}
+.link-item-main.open .link-item-caret{transform:rotate(180deg);color:var(--brand);}
+.link-item-main.open{background:var(--brand-soft);}
+.link-item-go{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;color:var(--text-faint);border-radius:var(--radius-sm);}
+.link-item-go:hover{color:var(--brand);background:var(--brand-soft);}
 .link-type-icon{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:17px;font-size:13.5px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
 .link-item-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .link-item-sub{flex-shrink:0;font-size:10px;color:var(--text-faint);}
+
+/* 인라인 미리보기 (행 클릭 시 그 자리에서 펼침) */
+.link-item-preview{margin:3px 0 6px 8px;padding:10px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);display:flex;flex-direction:column;gap:6px;}
+.link-preview-meta{font-size:10.5px;color:var(--text-faint);}
+.link-preview-body{font-size:11.5px;line-height:1.6;color:var(--text-soft);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow-y:auto;}
+.link-preview-empty{font-size:11px;color:var(--text-faint);}
+.link-preview-go{align-self:flex-start;font-size:11px;padding:5px 10px;}
 .link-add-btn{display:flex;align-items:center;gap:5px;justify-content:center;border:1.5px dashed var(--border);border-radius:var(--radius-sm);padding:7px;font-size:11.5px;color:var(--text-faint);background:none;cursor:pointer;}
 .link-add-btn:hover{border-color:var(--brand);color:var(--brand);}
 .link-picker{display:flex;flex-direction:column;gap:6px;}
