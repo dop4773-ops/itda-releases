@@ -518,13 +518,45 @@ body.topbar-hidden .global-topbar{display:none;}
 
 /* ================= 토스트 ================= */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--text);color:#fff;padding:9px 16px;border-radius:var(--radius-sm);font-size:12.5px;opacity:0;pointer-events:none;transition:.2s;z-index:100;}
-.lock-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:500;}
-.lock-card{width:280px;max-width:88vw;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:28px 24px;text-align:center;}
-.lock-logo{width:48px;height:48px;object-fit:contain;display:block;margin:0 auto 14px;}
-.lock-card h2{margin:0 0 4px;font-size:16px;color:var(--text);}
-.lock-card p{margin:0 0 16px;font-size:12.5px;color:var(--text-faint);}
-.lock-card .input{width:100%;box-sizing:border-box;text-align:center;letter-spacing:2px;}
-.lock-error{margin-top:8px;font-size:11.5px;color:var(--danger);}
+.lock-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:500;overflow:hidden;}
+/* 배경 장식 원 (브랜드 스플래시 느낌) */
+.lock-blob{position:absolute;border-radius:50%;background:var(--brand-soft);opacity:.9;pointer-events:none;}
+.lock-blob-1{width:540px;height:540px;top:-200px;right:-160px;}
+.lock-blob-2{width:440px;height:440px;bottom:-190px;left:-150px;}
+.lock-blob-3{width:250px;height:250px;bottom:56px;right:13%;opacity:.6;}
+:root:not([data-theme="light"]) .lock-blob{opacity:.14;}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .lock-blob{opacity:.14;} }
+:root[data-theme="dark"] .lock-blob{opacity:.14;}
+
+.lock-topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:18px 26px;}
+.lock-brand{display:flex;align-items:center;gap:9px;color:var(--text);}
+.lock-brand img{width:26px;height:26px;object-fit:contain;}
+.lock-brand b{font-size:15px;font-weight:700;}
+.lock-brand-sep{width:1px;height:14px;background:var(--border);}
+.lock-brand-tag{font-size:11.5px;color:var(--text-faint);}
+.lock-brand-en{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--text-faint);}
+
+.lock-card{position:relative;width:404px;max-width:90vw;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 24px 60px rgba(16,24,40,.14);padding:36px 40px 24px;text-align:center;}
+.lock-logo{width:46px;height:46px;object-fit:contain;display:block;margin:0 auto 8px;}
+.lock-wordmark{font-size:21px;font-weight:700;color:var(--text);margin-bottom:22px;}
+.lock-card h2{display:flex;align-items:center;justify-content:center;gap:7px;margin:0 0 6px;font-size:17px;font-weight:700;color:var(--text);}
+.lock-card h2 svg{color:var(--brand);}
+.lock-card p{margin:0 0 20px;font-size:12.5px;color:var(--text-faint);}
+
+.lock-input-wrap{position:relative;display:flex;align-items:center;}
+.lock-input-icon{position:absolute;left:13px;display:flex;color:var(--text-faint);pointer-events:none;}
+.lock-input-wrap input{width:100%;box-sizing:border-box;padding:11px 40px 11px 38px;font-size:13.5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text);outline:none;}
+.lock-input-wrap input:focus{border-color:var(--brand);background:var(--surface);}
+.lock-eye{position:absolute;right:8px;display:flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:none;color:var(--text-faint);cursor:pointer;border-radius:6px;}
+.lock-eye:hover{background:var(--divider);color:var(--text);}
+.lock-eye.on{color:var(--brand);}
+
+.lock-error{margin-top:9px;font-size:11.5px;color:var(--danger);}
+.lock-submit{width:100%;margin-top:14px;padding:11px;font-size:13.5px;}
+.lock-kbd-hint{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:14px;font-size:11.5px;color:var(--text-faint);}
+.lock-kbd-hint b{color:var(--text-soft);font-weight:600;}
+.lock-foot{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:20px;padding-top:16px;border-top:1px solid var(--divider);font-size:11px;color:var(--text-faint);}
+.lock-foot-sep{opacity:.5;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
 /* ================= 전역 빠른 입력 (FAB + 모달) ================= */
