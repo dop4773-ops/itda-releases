@@ -5,7 +5,7 @@ import { applyTheme, APP_THEMES, getUserName, applySidebarUserName, DISPLAY_SCAL
 import { lockNow } from '../shared/lock-screen.js';
 import { mountTagsPanel, TAG_ICON } from './tags.js';
 import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent, isBareKey, findConflict, labelForAccelerator } from '../shared/shortcuts.js';
-import { DASHBOARD_CARDS, DASHBOARD_STYLE_PRESETS } from './dashboard.js';
+import { DASHBOARD_CARDS, DASHBOARD_STYLE_PRESETS, DASH_STYLE_MIGRATE } from './dashboard.js';
 import { LAYOUT_PRESETS, getPreset, scaleForPreview, WIDGET_CARD_IDS } from '../shared/dashboard-layouts.js';
 import { promptText } from '../shared/text-prompt.js';
 
@@ -215,8 +215,8 @@ export async function mount(root, initialTab) {
 
         <div class="settings-panel" data-panel="dashboard">
           <div class="panel">
-            <div class="panel-head"><h3>대시보드 스타일</h3></div>
-            <p class="settings-panel-desc">전역 앱 테마와 별개로, 대시보드 카드·여백·라운드·그림자·강조색·배경을 한 번에 바꿔요. 레이아웃(위젯 배치)은 그대로 유지돼요.</p>
+            <div class="panel-head"><h3>레이아웃 &amp; 표시</h3></div>
+            <p class="settings-panel-desc">대시보드에 정보를 얼마나 촘촘하게 보여줄지 정해요. <b>색·테마는 안 바뀌고</b> 여백과 정보량만 달라져요. 위젯 배치도 그대로예요.</p>
             <div id="dash-stylePresetGrid" class="theme-card-grid"></div>
             <label class="panel-section-label" style="margin-top:14px;">위젯 헤더 스타일</label>
             <p class="settings-panel-desc" style="margin-top:2px;">업무 위젯(할 일·일정·메모 등)의 제목 표시 방식이에요. 카드마다 다르게 하려면 대시보드에서 카드를 우클릭하세요.</p>
@@ -1441,23 +1441,23 @@ export async function mount(root, initialTab) {
 
   // ================= 대시보드 구성 =================
   async function initDashboardCardsPanel() {
-    // 대시보드 스타일 프리셋 — 대시보드가 열릴 때 .dash-layout[data-dashstyle]로 적용된다.
+    // 레이아웃 & 표시 프리셋 — 대시보드가 열릴 때 .dash-layout[data-dashstyle]로 적용된다(색은 안 건드림).
     const spGrid = $('dash-stylePresetGrid');
     if (spGrid) {
-      const curSp = (await window.itda.settings.get('dashboard_style_preset')) || 'default';
-      const SP_SW = {
-        default: 'var(--surface)',
-        minimal: '#ffffff',
-        soft: 'linear-gradient(160deg,#f3f0fb,#f6f4fa)',
-        glass: 'linear-gradient(135deg,#dbe6f6,#efe4f5)',
-        paper: '#f4ecdd',
-        command: 'linear-gradient(160deg,#eef1f5,#2f5cc5)',
-        cozy: '#f3ebdd',
+      const rawSp = (await window.itda.settings.get('dashboard_style_preset')) || 'standard';
+      const curSp = DASH_STYLE_MIGRATE[rawSp] || rawSp;
+      // 미니 다이어그램: 막대 개수·간격으로 정보 밀도를 표현
+      const SP_PREV = {
+        spacious: '<i></i><i></i>',
+        standard: '<i></i><i></i><i></i>',
+        dense: '<i></i><i></i><i></i><i></i><i></i>',
+        focus: '<i class="dim"></i><i class="on"></i><i class="dim"></i>',
       };
       spGrid.innerHTML = DASHBOARD_STYLE_PRESETS.map(
         (p) => `<button type="button" class="theme-card ${p.id === curSp ? 'active' : ''}" data-sp="${p.id}">
-          <div class="sw" style="background:${SP_SW[p.id] || 'var(--surface)'}"></div>${escapeHtml(p.label)}
-          <span style="display:block;font-size:10px;color:var(--text-faint);margin-top:2px;">${escapeHtml(p.hint)}</span>
+          <div class="layout-prev layout-prev-${p.id}">${SP_PREV[p.id] || SP_PREV.standard}</div>
+          <b>${escapeHtml(p.label)}</b>
+          <span class="theme-card-desc">${escapeHtml(p.hint)}</span>
         </button>`
       ).join('');
       spGrid.querySelectorAll('[data-sp]').forEach((b) => {

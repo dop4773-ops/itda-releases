@@ -426,7 +426,19 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   "테마"→"전체 테마", 세부 디자인 라벨 정리(진하게→강조, 밀도 여유롭게/기본/촘촘하게).
 - Midnight에서 다크 토글 끄면 Pure로 넘어감(스타일 사라짐 방지).
 - CDP: cozy→soft 마이그레이션 / 5테마 배경색 / paper+green 강조색 독립 / 카드 렌더 검증. 66/66, lint 0.
-- **Phase 1b**(대시보드 스타일→레이아웃 축), **Phase 2**(실제 UI 프리뷰 카드 + 상단 현재스타일), **Phase 3**(내 프리셋 저장) 예정.
+## 디자인 시스템 개편 Phase 1b — "대시보드 스타일" → "레이아웃 & 표시" (v2.66.1)
+색까지 바꾸던 대시보드 프리셋 7종(default/minimal/soft/glass/paper/command/cozy)을
+**색을 절대 안 건드리는** 레이아웃 프리셋 4종으로 교체. 전역 테마와 완전 독립.
+
+- `DASHBOARD_STYLE_PRESETS` → Standard(기본, 속성 없음) / Spacious(넓은 여백) / Dense(고밀도) / Focus(보는 위젯만 또렷).
+- `styles.css`: `.dash-layout[data-dashstyle]` 블록에서 `--surface/--border/--brand/--dsp-*`·`.dash-bg` 색 오버라이드 전부 삭제.
+  남은 건 gap·padding·font-size(spacious/dense)와 opacity(focus)뿐.
+- **마이그레이션** (`dashboard.js` `DASH_STYLE_MIGRATE`, 멱등): minimal→spacious, command→dense, 나머지→standard. 대시보드 열 때 1회.
+- 설정: "대시보드 스타일" → "레이아웃 & 표시", 프리셋 카드에 밀도 미니 다이어그램.
+- `dashboard_theme`(대시보드 배경색, 우클릭)·per-card 테마·위젯 헤더는 그대로 유지.
+- CDP: command→dense 마이그레이션 / paper 테마 배경이 4프리셋 모두에서 유지(색 독립) 검증. 66/66, lint 0.
+
+**Phase 2**(실제 UI 프리뷰 카드 + 상단 현재스타일), **Phase 3**(내 프리셋 저장) 예정.
 
 ## 연결 위젯 인라인 미리보기 + 대시보드 방향키 (v2.65.7)
 - **연결/관련 항목 행 클릭 → 화면 이동 대신 그 자리에서 아코디언 미리보기** (`links-ui.js`).
