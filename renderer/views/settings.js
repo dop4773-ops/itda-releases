@@ -64,20 +64,20 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel">
-            <div class="panel-head"><h3>테마</h3></div>
-            <p class="settings-panel-desc">테마를 고르면 앱 전체(배경·사이드바·헤더·카드·버튼·입력·팝업)의 기본 디자인이 한 번에 정해져요. 아래 "세부 디자인"에서 더 조정할 수 있어요.</p>
+            <div class="panel-head"><h3>전체 테마</h3></div>
+            <p class="settings-panel-desc">잇다의 전체적인 분위기를 골라요. 배경·카드·테두리·모서리·그림자가 함께 바뀌고, 강조색과 글자 크기는 그대로예요.</p>
             <div id="theme-cardGrid" class="theme-card-grid"></div>
             <div class="update-row" style="margin-top:14px;">
               <div>
                 <div class="settings-row-title">강조색</div>
-                <div class="settings-row-desc">액션 버튼·링크·포커스·사이드바 선택 항목의 색이에요.</div>
+                <div class="settings-row-desc">버튼·링크·활성 메뉴·체크박스·포커스에 쓰이는 색. 테마와 따로 골라요.</div>
               </div>
               <div class="app-theme-swatches" id="app-themeSwatches"></div>
             </div>
             <div class="update-row" style="margin-top:10px;">
               <div>
                 <div class="settings-row-title">다크 모드</div>
-                <div class="settings-row-desc">어두운 화면으로 바꿔요. 위 테마와 함께 쓸 수 있어요.</div>
+                <div class="settings-row-desc">어두운 화면으로 바꿔요. Midnight 테마는 자동으로 켜져요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="theme-darkToggle" />
@@ -88,9 +88,9 @@ export async function mount(root, initialTab) {
 
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>세부 디자인</h3></div>
-            <p class="settings-panel-desc">고른 테마를 기준으로 형태만 미세 조정해요.</p>
+            <p class="settings-panel-desc">고른 테마 위에서 형태만 조금씩 조정해요.</p>
             <div class="update-row">
-              <div><div class="settings-row-title">테두리</div><div class="settings-row-desc">카드·사이드바·입력창 테두리를 진하게 하거나 검정으로.</div></div>
+              <div><div class="settings-row-title">테두리</div><div class="settings-row-desc">카드·사이드바·입력창 테두리 굵기·진하기.</div></div>
               <div class="seg" id="theme-borderSeg"></div>
             </div>
             <div class="update-row" style="margin-top:10px;">
@@ -624,8 +624,14 @@ export async function mount(root, initialTab) {
     toggle.addEventListener('change', async () => {
       const value = toggle.checked ? 'dark' : 'light';
       try {
-        await window.itda.settings.set({ key: 'theme', value });
-        await applyTheme();
+        // Midnight은 다크 전용 — 다크를 끄면 Pure로 넘긴다(끄고 나서 스타일이 사라지는 상태 방지).
+        if (!toggle.checked && (await getUiTheme()) === 'midnight') {
+          await setUiTheme('pure');
+        } else {
+          await window.itda.settings.set({ key: 'theme', value });
+          await applyTheme();
+        }
+        await initThemeDesignPanel(); // 테마 카드 active 상태 다시 맞춤
       } catch (e) {
         errorToast(e, '테마를 저장하지 못했어요');
         toggle.checked = !toggle.checked;
@@ -790,25 +796,28 @@ export async function mount(root, initialTab) {
   async function initThemeDesignPanel() {
     const grid = $('theme-cardGrid');
     if (!grid) return;
-    const curUi = (await getUiTheme()) || (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+    const curUi = await getUiTheme();
+    // 미니 미리보기: 배경 · 카드 · 강조점 — 실제 팔레트 그대로
     const SW = {
-      light: '#F7F7FB',
-      dark: '#1E2027',
-      midnight: 'linear-gradient(135deg,#151C2E,#5B8CFF)',
-      cozy: 'linear-gradient(135deg,#F3EBDD,#C08552)',
-      soft: 'linear-gradient(135deg,#FBFAFF,#7C7FE0)',
-      cool: 'linear-gradient(135deg,#FBFDFF,#2C9AB8)',
-      pastel: 'linear-gradient(135deg,#FFFDFE,#E289B0)',
-      glass: 'linear-gradient(135deg,#DBE6F6,#EEE3F4)',
-      retro: 'linear-gradient(135deg,#FFFBF0,#D2691E)',
-      minimal: '#FFFFFF',
-      professional: 'linear-gradient(135deg,#EDF0F4,#2C5CC5)',
+      pure: { bg: '#F7F7FB', card: '#FFFFFF', bd: '#EAEAF2', r: 6 },
+      soft: { bg: '#F5F2ED', card: '#FFFDFB', bd: '#ECE6DE', r: 9 },
+      paper: { bg: '#F1EBDD', card: '#FBF6EC', bd: '#E1D8C3', r: 3 },
+      studio: { bg: '#F3F4F7', card: '#FFFFFF', bd: '#DBDEE4', r: 2 },
+      midnight: { bg: '#0D1220', card: '#151C2E', bd: '#26314A', r: 6 },
     };
-    grid.innerHTML = UI_THEMES.map(
-      (t) => `<button type="button" class="theme-card ${t.id === curUi ? 'active' : ''}" data-ui="${t.id}">
-        <div class="sw" style="background:${SW[t.id] || 'var(--surface)'}"></div>${escapeHtml(t.label)}
-      </button>`
-    ).join('');
+    grid.innerHTML = UI_THEMES.map((t) => {
+      const s = SW[t.id] || SW.pure;
+      return `<button type="button" class="theme-card ${t.id === curUi ? 'active' : ''}" data-ui="${t.id}">
+        <div class="theme-card-prev" style="background:${s.bg}">
+          <div class="theme-card-prev-side" style="background:${s.card};border-right:1px solid ${s.bd}"></div>
+          <div class="theme-card-prev-card" style="background:${s.card};border:1px solid ${s.bd};border-radius:${s.r}px">
+            <span style="background:var(--brand)"></span><i></i><i></i>
+          </div>
+        </div>
+        <b>${escapeHtml(t.label)}</b>
+        <span class="theme-card-desc">${escapeHtml(t.desc || '')}</span>
+      </button>`;
+    }).join('');
     grid.querySelectorAll('[data-ui]').forEach((b) => {
       b.addEventListener('click', async () => {
         grid.querySelectorAll('[data-ui]').forEach((x) => x.classList.toggle('active', x === b));
@@ -823,13 +832,13 @@ export async function mount(root, initialTab) {
     });
 
     segRow('theme-borderSeg', await getUiAdjust('border'),
-      [['default', '기본'], ['strong', '진하게'], ['black', '검정']], (v) => setUiAdjust('border', v));
+      [['default', '기본'], ['strong', '강조'], ['black', '검정']], (v) => setUiAdjust('border', v));
     segRow('theme-radiusSeg', await getUiAdjust('radius'),
       [['sharp', '각지게'], ['default', '기본'], ['round', '둥글게']], (v) => setUiAdjust('radius', v));
     segRow('theme-shadowSeg', await getUiAdjust('shadow'),
       [['none', '없음'], ['soft', '약하게'], ['default', '기본'], ['strong', '강하게']], (v) => setUiAdjust('shadow', v));
     segRow('theme-densitySeg', await getUiAdjust('density'),
-      [['compact', '좁게'], ['default', '기본'], ['comfortable', '넓게']], (v) => setUiAdjust('density', v));
+      [['comfortable', '여유롭게'], ['default', '기본'], ['compact', '촘촘하게']], (v) => setUiAdjust('density', v));
   }
 
   // ================= 사이드바 개인화 =================

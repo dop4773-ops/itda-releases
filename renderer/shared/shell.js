@@ -291,24 +291,45 @@ export async function toggleTheme() {
 
 
 // 다른 화면(settings.js)에서도 토글 직후 반영해야 해서 재사용 가능하게 export.
+// 강조색 — 테마와 독립. 버튼·링크·활성메뉴·체크박스·포커스·주요 아이콘에 일관 적용.
 export const APP_THEMES = [
-  { id: '', label: '기본(블루)', brand: '#6C8CF5' },
+  { id: '', label: '블루', brand: '#6C8CF5' },
   { id: 'green', label: '그린', brand: '#2FA279' },
   { id: 'purple', label: '퍼플', brand: '#8A5CD1' },
-  { id: 'rose', label: '로즈', brand: '#D9628A' },
-  { id: 'amber', label: '앰버', brand: '#D5891F' },
+  { id: 'rose', label: '핑크', brand: '#D9628A' },
+  { id: 'amber', label: '오렌지', brand: '#D5891F' },
   { id: 'teal', label: '틸', brand: '#1F9AA8' },
-  { id: 'graphite', label: '그래파이트', brand: '#5A6270' },
+  { id: 'graphite', label: '그레이', brand: '#5A6270' },
 ];
 
+// 구 테마(11종) → 신 테마(5종) 1회성 리맵. 한 번 바꾸면 map에서 빠지므로 멱등.
+const UI_THEME_MIGRATE = {
+  cozy: 'soft', pastel: 'soft',
+  retro: 'paper',
+  professional: 'studio', minimal: 'studio', cool: 'studio',
+  glass: 'pure', light: 'pure',
+  dark: 'midnight',
+};
+async function migrateUiTheme() {
+  const cur = await window.itda.settings.get('ui_theme');
+  if (cur && UI_THEME_MIGRATE[cur]) {
+    const next = UI_THEME_MIGRATE[cur];
+    await window.itda.settings.set({ key: 'ui_theme', value: next });
+    const t = UI_THEMES.find((x) => x.id === next);
+    if (t) await window.itda.settings.set({ key: 'theme', value: t.dark ? 'dark' : 'light' });
+    return next;
+  }
+  return cur;
+}
+
 export async function applyTheme() {
+  const uiTheme = await migrateUiTheme();
   const theme = await window.itda.settings.get('theme');
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : '';
   const appTheme = await window.itda.settings.get('app_theme');
   if (appTheme && APP_THEMES.some((t) => t.id === appTheme)) document.documentElement.dataset.apptheme = appTheme;
   else delete document.documentElement.dataset.apptheme;
-  // 전역 UI 테마(분위기) — 라이트/다크·강조색 위에 겹쳐서 앱 전체 팔레트/형태를 바꾼다.
-  const uiTheme = await window.itda.settings.get('ui_theme');
+  // 전역 UI 테마(분위기) — 라이트/다크·강조색 위에 겹쳐서 앱 전체 배경/카드/형태를 바꾼다(강조색은 안 건드림).
   const uit = UI_THEMES.find((t) => t.id === uiTheme);
   if (uit && uit.uitheme) document.documentElement.dataset.uitheme = uit.uitheme;
   else delete document.documentElement.dataset.uitheme;
@@ -318,18 +339,14 @@ export async function applyTheme() {
 // ================= 전역 UI 테마 + 세부 조정(모서리/그림자/밀도) =================
 // 테마는 "기본 디자인 언어"를 한 번에 정하고, 세부 조정은 그 위에서 몇 가지만 더 튜닝한다.
 // 전부 documentElement의 data-* 속성 하나로 표현되고 CSS 변수 오버라이드로만 동작한다(컴포넌트 코드 무변경).
+// 전체 테마(분위기) — 5종. 배경/카드/테두리/모서리/그림자만 바꾸고 강조색·폰트는 안 건드림.
+// 다크는 Midnight 하나. 각 id는 CSS의 [data-uitheme] 값(pure는 기본이라 빈 값).
 export const UI_THEMES = [
-  { id: 'light', label: '라이트', dark: false, uitheme: '' },
-  { id: 'dark', label: '다크', dark: true, uitheme: '' },
-  { id: 'midnight', label: '미드나잇', dark: true, uitheme: 'midnight' },
-  { id: 'cozy', label: '코지 · 웜', dark: false, uitheme: 'cozy' },
-  { id: 'soft', label: '소프트', dark: false, uitheme: 'soft' },
-  { id: 'cool', label: '쿨', dark: false, uitheme: 'cool' },
-  { id: 'pastel', label: '파스텔', dark: false, uitheme: 'pastel' },
-  { id: 'glass', label: '글래스', dark: false, uitheme: 'glass' },
-  { id: 'retro', label: '레트로', dark: false, uitheme: 'retro' },
-  { id: 'minimal', label: '미니멀', dark: false, uitheme: 'minimal' },
-  { id: 'professional', label: '프로페셔널', dark: false, uitheme: 'professional' },
+  { id: 'pure', label: 'Pure', desc: '깨끗하고 중립적인 기본', dark: false, uitheme: '' },
+  { id: 'soft', label: 'Soft', desc: '따뜻하고 부드러운 톤', dark: false, uitheme: 'soft' },
+  { id: 'paper', label: 'Paper', desc: '종이 질감의 아늑한', dark: false, uitheme: 'paper' },
+  { id: 'studio', label: 'Studio', desc: '뚜렷한 구분선, 높은 밀도', dark: false, uitheme: 'studio' },
+  { id: 'midnight', label: 'Midnight', desc: '차분한 네이비 다크', dark: true, uitheme: 'midnight' },
 ];
 
 const UI_ADJUSTS = {
@@ -340,8 +357,10 @@ const UI_ADJUSTS = {
 };
 
 export async function getUiTheme() {
-  const saved = await window.itda.settings.get('ui_theme');
-  return UI_THEMES.some((t) => t.id === saved) ? saved : null; // null = 아직 안 골랐음(하위호환: 다크토글만 사용)
+  const saved = await migrateUiTheme();
+  if (UI_THEMES.some((t) => t.id === saved)) return saved;
+  // 아직 안 골랐으면: 다크 토글 상태만 반영(하위호환)
+  return (await window.itda.settings.get('theme')) === 'dark' ? 'midnight' : 'pure';
 }
 
 export async function setUiTheme(id) {

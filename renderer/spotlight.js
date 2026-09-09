@@ -10,7 +10,8 @@ async function applyMinimalTheme() {
   try {
     const s = await window.itda.settings.getMany(['theme', 'ui_theme', 'app_theme']);
     if (s.theme === 'dark') document.documentElement.dataset.theme = 'dark';
-    if (s.ui_theme && s.ui_theme !== 'light' && s.ui_theme !== 'dark') document.documentElement.dataset.uitheme = s.ui_theme;
+    // pure/light/dark는 별도 data-uitheme 없음(기본 팔레트). soft/paper/studio/midnight만 붙인다.
+    if (['soft', 'paper', 'studio', 'midnight'].includes(s.ui_theme)) document.documentElement.dataset.uitheme = s.ui_theme;
     if (s.app_theme) document.documentElement.dataset.apptheme = s.app_theme;
   } catch (e) {
     /* 기본(라이트) */

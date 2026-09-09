@@ -412,6 +412,22 @@ todos + events + workCenter + widgets 프리페치, 위젯은 각자 또 로드.
   `search.browse({type,tag})`(검색어 없이 범위 나열). `test/search.test.js` +2.
 - 프리픽스 활성 시 화면·바로가기 숨기고 항목만, 섹션 헤더에 스코프 접미("메모 · 항목").
 
+## 디자인 시스템 개편 Phase 1a — 테마 11→5 통합 (v2.66.0)
+"테마 / 대시보드 스타일 / 세부 디자인"이 겹치고 비슷한 테마가 11개라 구분이 안 되던 문제.
+축을 THEME(분위기) × ACCENT(강조색) × DETAIL(미세조정)로 분리하는 첫 단계.
+
+- **`UI_THEMES` 11 → 5**: Pure(기본, 빈 uitheme) / Soft(웜) / Paper(종이) / Studio(고밀도) / Midnight(다크).
+  각 테마는 배경·카드·테두리·모서리·그림자만 바꾸고 **`--brand`(강조색)·폰트는 안 건드림**.
+  `styles.css`의 구 uitheme 블록 9개 삭제 → soft/paper/studio 3개로. Midnight 블록 유지.
+- **마이그레이션** (`shell.js` `migrateUiTheme`, 멱등): cozy/pastel→soft, retro→paper,
+  professional/minimal/cool→studio, glass/light→pure, dark→midnight. `applyTheme`/`getUiTheme` 진입 시 1회.
+- **강조색**: `APP_THEMES` 라벨만 정리(로즈→핑크, 앰버→오렌지, 그래파이트→그레이). 색·id·마이그레이션 없음. 테마와 완전 독립.
+- **설정 화면**: 테마 카드가 색 사각형 → 미니 UI 미리보기(사이드바 조각+카드+강조점)+이름+한 줄 설명.
+  "테마"→"전체 테마", 세부 디자인 라벨 정리(진하게→강조, 밀도 여유롭게/기본/촘촘하게).
+- Midnight에서 다크 토글 끄면 Pure로 넘어감(스타일 사라짐 방지).
+- CDP: cozy→soft 마이그레이션 / 5테마 배경색 / paper+green 강조색 독립 / 카드 렌더 검증. 66/66, lint 0.
+- **Phase 1b**(대시보드 스타일→레이아웃 축), **Phase 2**(실제 UI 프리뷰 카드 + 상단 현재스타일), **Phase 3**(내 프리셋 저장) 예정.
+
 ## 연결 위젯 인라인 미리보기 + 대시보드 방향키 (v2.65.7)
 - **연결/관련 항목 행 클릭 → 화면 이동 대신 그 자리에서 아코디언 미리보기** (`links-ui.js`).
   `.link-item-main`을 `<a>` → `<button data-action="peek">`로. 펼침 시 `.get(id)` 조회(세션 캐시) →
