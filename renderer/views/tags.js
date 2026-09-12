@@ -47,8 +47,10 @@ export async function mountTagsPanel(root) {
       <div id="tag-list" class="compact-list"></div>
       <div class="form-row" style="margin-top:10px;border-top:1px solid var(--divider);padding-top:10px;">
         <input type="text" id="tag-newName" class="input" placeholder="새 카테고리 이름" style="flex:1;min-width:160px;" />
-        <input type="color" id="tag-newColor" value="#6B7280" style="width:34px;height:30px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;cursor:pointer;flex-shrink:0;" />
-        <input type="text" id="tag-newColorHex" class="input" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="#6B7280" maxlength="7" placeholder="#RRGGBB" style="width:78px;flex-shrink:0;font-size:11.5px;font-family:monospace;padding:4px 6px;text-transform:uppercase;" />
+        <div class="tag-color-group">
+          <input type="color" id="tag-newColor" value="#6B7280" class="tag-color-swatch" />
+          <input type="text" id="tag-newColorHex" class="input tag-color-hex" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="#6B7280" maxlength="7" placeholder="#RRGGBB" />
+        </div>
         <button class="btn" id="tag-addBtn">추가</button>
       </div>
     </div>
@@ -129,8 +131,10 @@ export async function mountTagsPanel(root) {
       .map(
         (c) => `
         <div class="list-row" data-id="${c.id}">
-          <input type="color" data-action="color" value="${c.color_hex}" style="width:22px;height:22px;border:1px solid var(--border);border-radius:6px;padding:1px;cursor:pointer;flex-shrink:0;" />
-          <input type="text" data-action="colorHex" class="input" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="${escapeHtml((c.color_hex || '').toUpperCase())}" maxlength="7" placeholder="#RRGGBB" style="width:78px;flex-shrink:0;font-size:11.5px;font-family:monospace;padding:4px 6px;text-transform:uppercase;" />
+          <div class="tag-color-group">
+            <input type="color" data-action="color" value="${c.color_hex}" class="tag-color-swatch" />
+            <input type="text" data-action="colorHex" class="input tag-color-hex" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="${escapeHtml((c.color_hex || '').toUpperCase())}" maxlength="7" placeholder="#RRGGBB" />
+          </div>
           <div class="main">
             <div style="display:flex;align-items:center;gap:4px;">
               <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />

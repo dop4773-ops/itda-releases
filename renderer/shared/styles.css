@@ -860,6 +860,13 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .compact-list.board-view .list-row .main{width:100%;}
 .compact-list.board-view .list-row .actions{width:100%;justify-content:flex-end;}
 
+/* 태그 색상: 스와치 + hex 텍스트 입력. wrapper를 flex-row로 고정해서 보드형(.list-row가
+   flex-direction:column)에서도 둘이 나란히 붙어있는다. hex는 폰트가 앱 전역과 달라 보이지
+   않도록 .input의 font-family:inherit를 그대로 쓴다(별도 지정 금지). */
+.tag-color-group{display:flex;align-items:center;gap:7px;flex-shrink:0;}
+.tag-color-swatch{width:32px;height:32px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;cursor:pointer;flex-shrink:0;}
+.tag-color-hex{width:88px;flex-shrink:0;font-size:12.5px;font-weight:600;padding:6px 8px;text-transform:uppercase;letter-spacing:.02em;}
+
 /* ================= Todo: 보기 전환 · 필터 행 · 카드 배지 ================= */
 .view-toggle{display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;flex-shrink:0;}
 .view-toggle-btn{width:30px;height:26px;border:none;background:transparent;border-radius:var(--radius-xs);color:var(--text-faint);cursor:pointer;display:flex;align-items:center;justify-content:center;}
