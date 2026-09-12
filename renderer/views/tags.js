@@ -191,6 +191,7 @@ export async function mountTagsPanel(root) {
       colorHexInput.addEventListener('blur', () => {
         colorHexInput.value = colorInput.value.toUpperCase(); // 잘못 입력한 값은 마지막 유효값으로 되돌림
       });
+      colorHexInput.addEventListener('focus', () => colorHexInput.select()); // 눌렀을 때 전체 선택 — 지우지 않고 바로 붙여넣기
 
       textColorToggle.querySelectorAll('button').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -227,6 +228,7 @@ export async function mountTagsPanel(root) {
   $('tag-newColorHex').addEventListener('blur', () => {
     $('tag-newColorHex').value = $('tag-newColor').value.toUpperCase();
   });
+  $('tag-newColorHex').addEventListener('focus', () => $('tag-newColorHex').select());
 
   $('tag-addBtn').addEventListener('click', async () => {
     const name = $('tag-newName').value.trim();
