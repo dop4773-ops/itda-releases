@@ -9,6 +9,15 @@ const SEARCH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
 const LIST_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>`;
 const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="9" rx="1"/><rect x="19" y="4" width="2" height="5" rx="1"/></svg>`;
 
+// macOS 네이티브 색상 패널(<input type=color>)은 hex 붙여넣기가 잘 안 먹는 경우가 있어
+// 옆에 이 정규식으로 검증하는 일반 텍스트 입력을 따로 둔다 — 거기엔 그냥 붙여넣으면 된다.
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+const normalizeHex = (v) => {
+  v = v.trim();
+  if (v && !v.startsWith('#')) v = `#${v}`;
+  return v;
+};
+
 // 탐색 모달에 쓸 타입별 순서/라벨 — Todo → 일정 → 메모 → 포스트잇 순으로 고정 노출
 const BROWSE_TYPE_ORDER = ['todo', 'event', 'memo', 'postit'];
 const BROWSE_TYPE_EMOJI = { todo: '✅', event: '📅', memo: '📝', postit: '📌' };
@@ -38,7 +47,8 @@ export async function mountTagsPanel(root) {
       <div id="tag-list" class="compact-list"></div>
       <div class="form-row" style="margin-top:10px;border-top:1px solid var(--divider);padding-top:10px;">
         <input type="text" id="tag-newName" class="input" placeholder="새 카테고리 이름" style="flex:1;min-width:160px;" />
-        <input type="color" id="tag-newColor" value="#6B7280" style="width:34px;height:30px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;cursor:pointer;" />
+        <input type="color" id="tag-newColor" value="#6B7280" style="width:34px;height:30px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px;cursor:pointer;flex-shrink:0;" />
+        <input type="text" id="tag-newColorHex" class="input" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="#6B7280" maxlength="7" placeholder="#RRGGBB" style="width:78px;flex-shrink:0;font-size:11.5px;font-family:monospace;padding:4px 6px;text-transform:uppercase;" />
         <button class="btn" id="tag-addBtn">추가</button>
       </div>
     </div>
@@ -120,9 +130,9 @@ export async function mountTagsPanel(root) {
         (c) => `
         <div class="list-row" data-id="${c.id}">
           <input type="color" data-action="color" value="${c.color_hex}" style="width:22px;height:22px;border:1px solid var(--border);border-radius:6px;padding:1px;cursor:pointer;flex-shrink:0;" />
+          <input type="text" data-action="colorHex" class="input" title="hex 코드를 직접 입력하거나 붙여넣기 하세요" value="${escapeHtml((c.color_hex || '').toUpperCase())}" maxlength="7" placeholder="#RRGGBB" style="width:78px;flex-shrink:0;font-size:11.5px;font-family:monospace;padding:4px 6px;text-transform:uppercase;" />
           <div class="main">
             <div style="display:flex;align-items:center;gap:4px;">
-              <span style="color:${c.color_hex};font-weight:700;font-size:13px;">#</span>
               <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />
             </div>
           </div>
@@ -144,6 +154,7 @@ export async function mountTagsPanel(root) {
       const category = categories.find((c) => c.id === id);
       const nameInput = row.querySelector('[data-action="name"]');
       const colorInput = row.querySelector('[data-action="color"]');
+      const colorHexInput = row.querySelector('[data-action="colorHex"]');
       const textColorToggle = row.querySelector('[data-action="textColorToggle"]');
       let currentTextColor = textColorToggle.querySelector('.is-active')?.dataset.value || '#000000';
 
@@ -161,7 +172,21 @@ export async function mountTagsPanel(root) {
         }
       });
       nameInput.addEventListener('input', scheduleSave);
-      colorInput.addEventListener('input', scheduleSave);
+      // 네이티브 <input type=color> 스와치 — macOS 색상 패널에선 hex 붙여넣기가 잘 안 먹어서
+      // 아래 텍스트 입력을 따로 둠. 스와치를 클릭해서 고르면 텍스트 쪽도 맞춰 보여준다.
+      colorInput.addEventListener('input', () => {
+        colorHexInput.value = colorInput.value.toUpperCase();
+        scheduleSave();
+      });
+      colorHexInput.addEventListener('input', () => {
+        const hex = normalizeHex(colorHexInput.value);
+        if (!HEX_COLOR_RE.test(hex)) return; // 6자리 다 입력/붙여넣기 되기 전엔 저장 보류
+        colorInput.value = hex;
+        scheduleSave();
+      });
+      colorHexInput.addEventListener('blur', () => {
+        colorHexInput.value = colorInput.value.toUpperCase(); // 잘못 입력한 값은 마지막 유효값으로 되돌림
+      });
 
       textColorToggle.querySelectorAll('button').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -187,6 +212,17 @@ export async function mountTagsPanel(root) {
       }
     });
   }
+
+  $('tag-newColor').addEventListener('input', () => {
+    $('tag-newColorHex').value = $('tag-newColor').value.toUpperCase();
+  });
+  $('tag-newColorHex').addEventListener('input', () => {
+    const hex = normalizeHex($('tag-newColorHex').value);
+    if (HEX_COLOR_RE.test(hex)) $('tag-newColor').value = hex;
+  });
+  $('tag-newColorHex').addEventListener('blur', () => {
+    $('tag-newColorHex').value = $('tag-newColor').value.toUpperCase();
+  });
 
   $('tag-addBtn').addEventListener('click', async () => {
     const name = $('tag-newName').value.trim();
