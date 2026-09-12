@@ -9,7 +9,9 @@ module.exports = function createEventsRepository(db) {
     today() {
       return db
         .prepare(
-          `SELECT e.*, c.name AS category_name, c.color_hex, c.text_color
+          `SELECT e.*, c.name AS category_name,
+                  COALESCE(c.color_hex, e.color_hex) AS color_hex,
+                  COALESCE(c.text_color, e.text_color) AS text_color
            FROM events e LEFT JOIN categories c ON c.id = e.category_id
            WHERE e.deleted_at IS NULL
              AND date(e.start_at) <= date('now','localtime') AND date(e.end_at) >= date('now','localtime')
@@ -25,7 +27,9 @@ module.exports = function createEventsRepository(db) {
     range(fromDate, toDate) {
       return db
         .prepare(
-          `SELECT e.*, c.name AS category_name, c.color_hex, c.text_color
+          `SELECT e.*, c.name AS category_name,
+                  COALESCE(c.color_hex, e.color_hex) AS color_hex,
+                  COALESCE(c.text_color, e.text_color) AS text_color
            FROM events e LEFT JOIN categories c ON c.id = e.category_id
            WHERE e.deleted_at IS NULL AND date(e.start_at) <= date(?) AND date(e.end_at) >= date(?)
            ORDER BY e.start_at ASC`
@@ -36,17 +40,19 @@ module.exports = function createEventsRepository(db) {
     getById(id) {
       return db
         .prepare(
-          `SELECT e.*, c.name AS category_name, c.color_hex, c.text_color
+          `SELECT e.*, c.name AS category_name,
+                  COALESCE(c.color_hex, e.color_hex) AS color_hex,
+                  COALESCE(c.text_color, e.text_color) AS text_color
            FROM events e LEFT JOIN categories c ON c.id = e.category_id WHERE e.id = ?`
         )
         .get(id);
     },
 
-    insert({ title, categoryId, location, startAt, endAt, allDay, recurrenceRule, recurrenceParentId, memo }) {
+    insert({ title, categoryId, location, startAt, endAt, allDay, recurrenceRule, recurrenceParentId, memo, colorHex, textColor }) {
       const info = db
         .prepare(
-          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo, color_hex, text_color)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           title,
@@ -57,7 +63,9 @@ module.exports = function createEventsRepository(db) {
           allDay ? 1 : 0,
           recurrenceRule ?? null,
           recurrenceParentId ?? null,
-          memo ?? null
+          memo ?? null,
+          colorHex ?? null,
+          textColor ?? null
         );
       return { id: info.lastInsertRowid };
     },
@@ -67,8 +75,8 @@ module.exports = function createEventsRepository(db) {
       const durationMs = new Date(parent.end_at.replace(' ', 'T')).getTime() - new Date(parent.start_at.replace(' ', 'T')).getTime();
       const timePart = parent.start_at.slice(10); // ' HH:MM:SS'
       const stmt = db.prepare(
-        `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, recurrence_parent_id, memo, color_hex, text_color)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const pad = (n) => String(n).padStart(2, '0');
       const insertMany = db.transaction((dates) => {
@@ -77,7 +85,7 @@ module.exports = function createEventsRepository(db) {
           const start = new Date(startAt.replace(' ', 'T'));
           const end = new Date(start.getTime() + durationMs);
           const endAtStr = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())} ${pad(end.getHours())}:${pad(end.getMinutes())}:${pad(end.getSeconds())}`;
-          stmt.run(parent.title, parent.category_id, parent.location, startAt, endAtStr, parent.all_day, parent.recurrence_rule, parent.id, parent.memo);
+          stmt.run(parent.title, parent.category_id, parent.location, startAt, endAtStr, parent.all_day, parent.recurrence_rule, parent.id, parent.memo, parent.color_hex, parent.text_color);
         }
       });
       insertMany(occurrenceDates);
@@ -96,11 +104,11 @@ module.exports = function createEventsRepository(db) {
       return db.prepare(`SELECT id FROM events WHERE ${clauses.join(' AND ')}`).all(...params);
     },
 
-    update({ id, title, categoryId, location, startAt, endAt, allDay, memo }) {
+    update({ id, title, categoryId, location, startAt, endAt, allDay, memo, colorHex, textColor }) {
       db.prepare(
-        `UPDATE events SET title = ?, category_id = ?, location = ?, start_at = ?, end_at = ?, all_day = ?, memo = ?
+        `UPDATE events SET title = ?, category_id = ?, location = ?, start_at = ?, end_at = ?, all_day = ?, memo = ?, color_hex = ?, text_color = ?
          WHERE id = ?`
-      ).run(title, categoryId, location, startAt, endAt, allDay, memo, id);
+      ).run(title, categoryId, location, startAt, endAt, allDay, memo, colorHex ?? null, textColor ?? null, id);
     },
 
     softDelete(id) {

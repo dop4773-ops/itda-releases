@@ -86,8 +86,9 @@ export function mountEventDetailModal(root, { onChange } = {}) {
   // ---------- 상세 보기 ----------
   function openDetail(evt) {
     ensureCategories().then(() => {
-      const cat = categories.find((c) => c.id === evt.category_id);
-      $('ed-detailTitle').innerHTML = `${cat ? `<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${cat.color_hex};display:inline-block;"></span>` : ''}${escapeHtml(evt.title)}`;
+      // 카테고리가 있으면 그 색, 없어도 이 일정 자체에 고른 색이 있으면 그걸 점으로
+      // (evt.color_hex는 두 경우 다 COALESCE로 이미 채워져 있다 — events.repository.js 참고).
+      $('ed-detailTitle').innerHTML = `${evt.color_hex ? `<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${evt.color_hex};display:inline-block;"></span>` : ''}${escapeHtml(evt.title)}`;
     });
     const start = (evt.start_at || '').replace(' ', ' ');
     const end = (evt.end_at || '').slice(11, 16);

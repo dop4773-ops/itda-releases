@@ -126,6 +126,8 @@ CREATE TABLE events (
   recurrence_rule       TEXT,            -- 'daily'|'weekly'|'monthly', 반복 없으면 NULL (RRULE 표준 아님 — 3가지 단순 패턴만)
   recurrence_parent_id  INTEGER REFERENCES events(id) ON DELETE CASCADE,
   memo                  TEXT,
+  color_hex             TEXT,            -- 카테고리 없음일 때만 쓰는 이벤트 자체 색상(있으면). 카테고리가 있으면 카테고리 색이 우선.
+  text_color            TEXT,            -- color_hex와 짝을 이루는 글자색('#000000'/'#ffffff')
   created_at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   deleted_at            TEXT

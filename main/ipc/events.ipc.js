@@ -43,7 +43,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
 
   ipcMain.handle(
     'events:add',
-    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo, link, fromInbox }) => {
+    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo, colorHex, textColor, link, fromInbox }) => {
       assertNonEmpty(title, '일정 제목을 입력해주세요.');
       assertNonEmpty(startAt, '시작 시각이 필요합니다.');
 
@@ -60,6 +60,10 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
           allDay: isAllDay,
           recurrenceRule,
           memo,
+          // 카테고리가 있으면 조회 시 COALESCE가 카테고리 색을 우선하므로 안 건드려도 무해 —
+          // 카테고리 없음일 때만 실제로 쓰인다.
+          colorHex,
+          textColor,
         });
         // 반복 지정 시: 방금 만든 걸 부모로 삼아 앞으로 180일치 발생일을 실제 행으로 미리 채워둔다
         if (recurrenceRule) {
@@ -83,18 +87,22 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
 
   ipcMain.handle(
     'events:update',
-    (event, { id, title, categoryId, location, startAt, endAt, allDay, memo }) => {
+    (event, { id, title, categoryId, location, startAt, endAt, allDay, memo, colorHex, textColor }) => {
       const ev = events.getById(id);
       if (!ev) throw new Error('일정을 찾을 수 없습니다.');
+      // categoryId/location/memo/colorHex/textColor는 "카테고리 없음으로 바꾸기"·"내용 지우기"처럼
+      // null이 곧 유효한 값이라 `??`(null도 대체)를 쓰면 못 지운다 — 안 보낸(undefined) 경우만 기존값 유지.
       events.update({
         id,
         title: title?.trim() ?? ev.title,
-        categoryId: categoryId ?? ev.category_id,
-        location: location ?? ev.location,
+        categoryId: categoryId !== undefined ? categoryId : ev.category_id,
+        location: location !== undefined ? location : ev.location,
         startAt: startAt ?? ev.start_at,
         endAt: endAt ?? ev.end_at,
         allDay: allDay != null ? (allDay ? 1 : 0) : ev.all_day,
-        memo: memo ?? ev.memo,
+        memo: memo !== undefined ? memo : ev.memo,
+        colorHex: colorHex !== undefined ? colorHex : ev.color_hex,
+        textColor: textColor !== undefined ? textColor : ev.text_color,
       });
       broadcastDataChanged('event', id);
       scheduleContentSync(repos, 'event', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)

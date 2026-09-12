@@ -74,10 +74,21 @@ function importAllTables(db, data) {
     (data.events || []).forEach((e) => {
       const info = db
         .prepare(
-          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, memo)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, memo, color_hex, text_color)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
-        .run(e.title, mapCategory(e.category_id), e.location ?? null, e.start_at, e.end_at, e.all_day ? 1 : 0, e.recurrence_rule ?? null, e.memo ?? null);
+        .run(
+          e.title,
+          mapCategory(e.category_id),
+          e.location ?? null,
+          e.start_at,
+          e.end_at,
+          e.all_day ? 1 : 0,
+          e.recurrence_rule ?? null,
+          e.memo ?? null,
+          e.color_hex ?? null,
+          e.text_color ?? null
+        );
       eventIdMap.set(e.id, info.lastInsertRowid);
       counts.events += 1;
     });

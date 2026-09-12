@@ -25,6 +25,22 @@ const CHEVRON_RIGHT = `<svg width="15" height="15" viewBox="0 0 24 24" fill="non
 const CLOSE_ICON = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
 const SMALL_TRASH_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 
+// 카테고리 없는 일정도 색을 고를 수 있게 — 카테고리가 이미 색을 담당하므로 이 팔레트는
+// "카테고리 없음"일 때만 보인다. 색상 구성은 구글 캘린더의 고정 이벤트 색상 11종을 참고.
+const EVENT_COLOR_PRESETS = [
+  { hex: '#7986CB', text: '#ffffff', name: '라벤더' },
+  { hex: '#33B679', text: '#ffffff', name: '세이지' },
+  { hex: '#8E24AA', text: '#ffffff', name: '그레이프' },
+  { hex: '#E67C73', text: '#ffffff', name: '플라밍고' },
+  { hex: '#F6BF26', text: '#000000', name: '바나나' },
+  { hex: '#F4511E', text: '#ffffff', name: '탠저린' },
+  { hex: '#039BE5', text: '#ffffff', name: '피콕' },
+  { hex: '#616161', text: '#ffffff', name: '그래파이트' },
+  { hex: '#3F51B5', text: '#ffffff', name: '블루베리' },
+  { hex: '#0B8043', text: '#ffffff', name: '바질' },
+  { hex: '#D50000', text: '#ffffff', name: '토마토' },
+];
+
 const HOUR_START = 6;
 const HOUR_END = 22; // 06:00 ~ 22:00 그리드에 표시
 const ROW_HEIGHT = 44;
@@ -419,6 +435,10 @@ export async function mount(root, deepLinkId) {
           <select id="c-category" class="select" style="flex:1;"></select>
           <input type="text" id="c-location" class="input" placeholder="장소" style="flex:1;" />
         </div>
+        <div class="form-row" id="c-colorRow" style="display:none;flex-direction:column;align-items:flex-start;gap:6px;">
+          <span style="font-size:11.5px;color:var(--text-faint);">색상 (카테고리가 없을 때만 적용돼요)</span>
+          <div class="event-color-grid" id="c-colorGrid"></div>
+        </div>
         <div class="form-row">
           <label class="checkbox-row"><input type="checkbox" id="c-allDay" /> 하루종일</label>
         </div>
@@ -486,6 +506,28 @@ export async function mount(root, deepLinkId) {
   let alldayOrder = []; // 종일 일정 사용자 지정 순서(드래그) — app_settings: calendar_allday_order
   let eventTemplates = []; // 즐겨찾는 일정 템플릿 — app_settings: calendar_event_templates
   let monthTrim = true; // 월간 뷰를 이 달이 걸치는 주 수만큼만(구글 캘린더식). app_settings: calendar_month_trim (기본 켬)
+  let selectedEventColor = null; // {hex,text} | null — "카테고리 없음"일 때만 의미 있는 이 일정만의 색
+
+  // ---------- 카테고리 없음 전용 색상 선택 ----------
+  // 카테고리를 고르면 그 색이 항상 우선이라(events.repository.js COALESCE) 이 팔레트는 숨긴다.
+  $('c-colorGrid').innerHTML = EVENT_COLOR_PRESETS.map(
+    (p) => `<button type="button" class="event-color-swatch" data-hex="${p.hex}" data-text="${p.text}" title="${p.name}" style="background:${p.hex};"></button>`
+  ).join('');
+  function syncColorGridActive() {
+    $('c-colorGrid').querySelectorAll('.event-color-swatch').forEach((btn) => {
+      btn.classList.toggle('active', !!selectedEventColor && selectedEventColor.hex === btn.dataset.hex);
+    });
+  }
+  $('c-colorGrid').querySelectorAll('.event-color-swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      selectedEventColor = selectedEventColor?.hex === btn.dataset.hex ? null : { hex: btn.dataset.hex, text: btn.dataset.text };
+      syncColorGridActive();
+    });
+  });
+  function syncColorRowVisibility() {
+    $('c-colorRow').style.display = $('c-category').value ? 'none' : 'flex';
+  }
+  $('c-category').addEventListener('change', syncColorRowVisibility);
 
   // ---------- 카테고리 (셀렉트 + 범례) ----------
   async function loadCategories() {
@@ -675,8 +717,9 @@ export async function mount(root, deepLinkId) {
 
   // ---------- 일정 상세 모달 (연결된 항목 포함) ----------
   function openDetail(evt) {
-    const cat = categories.find((c) => c.id === evt.category_id);
-    $('cd-title').innerHTML = `${cat ? `<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${cat.color_hex};display:inline-block;"></span>` : ''}${escapeHtml(evt.title)}`;
+    // 카테고리가 있으면 그 색, 없어도 이 일정 자체에 고른 색이 있으면 그걸 점으로(evt.color_hex는
+    // 두 경우 다 COALESCE로 이미 채워져 있다 — events.repository.js range()/getById() 참고).
+    $('cd-title').innerHTML = `${evt.color_hex ? `<span class="dot" style="width:9px;height:9px;border-radius:50%;background:${evt.color_hex};display:inline-block;"></span>` : ''}${escapeHtml(evt.title)}`;
     const start = (evt.start_at || '').replace(' ', ' ');
     const end = (evt.end_at || '').slice(11, 16);
     $('cd-time').textContent = evt.all_day ? `${start.slice(0, 10)} · 하루종일` : `${start.slice(0, 16)} ~ ${end}`;
@@ -786,6 +829,10 @@ export async function mount(root, deepLinkId) {
     $('c-category').value = isEdit && evt.category_id ? String(evt.category_id) : '';
     $('c-location').value = isEdit ? evt.location || '' : '';
     $('c-memo').value = isEdit ? evt.memo || '' : '';
+    // 카테고리 없음일 때만 evt.color_hex가 "이 일정 자체의 색"(카테고리가 있으면 그 색이 COALESCE로 대신 들어옴)
+    selectedEventColor = isEdit && !evt.category_id && evt.color_hex ? { hex: evt.color_hex, text: evt.text_color || '#000000' } : null;
+    syncColorGridActive();
+    syncColorRowVisibility();
 
     // 새 일정은 "하루종일"이 기본값 — 대부분의 일정 등록이 종일이라는 피드백 반영.
     const isAllDay = isEdit ? !!evt.all_day : true;
@@ -830,6 +877,7 @@ export async function mount(root, deepLinkId) {
   function applyTemplate(t) {
     $('c-title').value = t.title || '';
     $('c-category').value = t.categoryId ? String(t.categoryId) : '';
+    syncColorRowVisibility();
     $('c-location').value = t.location || '';
     const wasAllDay = $('c-allDay').checked;
     $('c-allDay').checked = !!t.allDay;
@@ -944,6 +992,9 @@ export async function mount(root, deepLinkId) {
       const categoryId = $('c-category').value ? Number($('c-category').value) : null;
       const location = $('c-location').value.trim() || null;
       const memo = $('c-memo').value.trim() || null;
+      // 카테고리가 있으면 그 색이 항상 우선이니 굳이 저장 안 함 — 카테고리 없음일 때만 의미 있음
+      const colorHex = categoryId ? null : selectedEventColor?.hex ?? null;
+      const textColor = categoryId ? null : selectedEventColor?.text ?? null;
       // 하루종일이면 날짜(YYYY-MM-DD)만 있으므로 시각을 붙여 datetime 형태로 맞춘다.
       // 종일 + 종료일 지정 → 그 날 끝(23:59:59)까지. 종료일 없으면 시작일 하루짜리.
       const startAt = isAllDay ? `${startRaw} 00:00:00` : startRaw.replace('T', ' ');
@@ -962,6 +1013,8 @@ export async function mount(root, deepLinkId) {
           endAt,
           allDay: isAllDay,
           memo,
+          colorHex,
+          textColor,
         });
         toast('일정을 수정했어요');
       } else {
@@ -973,6 +1026,8 @@ export async function mount(root, deepLinkId) {
           endAt,
           allDay: isAllDay,
           memo,
+          colorHex,
+          textColor,
           recurrenceRule: $('c-recurrence').value || null,
         });
       }

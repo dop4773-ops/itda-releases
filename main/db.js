@@ -12,7 +12,8 @@ const { chosung } = require('./shared/hangul');
 //   v3: search_index를 FTS5 → 일반 테이블로 재구축(한글 부분일치·초성검색 지원) + chosung 컬럼
 //   v4: search_index에 updated_at 컬럼 (검색 랭킹의 "최신도" 가산용)
 //   v5: inbox_items에 is_favorite 컬럼 (Inbox 별표)
-const SCHEMA_VERSION = 5;
+//   v6: events에 color_hex/text_color 컬럼 (카테고리 없는 일정도 색을 고를 수 있게)
+const SCHEMA_VERSION = 6;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -153,6 +154,12 @@ function applyLightweightMigrations(db) {
     // v5: Inbox 개편 — "먼저 처리할 항목" 별표. 기존 항목은 전부 0(별표 없음)으로 시작.
     db.exec(`ALTER TABLE inbox_items ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0`);
     console.log('[itda] 마이그레이션: inbox_items.is_favorite 컬럼 추가');
+  }
+  if (!hasColumn('events', 'color_hex')) {
+    // v6: 카테고리 없음인 일정도 색을 고를 수 있게. 카테고리가 있으면 그 색이 항상 우선(COALESCE).
+    db.exec(`ALTER TABLE events ADD COLUMN color_hex TEXT`);
+    db.exec(`ALTER TABLE events ADD COLUMN text_color TEXT`);
+    console.log('[itda] 마이그레이션: events.color_hex/text_color 컬럼 추가');
   }
   {
     // 포스트잇 기본 크기를 220x160 → 288x288 → 295x295(실제 포스트잇 7.8cm 정사각형, 96dpi 기준)로
