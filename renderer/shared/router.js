@@ -90,9 +90,15 @@ window.addEventListener('DOMContentLoaded', async () => {
   perf('initShell', t);
   navigate();
   perf('DOMContentLoaded→navigate 호출까지', tDom);
-  // 위젯 창(별도 BrowserWindow)의 "전체 OO 보기" 클릭 시 메인 창이 여기로 이동
+  // 위젯 창(별도 BrowserWindow)의 "전체 OO 보기" 클릭 시, 그리고 빠른찾기/Spotlight에서
+  // 검색 결과를 눌렀을 때 메인 창이 여기로 이동한다.
+  // location.hash를 지금과 똑같은 값으로 다시 대입하면 브라우저가 hashchange를 아예 안 터뜨려서
+  // navigate()가 안 불리고 화면에 아무 반응이 없다 — 방금 열어본 일정/메모를 "최근 연 항목"에서
+  // 다시 누르거나, 상세를 보고 있는 항목을 검색해서 또 누르는 흔한 경우에 걸린다. 그럴 땐
+  // hashchange를 기다리지 않고 navigate()를 직접 한 번 더 불러 강제로 다시 연다.
   window.itda.onNavigate((route) => {
-    location.hash = route;
+    if (location.hash === route) navigate();
+    else location.hash = route;
   });
   // OS 전역 단축키(Ctrl/Cmd+Alt+L)로 어디서든 바로 다시 잠그기
   window.itda.onLockNow(lockNow);

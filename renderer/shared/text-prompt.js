@@ -33,10 +33,14 @@ export function promptText(anchorEl, opts = {}) {
     document.body.appendChild(pop);
     activeEl = pop;
 
-    const rect = anchorEl.getBoundingClientRect();
     const popRect = pop.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
+    // anchorEl 없이 부를 때도 있다(예: 빠른찾기로 잠긴 메모를 바로 열면 버튼 클릭이 아니라
+    // 딥링크라 기준 엘리먼트가 없음) — 그때 anchorEl.getBoundingClientRect()가 그대로 터지면
+    // 예외가 위(openMemoMaybeLocked → 호출부에서 await 안 함)까지 조용히 묻혀서 팝오버가
+    // 아예 안 뜨고 "눌러도 아무 반응 없음"으로 보인다. 없으면 화면 중앙 쯤에 띄운다.
+    const rect = anchorEl ? anchorEl.getBoundingClientRect() : { left: (vw - popRect.width) / 2, bottom: (vh - popRect.height) / 2 };
     pop.style.left = `${Math.max(8, Math.min(rect.left, vw - popRect.width - 8))}px`;
     pop.style.top = `${Math.min(rect.bottom + 4, vh - popRect.height - 8)}px`;
 
