@@ -1,5 +1,5 @@
 import './error-report.js'; // window.onerror/unhandledrejection → main 로그 파일 (side-effect only)
-import { toast, errorToast, emptyStateBlock, escapeHtml } from './ui-utils.js';
+import { toast, errorToast, emptyStateBlock, escapeHtml, goToHash } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
 import { initCommandPalette } from './command-palette.js';
 import { SHORTCUTS, preloadShortcuts, getCachedBinding, matchesAccelerator, labelForAccelerator } from './shortcuts.js';
@@ -154,7 +154,7 @@ function initGlobalTopbar() {
   if (!bellWrap || !bellBtn) return;
 
   searchBtn?.addEventListener('click', () => {
-    location.hash = '#/search';
+    goToHash('#/search');
   });
 
   function renderThemeIcon() {
@@ -738,7 +738,7 @@ function initSidebarNavShortcuts() {
     const n = Number(e.key);
     if (!Number.isInteger(n) || n < 1 || n > routes.length) return;
     e.preventDefault();
-    location.hash = routes[n - 1];
+    goToHash(routes[n - 1]);
   });
 }
 

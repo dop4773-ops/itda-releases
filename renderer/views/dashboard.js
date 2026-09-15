@@ -1,4 +1,4 @@
-import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping } from '../shared/ui-utils.js';
+import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, goToHash } from '../shared/ui-utils.js';
 import { STICKY_COLORS } from '../shared/theme.js';
 import { periodLabel, queryRange, groupByDateKey, buildMonthGridHtml, buildCompactAgendaHtml } from './calendar.js';
 import { computeNotifications } from '../shared/notifications.js';
@@ -1457,10 +1457,7 @@ export async function mount(root) {
     toast(`"${ws.label}" 워크스페이스를 불러왔어요`);
     // 워크스페이스 설정들은 대시보드 mount 시점에 읽히므로, 대시보드 뷰만 다시 mount시킨다.
     // (전체 새로고침은 비밀번호 잠금 화면이 다시 떠서 피함)
-    location.hash = '#/inbox';
-    setTimeout(() => {
-      location.hash = '#/dashboard';
-    }, 60);
+    goToHash('#/dashboard');
   }
   let layoutMenu = null;
   const closeLayoutMenu = () => {
@@ -2061,7 +2058,7 @@ export async function mount(root) {
   // 대신 전역 상단바의 알림 종(bell) 드롭다운을 그대로 열어준다(중복 구현 안 함).
   root.querySelectorAll('.summary-card[data-nav]').forEach((card) => {
     card.addEventListener('dblclick', () => {
-      location.hash = card.dataset.nav;
+      goToHash(card.dataset.nav);
     });
   });
   $('d-notifSummaryCard')?.addEventListener('dblclick', () => {
@@ -2087,7 +2084,7 @@ export async function mount(root) {
     container.querySelectorAll('.dash-row-link').forEach((row) => {
       row.addEventListener('click', (e) => {
         if (e.target.closest('input,button,a')) return; // 체크박스 등 자체 동작이 있는 요소는 제외
-        location.hash = row.dataset.nav;
+        goToHash(row.dataset.nav);
       });
     });
   }
@@ -2252,7 +2249,7 @@ export async function mount(root) {
         .join('') +
       (events.length > LIMIT ? `<a class="todo-more-link" id="d-eventMore">+ ${events.length - LIMIT}개 더보기</a>` : '');
     listEl.querySelector('#d-eventMore')?.addEventListener('click', () => {
-      location.hash = '#/calendar';
+      goToHash('#/calendar');
     });
     listEl.querySelectorAll('.event-row').forEach((row) => {
       row.addEventListener('click', () => openEvt(row.dataset.id));
@@ -2339,7 +2336,7 @@ export async function mount(root) {
         });
       });
       evtListEl.querySelector('.todo-more-link')?.addEventListener('click', () => {
-        location.hash = '#/calendar';
+        goToHash('#/calendar');
       });
     }
   }
@@ -2722,7 +2719,7 @@ export async function mount(root) {
 
   root.querySelectorAll('.wc-stat[data-nav]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      location.hash = btn.dataset.nav;
+      goToHash(btn.dataset.nav);
     });
   });
 

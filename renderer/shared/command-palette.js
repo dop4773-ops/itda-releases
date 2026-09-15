@@ -1,4 +1,4 @@
-import { escapeHtml, debounce } from './ui-utils.js';
+import { escapeHtml, debounce, goToHash } from './ui-utils.js';
 import { TABS as SETTINGS_TABS } from '../views/settings.js';
 import { TAG_ICON } from '../views/tags.js';
 import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
@@ -106,11 +106,11 @@ function buildItemCommand(row) {
     matchedIn: row.matchedIn || null,
     run: () => {
       if (row.entity_type === 'inbox') {
-        location.hash = '#/inbox';
+        goToHash('#/inbox');
         return;
       }
       // 그 항목까지 바로 연다(#/type/id) — 메모가 다른 폴더에 있어도, Todo가 필터에 안 걸려도 열림
-      location.hash = `${TYPE_ROUTE[row.entity_type]}/${row.entity_id}`;
+      goToHash(`${TYPE_ROUTE[row.entity_type]}/${row.entity_id}`);
     },
   };
 }

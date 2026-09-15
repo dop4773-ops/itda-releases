@@ -1,4 +1,4 @@
-import { escapeHtml, errorToast, toast, isUserTyping, debounce } from './ui-utils.js';
+import { escapeHtml, errorToast, toast, isUserTyping, debounce, goToHash } from './ui-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
 import { eventDateLabel } from './quick-find-core.js';
 
@@ -124,7 +124,7 @@ export async function mountLinksWidget(container, self) {
     if (expandedKey !== key || !panel.isConnected) return;
     panel.innerHTML = previewBodyHtml(type, d);
     panel.querySelector('.link-preview-go')?.addEventListener('click', () => {
-      location.hash = `${TYPE_ROUTE[type]}/${id}`;
+      goToHash(`${TYPE_ROUTE[type]}/${id}`);
     });
   }
 
@@ -271,7 +271,7 @@ export async function mountLinksWidget(container, self) {
     const d = previewCache.get(expandedKey);
     panel.innerHTML = d !== undefined ? previewBodyHtml(t, d) : `<div class="link-preview-empty">불러오는 중…</div>`;
     panel.querySelector('.link-preview-go')?.addEventListener('click', () => {
-      location.hash = `${TYPE_ROUTE[t]}/${iStr}`;
+      goToHash(`${TYPE_ROUTE[t]}/${iStr}`);
     });
   }
 

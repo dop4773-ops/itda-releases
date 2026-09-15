@@ -1,4 +1,4 @@
-import { toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce } from '../shared/ui-utils.js';
+import { toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce, goToHash } from '../shared/ui-utils.js';
 import { STICKY_COLORS, stickyRotation } from '../shared/theme.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
@@ -249,7 +249,7 @@ export async function mount(root, deepLinkId) {
         (kinds.has('todo') ? pill('Todo', '#/todo') : '') + (kinds.has('event') ? pill('일정', '#/calendar') : '');
       badgeHost.querySelectorAll('[data-goto]').forEach((b) => {
         b.addEventListener('click', () => {
-          location.hash = b.dataset.goto;
+          goToHash(b.dataset.goto);
         });
       });
 

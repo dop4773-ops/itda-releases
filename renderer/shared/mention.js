@@ -1,4 +1,4 @@
-import { toast, errorToast } from './ui-utils.js';
+import { toast, errorToast, goToHash } from './ui-utils.js';
 import { stripHtmlToPlainText } from './rich-text.js';
 import { TYPE_ROUTE, TYPE_EMOJI, LINK_TYPE_LABEL } from './links-ui.js';
 
@@ -221,7 +221,10 @@ export function bindMentionAutocomplete(editableEl, self) {
     const chip = e.target.closest?.('.item-mention');
     if (!chip || !editableEl.contains(chip)) return;
     e.preventDefault();
-    const route = TYPE_ROUTE[chip.getAttribute('data-type')];
-    if (route) location.hash = route;
+    const base = TYPE_ROUTE[chip.getAttribute('data-type')];
+    const id = chip.getAttribute('data-id');
+    // data-id를 안 읽고 base 화면(#/memo)으로만 보내던 버그 — 만든 칩(위)엔 항상 data-id가
+    // 있으니 그 항목까지 바로 연다. 혹시 없는 예전 칩이면 화면만이라도 이동.
+    if (base) goToHash(id ? `${base}/${id}` : base);
   });
 }

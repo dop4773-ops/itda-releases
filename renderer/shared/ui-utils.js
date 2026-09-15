@@ -1,5 +1,17 @@
 import { todayStr } from './date-utils.js';
 
+// 화면 전환/항목 딥링크는 다 이걸로 — location.hash를 지금과 똑같은 값으로 대입하면 브라우저가
+// hashchange를 아예 안 터뜨려서 router.js의 navigate()가 안 불리고 화면에 아무 반응이 없다.
+// (빠른찾기에서 지금 보고 있는 항목을 다시 클릭/Enter, 연결된 항목의 "원본 열기"를 그 항목을
+// 보면서 또 누르는 경우 등에서 100% 재현됨.) 같은 해시면 hashchange를 직접 한 번 흉내 내서
+// router.js가 강제로 다시 열게 한다 — window.location.hash를 실제로 바꾸는 게 아니라서
+// 히스토리/URL 표시줄에 아무 흔적도 안 남고, router.js의 navigate()가 그대로 현재
+// location.hash를 읽어 다시 mount한다.
+export function goToHash(hash) {
+  if (location.hash === hash) window.dispatchEvent(new Event('hashchange'));
+  else location.hash = hash;
+}
+
 export function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';

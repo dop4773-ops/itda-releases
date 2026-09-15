@@ -2,6 +2,7 @@
 // OS 알림은 렌더러 표준 Notification 웹 API로 띄운다(Electron이 네이티브 알림으로 매핑 —
 // 별도 IPC나 main 프로세스 코드 없이 동작). 상태(스누즈/알림완료 여부)는 이 세션 메모리에만
 // 있고 재시작하면 초기화된다 — 알림 자체가 "지금 확인해볼 것"이라 굳이 영속화할 필요 없음.
+import { goToHash } from './ui-utils.js';
 const CHECK_INTERVAL_MS = 30 * 1000;
 const PAST_GRACE_MINUTES = 5; // 시작 후 이 시간까지는 그래도 알림을 띄움(막 지난 일정)
 const DROP_AFTER_MINUTES = 20; // 시작 후 이만큼 지나면 벨 드롭다운에서도 완전히 내림
@@ -22,7 +23,7 @@ function fireNotification(e, minutesUntil) {
   const n = new Notification(`"${e.title}" 일정`, { body });
   n.onclick = () => {
     window.focus();
-    location.hash = '#/calendar';
+    goToHash('#/calendar');
   };
 }
 
