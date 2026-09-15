@@ -59,20 +59,21 @@ function close() {
   window.itda.spotlight.close();
 }
 
+// openMainApp이 끝나길 기다렸다가 닫는다 — 예전엔 기다리지 않고(fire-and-forget) 바로
+// close()를 불러서, 이 창(항상 맨 위, screen-saver 레벨)이 없어지는 것과 본 창이
+// show()/focus()되는 게 경쟁했다. 본 창이 트레이에서 막 복귀하는 중(윈도우에서 특히
+// 시간이 더 걸림)이면 이 창이 먼저 사라져 포커스가 엉뚱한 곳으로 가면서 "눌러도 잘
+// 안 된다"는 증상으로 나타났다 — main 프로세스의 show()/focus() 처리가 끝났다는 게
+// 확인된(IPC가 resolve된) 뒤에만 이 창을 닫는다.
 function openRoute(route) {
-  window.itda.widgets.openMainApp(route).catch(() => {});
-  close();
+  window.itda.widgets.openMainApp(route).catch(() => {}).finally(close);
 }
 
 function openItem(row) {
   window.itda.search?.recordOpen?.({ type: row.entity_type, id: row.entity_id }); // "최근 연 항목" 기록
-  if (row.entity_type === 'inbox') {
-    window.itda.widgets.openMainApp('#/inbox').catch(() => {});
-  } else {
-    // 본체를 그 항목까지 바로 연다 — 메모가 다른 폴더에 있어도, Todo가 필터에 안 걸려도 열림(#/type/id)
-    window.itda.widgets.openMainApp(`${ITEM_ROUTE[row.entity_type] || '#/dashboard'}/${row.entity_id}`).catch(() => {});
-  }
-  close();
+  // 본체를 그 항목까지 바로 연다 — 메모가 다른 폴더에 있어도, Todo가 필터에 안 걸려도 열림(#/type/id)
+  const route = row.entity_type === 'inbox' ? '#/inbox' : `${ITEM_ROUTE[row.entity_type] || '#/dashboard'}/${row.entity_id}`;
+  window.itda.widgets.openMainApp(route).catch(() => {}).finally(close);
 }
 
 // search 결과 행 → spotlight 항목 엔트리
