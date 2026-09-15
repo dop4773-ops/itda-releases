@@ -23,6 +23,7 @@
  *     잠금이 꺼져 있으면(비밀번호 미설정) 렌더러 쪽(lock-screen.js)에서 안내만 하고 끝낸다.
  */
 const { globalShortcut, ipcMain } = require('electron');
+const { forceShowAndFocus } = require('../shared/window-focus');
 
 const DEFAULTS = {
   globalQuickCapture: 'CmdOrCtrl+Alt+I',
@@ -31,9 +32,7 @@ const DEFAULTS = {
 };
 
 function focusMainWindow(win) {
-  if (win.isMinimized()) win.restore();
-  if (!win.isVisible()) win.show();
-  win.focus();
+  forceShowAndFocus(win);
 }
 
 function registerOrLog(accelerator, handler) {

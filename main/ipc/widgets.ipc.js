@@ -1,5 +1,6 @@
 const windowManager = require('../widgets/window-manager');
 const postitWindowManager = require('../postit-widget/window-manager');
+const { forceShowAndFocus } = require('../shared/window-focus');
 
 const WIDGET_TYPES = ['today-schedule', 'today-todo', 'postit-board', 'google-calendar-mini', 'inbox', 'dday'];
 
@@ -74,9 +75,7 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
   ipcMain.handle('widgets:openMainApp', (event, route) => {
     const win = getMainWindow();
     if (!win || win.isDestroyed()) return { ok: false };
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
+    forceShowAndFocus(win);
     if (route) win.webContents.send('itda:navigate', route);
     return { ok: true };
   });

@@ -1,6 +1,7 @@
 const { BrowserWindow } = require('electron');
 const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
+const { forceShowAndFocus } = require('../shared/window-focus');
 
 // postitId -> BrowserWindow. 같은 포스트잇을 중복으로 열지 않고 이미 열려있으면 포커스만 준다.
 const windows = new Map();
@@ -19,7 +20,7 @@ const MIN_HEIGHT = 295;
 function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
   const existing = windows.get(postit.id);
   if (existing && !existing.isDestroyed()) {
-    existing.focus();
+    forceShowAndFocus(existing);
     return existing;
   }
 

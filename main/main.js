@@ -8,6 +8,7 @@ const { initSpotlight } = require('./spotlight');
 const { initTray } = require('./tray');
 const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
+const { forceShowAndFocus } = require('./shared/window-focus');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
 const { initErrorLogging } = require('./logger');
@@ -75,9 +76,7 @@ function createWindow() {
 
 function showMainWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
+    forceShowAndFocus(mainWindow);
   } else {
     createWindow();
   }
