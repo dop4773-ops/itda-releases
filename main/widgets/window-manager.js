@@ -38,11 +38,21 @@ function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTo
 
   win.setOpacity(opacity);
   win.setMenu(null);
+  // blur 재확인만으론 윈도우에서 topmost가 슬며시 풀리는 문제가 계속 재발했다(postit-widget/
+  // window-manager.js와 같은 원인 — 투명+frameless 창은 blur/show가 안정적으로 안 오는
+  // 경우가 있고, 이미 true인데 또 true를 걸면 Chromium이 재적용을 건너뛰기도 함) — 이벤트만
+  // 믿지 않고 1.5초마다 주기적으로도 다시 올린다. alwaysOnTop이 꺼져있으면 타이머 자체를 안 만든다.
+  let reassertTimer = null;
   if (alwaysOnTop) {
+    const reassertAlwaysOnTop = () => {
+      if (win.isDestroyed() || !win.isAlwaysOnTop()) return;
+      win.setAlwaysOnTop(true, 'screen-saver');
+      win.moveTop();
+    };
     win.setAlwaysOnTop(true, 'screen-saver');
-    win.on('blur', () => {
-      if (!win.isDestroyed() && win.isAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
-    });
+    win.on('blur', reassertAlwaysOnTop);
+    win.on('show', reassertAlwaysOnTop);
+    reassertTimer = setInterval(reassertAlwaysOnTop, 1500);
   }
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), { query: { type } });
@@ -60,6 +70,7 @@ function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTo
   win.on('moved', scheduleBoundsSave);
   win.on('resized', scheduleBoundsSave);
   win.on('closed', () => {
+    if (reassertTimer) clearInterval(reassertTimer);
     clearTimeout(boundsTimer);
     windows.delete(type);
   });

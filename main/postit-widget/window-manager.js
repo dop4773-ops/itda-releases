@@ -47,18 +47,21 @@ function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
   win.setOpacity(opacity);
   win.setMenu(null);
   // 생성자 alwaysOnTop만으로는 창 종류(transparent+frameless)에 따라 다른 앱 뒤로 밀리는 일이
-  // 있어서, 가장 높은 레벨('screen-saver')로 다시 한 번 확실히 건다. 또 창이 포커스를 잃거나
-  // 보여질 때 일부 환경(특히 윈도우)에서 topmost가 슬며시 풀리는 경우가 있어 다시 걸어준다.
-  // 이 재확인 리스너는 "처음 열 때 이미 켜져있던 경우"만이 아니라 항상 등록해둔다 — 안 그러면
-  // 처음엔 꺼둔 채로 열었다가 핀 버튼으로 나중에 켠 포스트잇(가장 흔한 경우)은 setAlwaysOnTop()
-  // IPC 쪽에서 한 번 moveTop()만 하고 끝이라, blur/show로 슬며시 풀려도 다시 안 걸려서
-  // "가장 앞으로가 잘 안 된다"는 증상으로 나타났었다. reassert 자체는 isAlwaysOnTop()일 때만
-  // 실제로 다시 걸므로 꺼져있는 동안은 아무 일도 안 한다.
+  // 있어서, 가장 높은 레벨('screen-saver')로 다시 한 번 확실히 건다.
+  // 윈도우에서 topmost가 슬며시 풀리는 문제가 blur/show 이벤트에 다시 걸어주는 것만으론
+  // 계속 재발했다 — 투명+frameless 창은 윈도우에서 blur/show 자체가 안정적으로 안 오는
+  // 경우가 있고, 이미 true인 상태에서 setAlwaysOnTop(true)를 또 불러도 Electron/Chromium이
+  // "값이 안 바뀌었다"고 z-order 재적용을 건너뛰는 경우도 있어서(알려진 동작), 이벤트만
+  // 믿지 않고 1.5초마다 주기적으로도 다시 올린다(moveTop까지 같이). isAlwaysOnTop()이
+  // false(핀 꺼짐)면 아무 일도 안 하니 평소엔 사실상 공짜 — 이 방법이 훨씬 확실하다.
   const reassertAlwaysOnTop = () => {
-    if (!win.isDestroyed() && win.isAlwaysOnTop()) win.setAlwaysOnTop(true, 'screen-saver');
+    if (win.isDestroyed() || !win.isAlwaysOnTop()) return;
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.moveTop();
   };
   win.on('blur', reassertAlwaysOnTop);
   win.on('show', reassertAlwaysOnTop);
+  const reassertTimer = setInterval(reassertAlwaysOnTop, 1500);
   if (postit.is_always_on_top) {
     win.setAlwaysOnTop(true, 'screen-saver');
   }
@@ -80,6 +83,7 @@ function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
   win.on('resized', scheduleBoundsSave);
 
   win.on('closed', () => {
+    clearInterval(reassertTimer);
     clearTimeout(boundsTimer);
     windows.delete(postit.id);
   });
@@ -95,7 +99,7 @@ function isOpen(postitId) {
 function setAlwaysOnTop(postitId, value) {
   const win = windows.get(postitId);
   if (!win || win.isDestroyed()) return;
-  // 'floating' 레벨을 명시해야 다른 앱 창 뒤로 밀리지 않고 확실히 위에 뜬다(레벨 없이 그냥
+  // 'screen-saver' 레벨을 명시해야 다른 앱 창 뒤로 밀리지 않고 확실히 위에 뜬다(레벨 없이 그냥
   // true만 넘기면 창 종류에 따라 애매하게 동작하는 경우가 있었다). 켤 때는 moveTop()으로
   // 지금 당장 맨 위로도 올려서 "켰는데 그대로 뒤에 있는" 것처럼 보이지 않게 한다.
   win.setAlwaysOnTop(value, 'screen-saver');
