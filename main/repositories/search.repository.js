@@ -1,5 +1,5 @@
 const { isChosungQuery } = require('../shared/hangul');
-const { normalizeQuery, queryForms, columnLike } = require('../shared/search-text');
+const { normalizeQuery, queryForms, columnLike, levenshtein, typoThreshold, wordsOf } = require('../shared/search-text');
 
 const ALL_TYPES = ['todo', 'event', 'memo', 'postit', 'inbox'];
 
@@ -170,7 +170,7 @@ function runScored(db, rawQuery, { types = null, tag = null, dateFrom = null, da
     params.push(...valid);
   }
 
-  const rows = db
+  let rows = db
     .prepare(
       `SELECT entity_type, entity_id, title, content, chosung, updated_at
        FROM search_index
@@ -178,9 +178,52 @@ function runScored(db, rawQuery, { types = null, tag = null, dateFrom = null, da
     )
     .all(...params);
 
+  // 오타 보정 폴백 — 정확 매치가 하나도 없을 때만, 유형필터만 적용해서 전체를 훑어 제목/본문
+  // 단어와 편집거리가 가까운 항목을 찾는다. "0건일 때만" 도는 거라 평소 검색 비용엔 안 붙는다.
+  let typoDistances = null;
+  if (!rows.length && flat.length >= 2 && !useChosung) {
+    const scanParams = valid.length ? valid : [];
+    const scanWhere = valid.length ? ` WHERE entity_type IN (${valid.map(() => '?').join(',')})` : '';
+    const all = db
+      .prepare(`SELECT entity_type, entity_id, title, content, chosung, updated_at FROM search_index${scanWhere}`)
+      .all(...scanParams);
+    const threshold = typoThreshold(flat.length);
+    const flatLc = flat.toLowerCase();
+    typoDistances = new Map();
+    const matched = [];
+    for (const r of all) {
+      let best = Infinity;
+      for (const w of wordsOf(r.title)) {
+        if (Math.abs(w.length - flatLc.length) > threshold) continue;
+        const d = levenshtein(flatLc, w.toLowerCase());
+        if (d < best) best = d;
+      }
+      if (best <= threshold) {
+        typoDistances.set(`${r.entity_type}:${r.entity_id}`, best);
+        matched.push(r);
+      }
+    }
+    rows = matched;
+  }
+
   const qLower = q.toLowerCase();
   const flatLower = flat.toLowerCase();
   const scored = rows.map((r) => {
+    const key = `${r.entity_type}:${r.entity_id}`;
+    if (typoDistances && typoDistances.has(key)) {
+      return {
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        title: r.title,
+        content: r.content,
+        matchedIn: 'typo',
+        snippet: makeSnippet(r.content, tokens),
+        updated_at: r.updated_at || '',
+        _rank: 5,
+        _recency: recencyBoost(r.updated_at),
+        _typoDistance: typoDistances.get(key),
+      };
+    }
     const t = (r.title || '').toLowerCase();
     let rank;
     let matchedIn;
@@ -215,15 +258,22 @@ function runScored(db, rawQuery, { types = null, tag = null, dateFrom = null, da
 
   if (sort === 'recent') scored.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   else if (sort === 'oldest') scored.sort((a, b) => a.updated_at.localeCompare(b.updated_at));
-  // 관련도순(기본): 매치 품질 → 최근 고친 것 → 제목 짧은 것.
-  else scored.sort((a, b) => a._rank - b._rank || b._recency - a._recency || (a.title || '').length - (b.title || '').length);
+  // 관련도순(기본): 매치 품질 → (오타 매치면) 편집거리 가까운 순 → 최근 고친 것 → 제목 짧은 것.
+  else
+    scored.sort(
+      (a, b) =>
+        a._rank - b._rank ||
+        (a._typoDistance ?? 0) - (b._typoDistance ?? 0) ||
+        b._recency - a._recency ||
+        (a.title || '').length - (b.title || '').length
+    );
 
   let filtered = applyMetaFilters(db, scored, { dateFrom, dateTo, status });
   filtered = applyTagFilter(db, filtered, tag);
   return { q, tokens, rows: filtered };
 }
 
-const stripInternal = ({ _rank, _recency, ...rest }) => rest;
+const stripInternal = ({ _rank, _recency, _typoDistance, ...rest }) => rest;
 
 module.exports = function createSearchRepository(db) {
   const repo = {

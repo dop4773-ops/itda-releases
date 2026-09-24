@@ -1,8 +1,26 @@
 const { app, dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const Database = require('better-sqlite3');
 const { backupsDir } = require('../auto-backup');
 const { openLogsFolder } = require('../logger');
+
+const DATA_TABLES = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links'];
+
+// data:mergeFromBackup 전용 — 백업 .db 파일을 읽기전용으로 열어 exportJson과 같은 모양의
+// { categories, todos, ... } 객체로 덤프한다. importAllTables가 그대로 받아 병합할 수 있게.
+function readAllTablesFromDbFile(filePath) {
+  const backupDb = new Database(filePath, { readonly: true, fileMustExist: true });
+  try {
+    const data = {};
+    for (const t of DATA_TABLES) {
+      data[t] = backupDb.prepare(`SELECT * FROM ${t}`).all();
+    }
+    return data;
+  } finally {
+    backupDb.close();
+  }
+}
 
 // exportJson이 만든 데이터를 실제로 DB에 밀어넣는 로직. IPC 핸들러 밖에 둬서
 // db.transaction으로 통째로 감쌀 수 있게(하나라도 실패하면 전부 롤백) 분리했다.
@@ -228,6 +246,40 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
     return { cancelled: false };
   });
 
+  // 데이터 병합: 복원(덮어쓰기)과 달리 현재 데이터는 그대로 두고, 백업 .db 파일 내용을
+  // "추가로" 불러온다. importAllTables가 이미 JSON 가져오기에서 하는 일(이름 같은 카테고리는
+  // 재사용, 나머진 새 id로 삽입)을 그대로 재사용 — 백업 파일을 읽어서 같은 모양으로만 만들어주면 됨.
+  ipcMain.handle('data:mergeFromBackup', async () => {
+    const win = getWin();
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      title: '병합할 백업 파일 선택',
+      properties: ['openFile'],
+      filters: [{ name: 'SQLite 백업 파일', extensions: ['db'] }],
+    });
+    if (canceled || !filePaths || !filePaths[0]) return { cancelled: true };
+
+    let data;
+    try {
+      data = readAllTablesFromDbFile(filePaths[0]);
+    } catch (e) {
+      throw new Error('백업 파일을 읽을 수 없어요. 잇다의 백업(.db) 파일이 맞는지 확인해주세요.');
+    }
+
+    const confirm = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['취소', '병합하기'],
+      defaultId: 0,
+      cancelId: 0,
+      title: '데이터 병합',
+      message: '선택한 백업 파일의 데이터를 지금 잇다에 추가로 불러옵니다.',
+      detail: '기존 데이터는 지워지지 않고, 백업 안의 항목이 전부 새로 추가돼요(같은 이름 카테고리는 재사용). 되돌리려면 미리 백업을 만들어두는 걸 권장해요.',
+    });
+    if (confirm.response !== 1) return { cancelled: true };
+
+    const counts = importAllTables(db, data);
+    return { cancelled: false, counts };
+  });
+
   // JSON으로 내보내기: 다른 기기로 옮기거나 눈으로 확인하기 좋은 형태로 전체 데이터를 덤프.
   // (가져오기 기능은 별도 요청 시 추가 — 지금은 내보내기만)
   ipcMain.handle('data:exportJson', async () => {
@@ -239,9 +291,8 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
     });
     if (canceled || !filePath) return { cancelled: true };
 
-    const tables = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links'];
     const data = { exportedAt: new Date().toISOString(), appVersion: app.getVersion() };
-    for (const t of tables) {
+    for (const t of DATA_TABLES) {
       data[t] = db.prepare(`SELECT * FROM ${t}`).all();
     }
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');

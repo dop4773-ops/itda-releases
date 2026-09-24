@@ -92,7 +92,7 @@ function buildTagCommand(category) {
 // 실제 항목(Todo/일정/메모/포스트잇/Inbox)을 검색어로 바로 찾아서, 목록 화면이 아니라
 // 그 항목의 상세(위젯)로 바로 연다 — "디테일하게 접근"의 핵심. inbox는 낱개 위젯이 없어서
 // Inbox 목록 화면으로만 이동한다.
-const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치' };
+const MATCH_LABEL = { title: '제목 일치', chosung: '초성 일치', content: '본문 일치', typo: '오타 보정' };
 
 function buildItemCommand(row) {
   const label = plainLabel(row.title || row.content);

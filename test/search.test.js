@@ -258,3 +258,20 @@ test('isChosungQuery', () => {
   assert.equal(isChosungQuery('ㅎ길동'), false);
   assert.equal(isChosungQuery(''), false);
 });
+
+test('오타 보정: 정확 매치가 0건일 때만 편집거리 1 폴백이 동작 (matchedIn: typo)', () => {
+  const hits = seeded().search.query('홍길똥'); // '동'→'똥' 오타, 정확 매치 0건
+  assert.ok(hits.length >= 1);
+  assert.ok(hits.every((h) => h.matchedIn === 'typo'));
+  assert.ok(hits.every((h) => (h.title + h.content).includes('홍길동')));
+});
+
+test('오타 보정: 정확 매치가 있으면 폴백이 끼어들지 않는다', () => {
+  const hits = seeded().search.query('홍길동');
+  assert.ok(hits.every((h) => h.matchedIn !== 'typo'));
+});
+
+test('오타 보정: 편집거리가 임계값을 넘으면 여전히 결과 없음', () => {
+  const hits = seeded().search.query('전혀다른단어');
+  assert.equal(hits.length, 0);
+});

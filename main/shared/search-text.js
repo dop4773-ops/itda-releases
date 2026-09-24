@@ -30,4 +30,37 @@ function columnLike(col, tokens, flat) {
   return { sql: `(${andPart} OR ${parts[parts.length - 1]})`, params };
 }
 
-module.exports = { normalizeQuery, queryForms, columnLike };
+// 레벤슈타인 편집거리 — 오타 보정 폴백 전용(정확 매치가 0건일 때만 씀). 외부 라이브러리 없이도
+// 표준 DP 한 함수면 충분해서 별도 의존성 추가 안 함.
+function levenshtein(a, b) {
+  const m = a.length;
+  const n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+// 오타로 봐줄 최대 편집거리 — 검색어가 짧으면 1글자, 길면 2글자까지 다른 것도 후보로 인정.
+function typoThreshold(len) {
+  return len <= 6 ? 1 : 2;
+}
+
+// 제목/본문에서 오타 후보 단어를 뽑는다 — 한글/영문/숫자가 아닌 문자(공백, 문장부호 등) 기준으로 쪼갬.
+function wordsOf(text) {
+  return String(text || '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+module.exports = { normalizeQuery, queryForms, columnLike, levenshtein, typoThreshold, wordsOf };

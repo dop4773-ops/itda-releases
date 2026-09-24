@@ -546,8 +546,12 @@ export async function mount(root, initialTab) {
               <button class="btn-secondary" id="data-backupBtn">백업하기</button>
             </div>
             <div class="data-action-row">
-              <div><b>데이터 복원</b><span>백업된 파일에서 데이터를 복원합니다. (복원 후 앱 재시작)</span></div>
+              <div><b>데이터 복원</b><span>백업된 파일에서 데이터를 복원합니다. (현재 데이터는 사라지고 백업 내용으로 교체 · 복원 후 앱 재시작)</span></div>
               <button class="btn-secondary" id="data-restoreBtn">복원하기</button>
+            </div>
+            <div class="data-action-row">
+              <div><b>데이터 병합</b><span>백업 파일의 데이터를 현재 데이터에 추가로 합칩니다. (기존 데이터는 유지)</span></div>
+              <button class="btn-secondary" id="data-mergeBtn">병합하기</button>
             </div>
             <div class="data-action-row">
               <div><b>모든 데이터 내보내기</b><span>JSON 파일로 내보내기 (다른 기기에서 가져오기 가능)</span></div>
@@ -1942,6 +1946,21 @@ export async function mount(root, initialTab) {
       } catch (e) {
         errorToast(e, '복원하지 못했어요');
         $('data-restoreBtn').disabled = false;
+      }
+    });
+
+    $('data-mergeBtn').addEventListener('click', async () => {
+      $('data-mergeBtn').disabled = true;
+      try {
+        const result = await window.itda.data.mergeFromBackup();
+        if (!result.cancelled) {
+          const c = result.counts || {};
+          toast(`병합했어요 (Todo ${c.todos ?? 0} · 일정 ${c.events ?? 0} · 메모 ${c.memos ?? 0} · 포스트잇 ${c.postits ?? 0})`);
+        }
+      } catch (e) {
+        errorToast(e, '병합하지 못했어요');
+      } finally {
+        $('data-mergeBtn').disabled = false;
       }
     });
 

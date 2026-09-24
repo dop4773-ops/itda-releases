@@ -118,6 +118,7 @@ contextBridge.exposeInMainWorld('itda', {
     chooseBackupsDir: () => ipcRenderer.invoke('data:chooseBackupsDir'),
     resetBackupsDir: () => ipcRenderer.invoke('data:resetBackupsDir'),
     restore: () => ipcRenderer.invoke('data:restore'),
+    mergeFromBackup: () => ipcRenderer.invoke('data:mergeFromBackup'),
     exportJson: () => ipcRenderer.invoke('data:exportJson'),
     importJson: () => ipcRenderer.invoke('data:importJson'),
     deleteAll: () => ipcRenderer.invoke('data:deleteAll'),
