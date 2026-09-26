@@ -107,11 +107,19 @@ function findCachedZip() {
   // "다른 Node.js 버전으로 컴파일됨(NODE_MODULE_VERSION 불일치)" 에러를 내는 근본 원인이었다.
   // node_modules/electron/package.json에 적힌 "이 프로젝트가 실제로 필요로 하는 버전"과
   // 파일명이 정확히 일치하는 것만 후보로 삼는다.
+  // 버전만 같고 플랫폼/아키텍처가 다른 zip(예: electron-v31.7.7-win32-arm64.zip)도
+  // 파일명 접두어(electron-v{version}-)만으로는 걸러지지 않는다 — 이 프로젝트가 electron-builder로
+  // 다른 OS용 빌드를 한 번이라도 만들면 캐시에 그 zip이 섞여 들어와, "버전은 맞는데 못 실행되는"
+  // 잘못된 압축 해제로 이어질 수 있다(실제로 겪음). 이 컴퓨터에서 실행할 플랫폼+아키텍처까지 맞춰야 한다.
+  const platformArch = `${process.platform}-${process.arch}`;
   const wanted = requiredElectronVersion();
   if (wanted) {
-    const versionMatched = results.filter((p) => path.basename(p).startsWith(`electron-v${wanted}-`));
+    const versionMatched = results.filter((p) => {
+      const base = path.basename(p);
+      return base.startsWith(`electron-v${wanted}-`) && base.includes(`-${platformArch}.zip`);
+    });
     if (versionMatched.length === 0) {
-      warn(`전역 캐시에 electron-v${wanted}용 zip이 없습니다(다른 프로젝트가 받아둔 다른 버전만 있음) — 버전이 다른 캐시는 안전하지 않아 사용하지 않습니다.`);
+      warn(`전역 캐시에 electron-v${wanted}-${platformArch}용 zip이 없습니다(다른 버전/다른 OS용만 있음) — 안전하지 않아 사용하지 않습니다.`);
       return null;
     }
     versionMatched.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
@@ -129,13 +137,20 @@ function binaryExists() {
   // Node 24.16+/26.1+의 압축해제 버그(electron/electron#51619)는 파일 자체는 만들어놓고
   // 내용이 0바이트인 채로 끝나는 경우가 있다. existsSync만으로는 이런 "존재하지만 깨진"
   // 상태를 놓쳐서 진단 스크립트가 잘못 "정상 설치됨"이라고 판단하는 실제 버그가 있었다.
-  // 정상적인 electron 실행파일은 최소 수십MB는 되므로, 1MB 미만이면 손상된 것으로 간주한다.
   try {
-    const size = fs.statSync(p).size;
-    return size > 1024 * 1024;
+    if (fs.statSync(p).size <= 0) return false;
   } catch (e) {
     return false;
   }
+  if (process.platform !== 'darwin') {
+    // Windows/Linux는 이 실행파일 자체가 본체라 수십MB는 되어야 정상이다.
+    try { return fs.statSync(p).size > 1024 * 1024; } catch (e) { return false; }
+  }
+  // macOS는 Contents/MacOS/Electron이 큰 프레임워크를 불러오는 수십KB짜리 스텁이라
+  // 파일 크기로 판단할 수 없다(실제로 이 스텁만 보고 "손상됨"으로 오판하는 버그가 있었다).
+  // 대신 실제 코드가 들어있는 Electron Framework 바이너리가 충분히 큰지로 판단한다.
+  const fw = path.join(path.dirname(p), '..', 'Frameworks', 'Electron Framework.framework', 'Versions', 'A', 'Electron Framework');
+  try { return fs.statSync(fw).size > 10 * 1024 * 1024; } catch (e) { return false; }
 }
 
 function attemptOfficialInstall() {
