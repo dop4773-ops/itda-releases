@@ -1,6 +1,6 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, goToHash } from '../shared/ui-utils.js';
 import { STICKY_COLORS } from '../shared/theme.js';
-import { periodLabel, queryRange, groupByDateKey, buildMonthGridHtml, buildCompactAgendaHtml } from './calendar.js';
+import { periodLabel, queryRange, groupByDateKey, buildMonthGridHtml, buildCompactAgendaHtml, loadHolidays } from './calendar.js';
 import { computeNotifications } from '../shared/notifications.js';
 import { computeRecentActivity } from '../shared/recent-activity.js';
 import { widgetLaunchButtonHtml, bindWidgetLaunchButton } from '../shared/widget-launch-button.js';
@@ -2586,6 +2586,7 @@ export async function mount(root) {
     let events;
     try {
       const { fromDate, toDate } = queryRange(calView, calAnchor);
+      await loadHolidays(fromDate, toDate);
       events = await fetchMergedEvents(fromDate, toDate);
     } catch (e) {
       errorToast(e, '일정을 불러오지 못했어요');

@@ -12,6 +12,7 @@ const SETTINGS_TAB_KEYWORDS = {
   display: '배율 다크모드 테마 화면크기 글꼴 폰트 글자색 텍스트색',
   security: '잠금 비밀번호 PIN',
   convenience: '편의기능 업데이트자동확인 자동실행 시작프로그램 자동추천 관련항목',
+  holiday: '공휴일 휴일 빨간날 대체공휴일 연휴',
   data: '백업 복원 내보내기 가져오기',
   update: '버전 업데이트확인',
 };

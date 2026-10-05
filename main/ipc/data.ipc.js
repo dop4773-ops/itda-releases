@@ -5,7 +5,7 @@ const Database = require('better-sqlite3');
 const { backupsDir } = require('../auto-backup');
 const { openLogsFolder } = require('../logger');
 
-const DATA_TABLES = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links'];
+const DATA_TABLES = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links', 'holidays'];
 
 // data:mergeFromBackup 전용 — 백업 .db 파일을 읽기전용으로 열어 exportJson과 같은 모양의
 // { categories, todos, ... } 객체로 덤프한다. importAllTables가 그대로 받아 병합할 수 있게.
@@ -14,7 +14,9 @@ function readAllTablesFromDbFile(filePath) {
   try {
     const data = {};
     for (const t of DATA_TABLES) {
-      data[t] = backupDb.prepare(`SELECT * FROM ${t}`).all();
+      // 오래된 백업엔 없는 테이블(예: holidays)이 있을 수 있어 건너뛴다
+      const exists = backupDb.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+      data[t] = exists ? backupDb.prepare(`SELECT * FROM ${t}`).all() : [];
     }
     return data;
   } finally {
@@ -25,7 +27,7 @@ function readAllTablesFromDbFile(filePath) {
 // exportJson이 만든 데이터를 실제로 DB에 밀어넣는 로직. IPC 핸들러 밖에 둬서
 // db.transaction으로 통째로 감쌀 수 있게(하나라도 실패하면 전부 롤백) 분리했다.
 function importAllTables(db, data) {
-  const counts = { categories: 0, todos: 0, todo_subtasks: 0, todo_tags: 0, events: 0, memos: 0, postits: 0, inbox_items: 0, item_links: 0 };
+  const counts = { categories: 0, todos: 0, todo_subtasks: 0, todo_tags: 0, events: 0, memos: 0, postits: 0, inbox_items: 0, item_links: 0, holidays: 0 };
 
   const run = db.transaction(() => {
     // ---------- 카테고리: 이름이 같으면 재사용, 없으면 새로 생성 ----------
@@ -138,6 +140,13 @@ function importAllTables(db, data) {
     (data.inbox_items || []).forEach((i) => {
       db.prepare('INSERT INTO inbox_items (content, is_processed) VALUES (?, ?)').run(i.content, i.is_processed ? 1 : 0);
       counts.inbox_items += 1;
+    });
+
+    // ---------- 공휴일: 이미 있는 날짜는 그대로 두고 없는 날짜만 추가 ----------
+    (data.holidays || []).forEach((h) => {
+      counts.holidays += db
+        .prepare('INSERT OR IGNORE INTO holidays (date, name, source) VALUES (?, ?, ?)')
+        .run(h.date, h.name, h.source || 'manual').changes;
     });
 
     // ---------- 항목 간 연결: 양쪽 다 이번에 성공적으로 매핑된 경우만 복원 ----------

@@ -13,7 +13,8 @@ const { chosung } = require('./shared/hangul');
 //   v4: search_index에 updated_at 컬럼 (검색 랭킹의 "최신도" 가산용)
 //   v5: inbox_items에 is_favorite 컬럼 (Inbox 별표)
 //   v6: events에 color_hex/text_color 컬럼 (카테고리 없는 일정도 색을 고를 수 있게)
-const SCHEMA_VERSION = 6;
+//   v7: holidays 테이블 (공휴일 자동 불러오기/직접 추가, 달력에 빨간 날짜 표시)
+const SCHEMA_VERSION = 7;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -267,6 +268,18 @@ function applyLightweightMigrations(db) {
       CREATE INDEX idx_memo_attachments_memo ON memo_attachments(memo_id);
     `);
     console.log('[itda] 마이그레이션: memo_attachments 테이블 생성');
+  }
+
+  if (!hasTable('holidays')) {
+    db.exec(`
+      CREATE TABLE holidays (
+        date        TEXT PRIMARY KEY,
+        name        TEXT NOT NULL,
+        source      TEXT NOT NULL DEFAULT 'manual',
+        created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+    `);
+    console.log('[itda] 마이그레이션: holidays 테이블 생성');
   }
 
   // 메모 폴더(애플 메모장 스타일 분류) — 카테고리 태그와는 별개 축.

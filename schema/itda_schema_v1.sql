@@ -282,6 +282,18 @@ INSERT INTO app_settings (key, value) VALUES
 
 
 -- ------------------------------------------------------------
+-- 11. holidays : 공휴일(날짜당 1행). 인터넷에서 불러오거나 직접 추가. 달력에 빨간 날짜로 표시.
+--     일정(events)과 달리 검색/Todo/오늘 일정에 섞이지 않는 별도 테이블.
+-- ------------------------------------------------------------
+CREATE TABLE holidays (
+  date        TEXT PRIMARY KEY,                 -- 'YYYY-MM-DD'
+  name        TEXT NOT NULL,
+  source      TEXT NOT NULL DEFAULT 'manual',   -- 'auto'(인터넷) | 'manual'(직접 추가)
+  created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+
+-- ------------------------------------------------------------
 -- 휴지통(v1) 조회 예시 : deleted_at IS NOT NULL 인 항목
 --   SELECT * FROM todos  WHERE deleted_at IS NOT NULL;
 --   SELECT * FROM events WHERE deleted_at IS NOT NULL;

@@ -28,6 +28,7 @@ const registerSearchIpc = require('./search.ipc');
 const registerSettingsIpc = require('./settings.ipc');
 const registerLinksIpc = require('./links.ipc');
 const registerGoogleCalendarIpc = require('./googleCalendar.ipc');
+const registerHolidaysIpc = require('./holidays.ipc');
 const registerDataIpc = require('./data.ipc');
 const registerPostitWidgetIpc = require('./postitWidget.ipc');
 const registerWidgetsIpc = require('./widgets.ipc');
@@ -60,13 +61,14 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerSearchIpc(ipcMain, repos);
   registerSettingsIpc(ipcMain, repos);
   registerGoogleCalendarIpc(ipcMain, repos);
+  const { autoFetchHolidays } = registerHolidaysIpc(ipcMain, repos);
   registerDataIpc(ipcMain, repos, db); // 백업/복원은 repos가 아니라 db 원본이 필요해서 따로 넘김
   const { openWidgetByType } = registerWidgetsIpc(ipcMain, repos, getMainWindow);
   const { purgeOne } = registerTrashIpc(ipcMain, repos, { deleteLinksFor, closeWidgetIfOpen, closeItemWidgetIfOpen });
   initTrashCleanup(repos.trash, purgeOne); // 30일 지난 휴지통 항목 자동 영구삭제 (시작 시 1회 + 매일 재점검)
 
   // main.js가 자동 업데이트 재시작 직후 위젯을 복원할 때 필요(main/widget-restore 참고)
-  return { openWidgetByType, openPostitById };
+  return { openWidgetByType, openPostitById, autoFetchHolidays };
 }
 
 module.exports = registerIpcHandlers;

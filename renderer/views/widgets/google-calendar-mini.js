@@ -1,5 +1,5 @@
 import { renderBoardWidgetShell } from '../../shared/widget-ui.js';
-import { buildMonthGridHtml, queryRange, groupByDateKey } from '../calendar.js';
+import { buildMonthGridHtml, queryRange, groupByDateKey, loadHolidays } from '../calendar.js';
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -7,6 +7,7 @@ async function mount() {
   let events = [];
   try {
     const { fromDate, toDate } = queryRange('month', anchor);
+    await loadHolidays(fromDate, toDate);
     const [local, google] = await Promise.all([
       window.itda.events.range({ fromDate, toDate }),
       window.itda.googleCalendar.range({ fromDate, toDate }).catch(() => []),

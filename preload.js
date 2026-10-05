@@ -110,6 +110,17 @@ contextBridge.exposeInMainWorld('itda', {
     selectCalendar: (payload) => ipcRenderer.invoke('googleCalendar:selectCalendar', payload),
     importCredentialsFile: () => ipcRenderer.invoke('googleCalendar:importCredentialsFile'),
   },
+  holidays: {
+    range: (payload) => ipcRenderer.invoke('holidays:range', payload),
+    listYear: (year) => ipcRenderer.invoke('holidays:listYear', year),
+    fetchYear: (year) => ipcRenderer.invoke('holidays:fetchYear', year),
+    saveMany: (list) => ipcRenderer.invoke('holidays:saveMany', list),
+    add: (payload) => ipcRenderer.invoke('holidays:add', payload),
+    rename: (payload) => ipcRenderer.invoke('holidays:rename', payload),
+    remove: (date) => ipcRenderer.invoke('holidays:remove', date),
+    getAuto: () => ipcRenderer.invoke('holidays:getAuto'),
+    setAuto: (on) => ipcRenderer.invoke('holidays:setAuto', on),
+  },
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),
     getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),

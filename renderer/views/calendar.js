@@ -60,6 +60,19 @@ export function periodLabel(view, anchor) {
   return `${anchor.getFullYear()}년 ${anchor.getMonth() + 1}월 ${anchor.getDate()}일 (${WEEKDAY_LABELS[anchor.getDay()]})`;
 }
 
+// 공휴일(날짜 → 이름). 달력 화면·대시보드 사이드 달력·미니 위젯이 같은 방식으로 빨간 날짜+이름을
+// 보여주도록, 그리기 전에 loadHolidays(fromDate,toDate)로 보이는 기간만 채워두면 아래 빌더들이 읽는다.
+// 매번 비우고 다시 채우므로 설정에서 지우거나 고친 값이 바로 반영된다. 실패해도 공휴일만 빠질 뿐 달력은 정상.
+const holidayNames = new Map();
+export async function loadHolidays(fromDate, toDate) {
+  holidayNames.clear();
+  try {
+    (await window.itda.holidays.range({ fromDate, toDate })).forEach((h) => holidayNames.set(h.date, h.name));
+  } catch (e) {
+    /* 공휴일 없이 표시 */
+  }
+}
+
 export function queryRange(view, anchor) {
   if (view === 'month') {
     const dates = monthGridDates(anchor);
@@ -146,7 +159,7 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
             ? `<div class="month-compact-indicator" title="${dayEvents.length}개 일정"><span class="month-compact-dot"></span>${dayEvents.length}</div>`
             : '';
         return `
-        <div class="month-cell month-cell-compact ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${key}">
+        <div class="month-cell month-cell-compact ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}" ${holidayNames.has(key) ? `title="${escapeHtml(holidayNames.get(key))}"` : ''}>
           <span class="date-num">${d.getDate()}</span>
           ${indicator}
         </div>`;
@@ -173,8 +186,8 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
         return `<div class="month-event-pill ${e.source === 'google' ? 'is-google' : ''}${spanCls}" style="background:${bg};color:${fg}" data-source="${e.source || 'local'}" data-id="${e.id}">${label}</div>`;
       };
       return `
-      <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''}" data-date="${key}">
-        <span class="date-num">${d.getDate()}</span>
+      <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}">
+        <div class="date-row"><span class="date-num">${d.getDate()}</span>${holidayNames.has(key) ? `<span class="holiday-name">${escapeHtml(holidayNames.get(key))}</span>` : ''}</div>
         ${visible.map(pill).join('')}
         ${overflow > 0 ? `<div class="month-more">+${overflow}개 더보기</div>` : ''}
       </div>`;
@@ -206,7 +219,8 @@ export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 
     .map((d) => {
       const key = toKey(d);
       const dayEvents = (byDate.get(key) || []).slice().sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''));
-      const dayLabel = dayCount === 7 ? `<div class="agenda-day-label ${isSameDay(d, today) ? 'is-today' : ''}">${WEEKDAY_LABELS[d.getDay()]} ${d.getDate()}</div>` : '';
+      const hol = holidayNames.get(key);
+      const dayLabel = dayCount === 7 ? `<div class="agenda-day-label ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}">${WEEKDAY_LABELS[d.getDay()]} ${d.getDate()}${hol ? ` · ${escapeHtml(hol)}` : ''}</div>` : '';
 
       if (dayEvents.length === 0) {
         return `<div class="agenda-day-block">${dayLabel}<div class="agenda-empty">일정이 없어요</div></div>`;
@@ -249,7 +263,10 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   const totalHeight = hourCount * ROW_HEIGHT;
 
   const dayHeaders = days
-    .map((d) => `<div class="time-day-header ${isSameDay(d, today) ? 'is-today' : ''}"><span class="dow">${WEEKDAY_LABELS[d.getDay()]}</span><span>${d.getDate()}</span></div>`)
+    .map((d) => {
+      const hol = holidayNames.get(toKey(d));
+      return `<div class="time-day-header ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}"><span class="dow">${WEEKDAY_LABELS[d.getDay()]}</span><span>${d.getDate()}</span>${hol ? `<span class="holiday-name">${escapeHtml(hol)}</span>` : ''}</div>`;
+    })
     .join('');
 
   const hourLabels = Array.from({ length: hourCount }, (_, i) => `<div class="time-hour-label" style="height:${ROW_HEIGHT}px;">${pad(HOUR_START + i)}:00</div>`).join('');
@@ -553,6 +570,7 @@ export async function mount(root, deepLinkId) {
     let googleEvents = [];
     try {
       const { fromDate, toDate } = queryRange(currentView, anchor);
+      await loadHolidays(fromDate, toDate);
       // 구글 캘린더는 읽기전용 캐시 테이블 조회일 뿐이라 연결 안 되어 있어도 그냥 빈 배열이 옴(에러 아님).
       // showGoogle이 꺼져 있으면 아예 요청하지 않는다(불필요한 조회 생략).
       const [localResult, googleResult] = await Promise.allSettled([

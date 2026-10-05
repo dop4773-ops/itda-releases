@@ -49,6 +49,7 @@ const SCREEN_COMMANDS = [
   { icon: '🔒', label: '설정 · 보안', kw: '설정 보안 잠금 비밀번호 pin', route: '#/settings/security' },
   { icon: '🎛️', label: '설정 · 편의 기능', kw: '설정 편의기능 자동추천 자동실행 시작프로그램 관련항목', route: '#/settings/convenience' },
   { icon: '📆', label: '설정 · Google Calendar', kw: '설정 구글 캘린더 google calendar 동기화', route: '#/settings/gcal' },
+  { icon: '🎌', label: '설정 · 공휴일', kw: '설정 공휴일 휴일 빨간날 대체공휴일', route: '#/settings/holiday' },
   { icon: '💾', label: '설정 · 데이터 & 백업', kw: '설정 데이터 백업 복원 내보내기 가져오기', route: '#/settings/data' },
   { icon: '🔄', label: '설정 · 업데이트', kw: '설정 업데이트 버전 최신', route: '#/settings/update' },
 ];

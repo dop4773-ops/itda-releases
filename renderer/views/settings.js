@@ -12,6 +12,7 @@ import { promptText } from '../shared/text-prompt.js';
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
 const CAL_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
+const HOLIDAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22V4"/><path d="M4 4h13l-2.5 4L17 12H4"/></svg>`;
 const BACKUP_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/><path d="M3 12a9 3 0 0018 0"/></svg>`;
 const UPDATE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8M3 16l2.64 2.36A9 9 0 0020.49 15"/></svg>`;
 
@@ -31,6 +32,7 @@ export const TABS = [
   { id: 'security', label: '보안', icon: LOCK_ICON, tone: 'danger' },
   { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON, tone: 'blue' },
   { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON, tone: 'green' },
+  { id: 'holiday', label: '공휴일', icon: HOLIDAY_ICON, tone: 'danger' },
   { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON, tone: 'purple' },
   { id: 'update', label: '업데이트', icon: UPDATE_ICON, tone: 'pink' },
 ];
@@ -487,6 +489,41 @@ export async function mount(root, initialTab) {
               읽기 전용으로만 연동돼요. 잇다에서 만든 일정은 Google로 올라가지 않고, Google 쪽 일정도 잇다에서 수정·삭제할 수 없어요.
             </p>
             <div id="gcal-panel"><div class="empty">불러오는 중…</div></div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-panel="holiday">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>인터넷에서 공휴일 불러오기</h3></div>
+            <p class="settings-panel-desc">
+              한국천문연구원 특일정보 기준으로 그 해의 공휴일·대체공휴일·선거일을 받아와요. 미리보기에서 이름을 고치거나 뺀 뒤 저장할 수 있고, 이미 등록된 날짜는 건드리지 않아요.
+            </p>
+            <div class="form-row">
+              <select id="hol-fetchYear" class="select" style="width:100px;"></select>
+              <button class="btn-secondary" id="hol-fetchBtn">불러오기</button>
+            </div>
+            <div id="hol-preview"></div>
+            <div class="update-row" style="margin-top:12px;border-top:1px solid var(--divider);padding-top:12px;">
+              <div>
+                <div class="settings-row-title">매년 자동으로 불러오기</div>
+                <div class="settings-row-desc">잇다를 켤 때 올해(11월부터는 내년도) 공휴일 중 아직 없는 날짜를 자동으로 추가해요. 한 번 받은 해는 다시 받지 않아서, 직접 지우거나 고친 공휴일이 되살아나지 않아요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="hol-autoToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>공휴일 목록</h3></div>
+            <p class="settings-panel-desc">등록한 공휴일은 달력에 빨간 날짜로 표시돼요. 이름을 고치고 Enter를 누르거나 칸을 벗어나면 저장돼요.</p>
+            <div class="form-row">
+              <input type="date" id="hol-addDate" class="input" style="width:150px;" />
+              <input type="text" id="hol-addName" class="input" placeholder="공휴일명 (예: 창립기념일)" style="width:200px;" />
+              <button class="btn-secondary" id="hol-addBtn">직접 추가</button>
+              <select id="hol-listYear" class="select" style="width:100px;margin-left:auto;"></select>
+            </div>
+            <div id="hol-list"></div>
           </div>
         </div>
 
@@ -1915,6 +1952,146 @@ export async function mount(root, initialTab) {
     });
   }
 
+  // ================= 공휴일 =================
+  async function initHolidayPanel() {
+    const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+    const attr = (v) => escapeHtml(v).replace(/"/g, '&quot;');
+    const dateLabel = (d) => `${d} (${DOW[new Date(`${d}T00:00:00`).getDay()]})`;
+    const thisYear = new Date().getFullYear();
+    const yearOptions = [thisYear - 1, thisYear, thisYear + 1, thisYear + 2].map((y) => `<option value="${y}">${y}년</option>`).join('');
+    $('hol-fetchYear').innerHTML = yearOptions;
+    $('hol-listYear').innerHTML = yearOptions;
+    $('hol-fetchYear').value = String(thisYear);
+    $('hol-listYear').value = String(thisYear);
+
+    async function renderList() {
+      const el = $('hol-list');
+      let rows;
+      try {
+        rows = await window.itda.holidays.listYear($('hol-listYear').value);
+      } catch (e) {
+        el.innerHTML = `<p style="font-size:12.5px;color:var(--danger);">목록을 불러오지 못했어요.</p>`;
+        return;
+      }
+      if (!rows.length) {
+        el.innerHTML = `<div class="empty">${$('hol-listYear').value}년에 등록된 공휴일이 없어요. 위에서 인터넷으로 불러오거나 직접 추가해보세요.</div>`;
+        return;
+      }
+      el.innerHTML = rows
+        .map(
+          (h) => `
+        <div class="hol-row" data-date="${h.date}">
+          <span class="hol-date">${dateLabel(h.date)}</span>
+          <input type="text" class="input hol-name" value="${attr(h.name)}" />
+          <span class="hol-src">${h.source === 'auto' ? '자동' : '직접'}</span>
+          <button class="btn-secondary" data-action="del">삭제</button>
+        </div>`
+        )
+        .join('');
+    }
+
+    $('hol-list').addEventListener('change', async (e) => {
+      const input = e.target.closest('.hol-name');
+      if (!input) return;
+      try {
+        await window.itda.holidays.rename({ date: input.closest('.hol-row').dataset.date, name: input.value });
+        toast('이름을 바꿨어요');
+      } catch (err) {
+        errorToast(err, '저장하지 못했어요');
+        await renderList();
+      }
+    });
+    $('hol-list').addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-action="del"]');
+      if (!btn) return;
+      try {
+        await window.itda.holidays.remove(btn.closest('.hol-row').dataset.date);
+        await renderList();
+      } catch (err) {
+        errorToast(err, '삭제하지 못했어요');
+      }
+    });
+    $('hol-listYear').addEventListener('change', renderList);
+
+    $('hol-addBtn').addEventListener('click', async () => {
+      const date = $('hol-addDate').value;
+      const name = $('hol-addName').value;
+      try {
+        await window.itda.holidays.add({ date, name });
+        $('hol-addName').value = '';
+        $('hol-listYear').value = date.slice(0, 4);
+        await renderList();
+        toast('공휴일을 추가했어요');
+      } catch (err) {
+        errorToast(err, '추가하지 못했어요');
+      }
+    });
+
+    $('hol-fetchBtn').addEventListener('click', async () => {
+      const year = $('hol-fetchYear').value;
+      const btn = $('hol-fetchBtn');
+      const preview = $('hol-preview');
+      btn.disabled = true;
+      btn.textContent = '불러오는 중…';
+      try {
+        const [list, existing] = await Promise.all([window.itda.holidays.fetchYear(year), window.itda.holidays.listYear(year)]);
+        const have = new Set(existing.map((h) => h.date));
+        preview.innerHTML = `
+          <div class="hol-preview-box">
+            <div class="form-row" style="margin:0 0 8px;">
+              <button class="btn" id="hol-saveBtn">선택한 공휴일 저장</button>
+              <button class="btn-secondary" id="hol-cancelBtn">닫기</button>
+              <span class="hol-src" style="width:auto;">체크한 날짜만 저장돼요 · 이름은 여기서 고칠 수 있어요</span>
+            </div>
+            ${list
+              .map(
+                (h) => `
+              <div class="hol-row" data-date="${h.date}">
+                <input type="checkbox" ${have.has(h.date) ? 'disabled' : 'checked'} />
+                <span class="hol-date">${dateLabel(h.date)}</span>
+                <input type="text" class="input hol-name" value="${attr(h.name)}" ${have.has(h.date) ? 'disabled' : ''} />
+                <span class="hol-src">${have.has(h.date) ? '등록됨' : '새로'}</span>
+              </div>`
+              )
+              .join('')}
+          </div>`;
+        $('hol-cancelBtn').addEventListener('click', () => (preview.innerHTML = ''));
+        $('hol-saveBtn').addEventListener('click', async () => {
+          const picked = [...preview.querySelectorAll('.hol-row')]
+            .filter((row) => row.querySelector('input[type=checkbox]:checked:not(:disabled)'))
+            .map((row) => ({ date: row.dataset.date, name: row.querySelector('.hol-name').value }));
+          try {
+            const { added } = await window.itda.holidays.saveMany(picked);
+            toast(`공휴일 ${added}건을 저장했어요`);
+            preview.innerHTML = '';
+            $('hol-listYear').value = year;
+            await renderList();
+          } catch (err) {
+            errorToast(err, '저장하지 못했어요');
+          }
+        });
+      } catch (err) {
+        errorToast(err, '공휴일을 불러오지 못했어요. 인터넷 연결을 확인해주세요');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '불러오기';
+      }
+    });
+
+    const auto = $('hol-autoToggle');
+    auto.checked = await window.itda.holidays.getAuto();
+    auto.addEventListener('change', async () => {
+      try {
+        await window.itda.holidays.setAuto(auto.checked);
+      } catch (err) {
+        errorToast(err, '저장하지 못했어요');
+        auto.checked = !auto.checked;
+      }
+    });
+
+    await renderList();
+  }
+
   // ================= 데이터 & 백업 =================
   function initDataPanel() {
     $('data-openLogsBtn').addEventListener('click', async () => {
@@ -2194,6 +2371,7 @@ export async function mount(root, initialTab) {
   await initConveniencePanel();
   await initAutoBackupPanel();
   initDataPanel();
+  await initHolidayPanel();
   await initUpdatePanel();
   await loadGcalPanel();
 
