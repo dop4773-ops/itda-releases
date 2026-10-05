@@ -2333,3 +2333,22 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .search-result-row{gap:10px;}
 .search-result-row input[type="checkbox"]{width:15px;height:15px;accent-color:var(--brand);cursor:pointer;flex-shrink:0;}
 .search-result-row .main{text-decoration:none;color:inherit;}
+
+
+/* 일정 일괄 등록(근무표 사진/글) 창 */
+.modal-card.bulk-card{width:min(780px,94vw);max-height:80vh;overflow-y:auto;}
+.bulk-drop{border:1.5px dashed var(--border);border-radius:var(--radius-md);padding:16px;text-align:center;font-size:12.5px;color:var(--text-soft);display:flex;flex-direction:column;align-items:center;gap:8px;outline:none;}
+.bulk-drop.drag,.bulk-drop:focus{border-color:var(--brand);background:var(--brand-soft);}
+.bulk-status{font-size:12px;color:var(--text-soft);margin:8px 0;min-height:16px;}
+.bulk-text{margin:4px 0 10px;}
+.bulk-text summary{cursor:pointer;font-size:12.5px;color:var(--text-soft);padding:4px 0;}
+.bulk-text textarea{width:100%;min-height:90px;margin:6px 0;}
+.bulk-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--divider);}
+.bulk-row .bulk-date{width:142px;flex-shrink:0;font-size:12.5px;padding:5px 8px;}
+.bulk-thumb{height:32px;max-width:190px;object-fit:contain;border:1px solid var(--divider);border-radius:6px;background:#fff;flex-shrink:0;}
+.bulk-thumb-empty{width:0;}
+.bulk-row .bulk-title{flex:1;min-width:110px;font-size:12.5px;padding:5px 8px;}
+.bulk-row .select{width:auto;padding:5px 6px;font-size:12px;}
+.bulk-row.is-bad .bulk-title{border-color:var(--danger);}
+.bulk-foot{margin:12px 0 0;}
+.bulk-note{font-size:11.5px;color:var(--text-faint);}

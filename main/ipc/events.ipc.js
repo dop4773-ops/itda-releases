@@ -85,6 +85,23 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
     }
   );
 
+  // 일괄 등록(근무표 사진/글 붙여넣기) — 전부 종일 일정, 하나라도 잘못되면 통째로 롤백.
+  ipcMain.handle('events:addMany', (event, { items, categoryId }) => {
+    if (!Array.isArray(items) || !items.length) throw new Error('등록할 일정이 없어요.');
+    if (items.length > 200) throw new Error('한 번에 200건까지 등록할 수 있어요.');
+    const ids = repos.transaction(() =>
+      items.map((it) => {
+        const title = String(it.title || '').trim();
+        if (!title) throw new Error('일정 제목을 입력해주세요.');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.date))) throw new Error('날짜 형식이 올바르지 않아요.');
+        const startAt = `${it.date} 00:00:00`;
+        return events.insert({ title, categoryId: categoryId ?? null, startAt, endAt: resolveEndAt(startAt, null, true), allDay: true }).id;
+      })
+    )();
+    broadcastDataChanged('event', ids[ids.length - 1]);
+    return { added: ids.length };
+  });
+
   ipcMain.handle(
     'events:update',
     (event, { id, title, categoryId, location, startAt, endAt, allDay, memo, colorHex, textColor }) => {

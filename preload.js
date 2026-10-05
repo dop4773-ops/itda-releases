@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('itda', {
     range: (payload) => ipcRenderer.invoke('events:range', payload),
     get: (id) => ipcRenderer.invoke('events:get', id),
     add: (payload) => ipcRenderer.invoke('events:add', payload),
+    addMany: (payload) => ipcRenderer.invoke('events:addMany', payload),
     update: (payload) => ipcRenderer.invoke('events:update', payload),
     delete: (id) => ipcRenderer.invoke('events:delete', id),
     deleteSeries: (payload) => ipcRenderer.invoke('events:deleteSeries', payload),

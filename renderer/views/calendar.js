@@ -7,6 +7,7 @@ import { attachDateQuickChips } from '../shared/date-quick-chips.js';
 import { confirmSeriesScope } from '../shared/series-scope.js';
 import { setScreenShortcuts } from '../shared/shell.js';
 import { promptText } from '../shared/text-prompt.js';
+import { openBulkScheduleDialog } from '../shared/bulk-schedule-dialog.js';
 import {
   WEEKDAY_LABELS,
   dateKey as toKey,
@@ -410,6 +411,7 @@ export async function mount(root, deepLinkId) {
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         ${widgetLaunchButtonHtml('c-scheduleWidgetBtn', '오늘 일정 위젯 열기')}
+        <button class="btn-secondary" id="c-openBulk" title="근무표 사진이나 글로 여러 일정을 한 번에 등록">일괄 등록</button>
         <button class="btn" id="c-openAdd">+ 새 일정</button>
       </div>
     </div>
@@ -953,6 +955,7 @@ export async function mount(root, deepLinkId) {
   attachDateQuickChips($('c-start')); // 시작 일시 옆에 오늘/내일/이번 주/다음 주 퀵칩 — c-start는 열고 닫아도 DOM이 그대로라 한 번만 붙이면 됨
 
   $('c-openAdd').addEventListener('click', () => openModal());
+  $('c-openBulk').addEventListener('click', () => openBulkScheduleDialog({ categories, onRegistered: load }));
   $('c-cancelAdd').addEventListener('click', closeModal);
 
   // "★ 템플릿 저장" — 지금 폼에 입력된 제목/카테고리/장소/종일 여부를 즐겨찾는 템플릿으로 저장
