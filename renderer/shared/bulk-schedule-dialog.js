@@ -37,23 +37,18 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   const UNSURE_RATIO = 0.55; // 1등/2등 거리 비율이 이 이상이면 "확인 필요" 표시
 
   const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay open';
+  overlay.className = 'modal-overlay bulk-overlay open';
   overlay.innerHTML = `
     <div class="modal-card bulk-card">
       <div class="panel-head">
         <h3 style="margin:0;">일정 일괄 등록</h3>
         <button class="btn-icon" data-act="close" title="닫기">✕</button>
       </div>
-      <p class="settings-panel-desc">
-        월간 표를 캡처한 사진에서 <b>하늘색 글씨 칸</b>(평일만)을 찾아 날짜를 채워요. 글자는 읽지 않으니, 칸 이미지를 보면서 RM 번호와 층만 골라주세요.
-      </p>
-      <div class="form-row">
-        <label style="font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:8px;">
-          대상 달
+      <div class="bulk-controls">
+        <label>대상 달
           <input type="month" id="bulk-month" class="input" value="${base.getFullYear()}-${pad(base.getMonth() + 1)}" />
         </label>
-        <label style="font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:8px;">
-          카테고리
+        <label>카테고리
           <select id="bulk-cat" class="select">
             <option value="">없음</option>
             ${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
@@ -61,8 +56,9 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         </label>
         <span class="bulk-note">하루종일 일정으로 등록돼요</span>
       </div>
+      <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
       <div class="bulk-drop" id="bulk-drop" tabindex="0">
-        <span>표 캡처를 여기에 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요</span>
+        <span id="bulk-drop-text">표 캡처를 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요</span>
         <button class="btn-secondary" id="bulk-pick">사진 파일 선택…</button>
         <input type="file" id="bulk-file" accept="image/*" hidden />
       </div>
@@ -73,12 +69,12 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <button class="btn-secondary" id="bulk-parse">목록으로 만들기</button>
       </details>
       <div id="bulk-list"></div>
-      <div class="form-row bulk-foot">
+      <div class="bulk-bar">
         <button class="btn-secondary" id="bulk-add">+ 행 추가</button>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" data-act="close">취소</button>
-        <button class="btn" id="bulk-submit">등록</button>
+        <div class="bulk-bar-right">
+          <button class="btn-secondary" data-act="close">취소</button>
+          <button class="btn" id="bulk-submit">등록</button>
+        </div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -124,9 +120,9 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
       <div class="bulk-row" data-id="${r.id}">
         <input type="checkbox" class="bulk-inc" ${r.include ? 'checked' : ''} />
         <input type="date" class="input bulk-date" value="${attr(r.date)}" />
-        ${r.thumb ? `<img class="bulk-thumb" src="${r.thumb}" alt="" />` : '<span class="bulk-thumb-empty"></span>'}
-        <input type="text" class="input bulk-title" value="${attr(r.title)}" placeholder="오른쪽에서 RM·층 고르기" />
-        ${r.guess ? `<span class="bulk-flag ${r.unsure ? 'warn' : ''}" title="사진 모양으로 추측한 값이에요">${r.unsure ? '확인' : '자동'}</span>` : ''}
+        ${r.thumb ? `<img class="bulk-thumb" src="${r.thumb}" alt="" />` : '<span></span>'}
+        <input type="text" class="input bulk-title" value="${attr(r.title)}" placeholder="RM·층 선택 또는 직접 입력" />
+        <span class="bulk-flag-slot">${r.guess ? `<span class="bulk-flag ${r.unsure ? 'warn' : ''}" title="사진 모양으로 추측한 값이에요">${r.unsure ? '확인' : '자동'}</span>` : ''}</span>
         <select class="select bulk-rm"><option value="">RM</option>${RM_NUMBERS.map((n) => `<option value="${n}" ${p && p.rm === n ? 'selected' : ''}>RM${n}</option>`).join('')}</select>
         <select class="select bulk-floor"><option value="">층</option>${floors.map((f) => `<option value="${f}" ${p && p.floors === f ? 'selected' : ''}>${f}층</option>`).join('')}</select>
         <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
@@ -146,7 +142,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
 
   function clearGuess(r, rowEl) {
     r.guess = false;
-    rowEl.querySelector('.bulk-flag')?.remove();
+    rowEl.querySelector('.bulk-flag-slot').textContent = '';
   }
 
   $('#bulk-list').addEventListener('input', (e) => {
@@ -194,21 +190,40 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   });
 
   // ---------- 사진 ----------
+  // 칸 이미지는 원본 픽셀 대신 "파란 글씨 세기"만 진한 청색으로 그려 — 회색 바탕·칸 경계선이 빠지고 읽기 쉽다.
+  // 크기는 항상 THUMB_W x THUMB_H(2배 해상도)로 맞춰, 글씨 폭이 달라도 목록의 줄이 가지런하다.
+  const THUMB_W = 176;
+  const THUMB_H = 34;
   function cropThumb(box) {
-    const mx = 2; // 가로 여백은 작게 — 크게 잡으면 옆 칸의 굵은 경계선이 같이 잘려 들어온다
-    const my = 5;
+    const mx = 3;
+    const my = 4;
     const sx = Math.max(0, box.x0 - mx);
     const sy = Math.max(0, box.y0 - my);
     const sw = Math.min(srcCanvas.width - sx, box.x1 - box.x0 + 1 + mx * 2);
     const sh = Math.min(srcCanvas.height - sy, box.y1 - box.y0 + 1 + my * 2);
-    const scale = Math.max(1.5, Math.min(3, 240 / sw));
+    const src = srcCanvas.getContext('2d').getImageData(sx, sy, sw, sh);
+    const ink = document.createElement('canvas');
+    ink.width = sw;
+    ink.height = sh;
+    const out = ink.getContext('2d').createImageData(sw, sh);
+    for (let i = 0; i < src.data.length; i += 4) {
+      // 약한 번짐(압축 잡음)은 지우고 진한 글씨는 더 진하게 — 대비를 키워 또렷하게 한다
+      const a = Math.max(0, Math.min(1, ((src.data[i + 2] - src.data[i]) / 160 - 0.18) / 0.5));
+      out.data[i] = 255 - a * 255;
+      out.data[i + 1] = 255 - a * 185;
+      out.data[i + 2] = 255 - a * 145;
+      out.data[i + 3] = 255;
+    }
+    ink.getContext('2d').putImageData(out, 0, 0);
     const c = document.createElement('canvas');
-    c.width = Math.round(sw * scale);
-    c.height = Math.round(sh * scale);
+    c.width = THUMB_W * 2;
+    c.height = THUMB_H * 2;
     const ctx = c.getContext('2d');
-    ctx.filter = 'contrast(1.8) saturate(1.4) brightness(.8)'; // 가는 하늘색 글씨를 눈으로 읽기 쉽게
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    const k = Math.min(c.width / sw, c.height / sh);
     ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(srcCanvas, sx, sy, sw, sh, 0, 0, c.width, c.height);
+    ctx.drawImage(ink, 0, 0, sw, sh, (c.width - sw * k) / 2, (c.height - sh * k) / 2, sw * k, sh * k);
     return c.toDataURL('image/png');
   }
 
@@ -218,7 +233,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     const result = detectScheduleCells(img, { year, month });
     rows = rows.filter((r) => !r.cell); // 직접 넣은 행은 유지, 사진에서 온 행만 다시 만든다
     if (!result.ok) {
-      $('#bulk-status').textContent = `${result.reason} 아래 "행 추가"나 글 붙여넣기로 등록할 수 있어요.`;
+      $('#bulk-status').textContent = `${result.reason} "행 추가"나 글 붙여넣기로 등록할 수 있어요.`;
     } else if (!result.cells.length) {
       $('#bulk-status').textContent = '하늘색 글씨 칸을 찾지 못했어요. 표 전체가 보이게 캡처했는지 확인해주세요.';
     } else {
@@ -238,8 +253,11 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         });
       });
       const unsure = rows.filter((r) => r.guess && r.unsure).length;
-      $('#bulk-status').textContent = `${result.cells.length}칸을 찾았어요 — 날짜와 RM·층을 사진 모양으로 추측해서 채웠어요. 칸 이미지와 맞는지 확인하고 틀린 건 고쳐주세요.${unsure ? ` (노란 "확인" ${unsure}건은 특히 한 번 더 봐주세요)` : ''}`;
+      $('#bulk-status').textContent = `${result.cells.length}칸을 찾았어요${unsure ? ` · 노란 "확인" ${unsure}건은 특히 다시 봐주세요` : ''}`;
     }
+    $('#bulk-desc').style.display = 'none'; // 사진을 넣은 뒤엔 안내 문구를 접어 목록 자리를 넓힌다
+    $('#bulk-drop').classList.add('compact');
+    $('#bulk-drop-text').innerHTML = '다른 사진은 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요';
     renderRows();
   }
 
@@ -292,8 +310,9 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     const { rows: parsed, skipped } = parseScheduleText($('#bulk-text').value, ym().year);
     parsed.forEach((p) => rows.push({ id: nextId++, date: p.date, title: p.title, include: true }));
     $('#bulk-status').textContent = parsed.length
-      ? `${parsed.length}줄을 목록에 넣었어요.${skipped.length ? ` (읽지 못한 ${skipped.length}줄: ${skipped.slice(0, 2).join(' / ')}…)` : ''}`
+      ? `${parsed.length}줄을 넣었어요${skipped.length ? ` · 읽지 못한 ${skipped.length}줄: ${skipped[0].slice(0, 20)}` : ''}`
       : '읽을 수 있는 줄이 없어요. "10/7 RM7(8,9층)"처럼 월/일 다음에 제목을 적어주세요.';
+    if (parsed.length) $('#bulk-desc').style.display = 'none';
     if (parsed.length) $('#bulk-text').value = '';
     renderRows();
   });

@@ -133,18 +133,27 @@ export function detectScheduleCells(img, { year, month, weekdaysOnly = true }) {
       let week = -1;
       for (let b = 0; b < bands.length; b++) if (bands[b][1] < y0) week = b;
       if (week < 0) continue;
-      let bx0 = cx1;
-      let bx1 = cx0;
+      const colFlag = new Uint8Array(cx1 - cx0 + 1);
       let n = 0;
       for (let y = y0; y <= y1; y++) {
         for (let x = cx0, i = (y * width + cx0) * 4; x <= cx1; x++, i += 4) {
           if (isLightBlue(data[i], data[i + 1], data[i + 2])) {
             n++;
-            if (x < bx0) bx0 = x;
-            if (x > bx1) bx1 = x;
+            colFlag[x - cx0] = 1;
           }
         }
       }
+      // 칸 경계선의 색 번짐 같은 "양 끝에 떨어져 있는 아주 얇은 조각"만 칸 범위에서 뺀다. 글씨 중간의 틈(압축으로
+      // 생김)이나 글자 덩어리는 건드리지 않는다 — 가장 긴 덩어리만 남기는 방식은 압축된 사진에서 글씨를 반토막 냈다.
+      const parts = runs(colFlag, Math.max(3, Math.round(unit * 0.07)), 1);
+      if (!parts.length) continue;
+      const thin = Math.max(3, Math.round(unit * 0.05));
+      let lo = 0;
+      let hi = parts.length - 1;
+      while (hi > lo && parts[hi][1] - parts[hi][0] + 1 <= thin) hi--;
+      while (lo < hi && parts[lo][1] - parts[lo][0] + 1 <= thin) lo++;
+      const bx0 = cx0 + parts[lo][0];
+      const bx1 = cx0 + parts[hi][1];
       if (n < unit * 0.15 || bx1 - bx0 < unit * 0.15) continue; // 점 하나 같은 잡음
       const key = week * 7 + col;
       const prev = found.get(key);

@@ -2335,22 +2335,30 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .search-result-row .main{text-decoration:none;color:inherit;}
 
 
-/* 일정 일괄 등록(근무표 사진/글) 창 */
-.modal-card.bulk-card{width:min(780px,94vw);max-height:80vh;overflow-y:auto;}
-.bulk-drop{border:1.5px dashed var(--border);border-radius:var(--radius-md);padding:16px;text-align:center;font-size:12.5px;color:var(--text-soft);display:flex;flex-direction:column;align-items:center;gap:8px;outline:none;}
-.bulk-drop.drag,.bulk-drop:focus{border-color:var(--brand);background:var(--brand-soft);}
-.bulk-status{font-size:12px;color:var(--text-soft);margin:8px 0;min-height:16px;}
-.bulk-text{margin:4px 0 10px;}
-.bulk-text summary{cursor:pointer;font-size:12.5px;color:var(--text-soft);padding:4px 0;}
-.bulk-text textarea{width:100%;min-height:90px;margin:6px 0;}
-.bulk-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--divider);}
-.bulk-row .bulk-date{width:142px;flex-shrink:0;font-size:12.5px;padding:5px 8px;}
-.bulk-thumb{height:32px;max-width:190px;object-fit:contain;border:1px solid var(--divider);border-radius:6px;background:#fff;flex-shrink:0;}
-.bulk-thumb-empty{width:0;}
-.bulk-row .bulk-title{flex:1;min-width:110px;font-size:12.5px;padding:5px 8px;}
-.bulk-row .select{width:auto;padding:5px 6px;font-size:12px;}
-.bulk-row.is-bad .bulk-title{border-color:var(--danger);}
-.bulk-foot{margin:12px 0 0;}
+/* 일정 일괄 등록(근무표 사진/글) 창 — 목록만 스크롤되고 위·아래(설정·사진·버튼)는 고정. 줄은 고정 열이라 가지런하다. */
+.modal-overlay.bulk-overlay{padding-top:3vh;}
+.modal-card.bulk-card{width:min(860px,96vw);max-height:94vh;overflow:hidden;padding:16px 20px;}
+.bulk-card .panel-head{flex-shrink:0;margin-bottom:8px;}
+.bulk-controls{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:0 0 8px;flex-shrink:0;}
+.bulk-controls label{font-size:12px;color:var(--text-faint);display:flex;align-items:center;gap:8px;}
 .bulk-note{font-size:11.5px;color:var(--text-faint);}
-.bulk-flag{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand);white-space:nowrap;flex-shrink:0;}
+.bulk-desc{font-size:12px;color:var(--text-soft);margin:0 0 8px;flex-shrink:0;}
+.bulk-drop{border:1.5px dashed var(--border);border-radius:var(--radius-md);padding:12px;font-size:12.5px;color:var(--text-soft);display:flex;align-items:center;justify-content:center;gap:12px;flex-shrink:0;outline:none;}
+.bulk-drop.compact{padding:6px 12px;font-size:12px;}
+.bulk-drop.drag,.bulk-drop:focus{border-color:var(--brand);background:var(--brand-soft);}
+.bulk-status{font-size:12px;color:var(--text-soft);margin:8px 0 4px;flex-shrink:0;}
+.bulk-status:empty{display:none;}
+.bulk-text{margin:4px 0 0;flex-shrink:0;}
+.bulk-text summary{cursor:pointer;font-size:12px;color:var(--text-soft);padding:2px 0;}
+.bulk-text textarea{width:100%;min-height:70px;margin:6px 0;}
+#bulk-list{flex:1 1 auto;min-height:0;overflow-y:auto;margin-top:6px;border-top:1px solid var(--divider);}
+.bulk-row{display:grid;grid-template-columns:18px 128px 176px minmax(120px,1fr) 40px 76px 86px 22px;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--divider);}
+.bulk-row .input,.bulk-row .select{width:100%;min-width:0;font-size:12.5px;padding:5px 8px;}
+.bulk-row .select{padding:5px 4px;font-size:12px;}
+.bulk-thumb{width:176px;height:34px;object-fit:contain;border:1px solid var(--divider);border-radius:6px;background:#fff;display:block;}
+.bulk-row.is-bad .bulk-title{border-color:var(--danger);}
+.bulk-flag-slot{display:flex;justify-content:center;}
+.bulk-flag{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand);white-space:nowrap;}
 .bulk-flag.warn{background:color-mix(in srgb,var(--warning,#E0A73B) 30%,transparent);color:var(--text);}
+.bulk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;padding-top:10px;margin-top:6px;border-top:1px solid var(--divider);}
+.bulk-bar-right{display:flex;gap:8px;}
