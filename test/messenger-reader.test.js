@@ -105,20 +105,23 @@ test('원본 불변(메신저 꺼짐): 복사본으로 읽고 폴더에 아무�
 test('원본 불변(메신저 켜짐): 제자리에서 읽되 아직 반영 안 된 최신 데이터까지 보고, 본체 파일·폴더는 그대로', (t) => {
   const { dir, file } = setup(t);
   const writer = new Database(file); // 켜져 있는 메신저 흉내 — 연결을 열어 둔 채 WAL에 체크포인트 안 된 변경을 만든다
-  writer.pragma('journal_mode = WAL');
-  writer.pragma('wal_autocheckpoint = 0');
-  writer
-    .prepare("INSERT INTO admission_discharge_entries (event_id,event_date,event_type,patient_name,ward,author_id,created_utc,updated_utc) VALUES ('fake-adm-99','2026-10-07','입원','방금등록','5병동','u','2026-10-07T01:00:00Z','2026-10-07T01:00:00Z')")
-    .run();
-  t.after(() => writer.close());
-  assert.ok(fs.existsSync(`${file}-wal`), '켜짐 상태 전제: -wal 존재');
-  const before = { files: listing(dir), hash: sha(file), mtime: fs.statSync(file).mtimeMs };
-  const { mode, ids } = withReader(file, (h) => ({ mode: h.mode, ids: readAll(h.db, WINDOW).admissions.map((a) => a.id) }));
-  assert.equal(mode, 'in-place');
-  assert.ok(ids.includes('fake-adm-99'), 'WAL에만 있는 최신 항목까지 읽어야 함');
-  assert.deepEqual(listing(dir), before.files);
-  assert.equal(sha(file), before.hash);
-  assert.equal(fs.statSync(file).mtimeMs, before.mtime);
+  try {
+    writer.pragma('journal_mode = WAL');
+    writer.pragma('wal_autocheckpoint = 0');
+    writer
+      .prepare("INSERT INTO admission_discharge_entries (event_id,event_date,event_type,patient_name,ward,author_id,created_utc,updated_utc) VALUES ('fake-adm-99','2026-10-07','입원','방금등록','5병동','u','2026-10-07T01:00:00Z','2026-10-07T01:00:00Z')")
+      .run();
+    assert.ok(fs.existsSync(`${file}-wal`), '켜짐 상태 전제: -wal 존재');
+    const before = { files: listing(dir), hash: sha(file), mtime: fs.statSync(file).mtimeMs };
+    const { mode, ids } = withReader(file, (h) => ({ mode: h.mode, ids: readAll(h.db, WINDOW).admissions.map((a) => a.id) }));
+    assert.equal(mode, 'in-place');
+    assert.ok(ids.includes('fake-adm-99'), 'WAL에만 있는 최신 항목까지 읽어야 함');
+    assert.deepEqual(listing(dir), before.files);
+    assert.equal(sha(file), before.hash);
+    assert.equal(fs.statSync(file).mtimeMs, before.mtime);
+  } finally {
+    writer.close(); // Windows는 열린 파일을 못 지우므로, 임시 폴더 정리(setup의 t.after) 전에 반드시 닫는다
+  }
 });
 
 test('허용 목록: 읽는 SQL은 입퇴원·외출외박·병동이동 표(와 구조 점검)만 건드리고 messages 등은 절대 안 읽는다', (t) => {
