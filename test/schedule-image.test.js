@@ -64,3 +64,46 @@ test('글 붙여넣기: 월/일 + 제목, 요일 괄호·구분자 허용, 못 �
   ]);
   assert.deepEqual(skipped, ['아무말']);
 });
+
+test('RM·층 추측: 기준과 같은 모양/잡음/1픽셀 어긋남도 같은 라벨, 전혀 다른 모양은 확신도가 낮다', async () => {
+  const { buildModel, classify, VEC_W, VEC_H, vecToB64, b64ToVec } = await load();
+  // 숫자 자리(오른쪽 영역)만 다른 가짜 글씨 3종 — 나머지(R,M,층 자리)는 모두 같다
+  const mk = (seed) => {
+    const v = new Float32Array(VEC_W * VEC_H);
+    for (let y = 3; y < 11; y++) for (let x = 5; x < 70; x++) v[y * VEC_W + x] = 0.5; // 공통 글씨 띠
+    for (let y = 3; y < 11; y++) for (let x = 20 + seed * 12; x < 26 + seed * 12; x++) v[y * VEC_W + x] = 1; // 라벨마다 다른 숫자 자리
+    return v;
+  };
+  const model = buildModel([0, 1, 2].map((i) => ({ label: `RM${4 + i}(8,9층)`, v: mk(i) })));
+  const noisy = (v, amp) => Float32Array.from(v, (x, k) => Math.max(0, Math.min(1, x + (((k * 2654435761) % 1000) / 1000 - 0.5) * amp)));
+  const shiftRight = (v) => Float32Array.from(v, (_, k) => (k % VEC_W ? v[k - 1] : 0));
+  for (let i = 0; i < 3; i++) {
+    const want = `RM${4 + i}(8,9층)`;
+    assert.equal(classify(mk(i), model).label, want);
+    assert.equal(classify(noisy(mk(i), 0.3), model).label, want);
+    assert.equal(classify(shiftRight(mk(i)), model).label, want);
+  }
+  assert.ok(classify(mk(0), model).ratio < 0.2, '정확히 같은 모양은 확실');
+  assert.equal(classify(mk(0), buildModel([{ label: 'RM4(8,9층)', v: mk(0) }])), null, '라벨이 하나뿐이면 비교할 수 없어 null');
+  assert.deepEqual(Array.from(b64ToVec(vecToB64(mk(1)))).map((x) => Math.round(x * 255)), Array.from(mk(1)).map((x) => Math.round(x * 255)));
+});
+
+test('학습 저장: 라벨당 최근 4개만 남긴다', async () => {
+  const { addLearned } = await load();
+  let l = [];
+  for (let i = 0; i < 6; i++) l = addLearned(l, [{ label: 'RM7(8,9층)', v: `a${i}` }]);
+  l = addLearned(l, [{ label: 'RM4(5,7층)', v: 'b' }]);
+  assert.deepEqual(l.filter((x) => x.label === 'RM7(8,9층)').map((x) => x.v), ['a2', 'a3', 'a4', 'a5']);
+  assert.equal(l.length, 5);
+});
+
+test('내장 기준(seeds): 10개 라벨, 모두 RM·층 형식이고 칸 크기에 맞는 길이', async () => {
+  const seedsSrc = require('node:fs').readFileSync(require('node:path').join(__dirname, '../renderer/shared/schedule-seeds.js'), 'utf8');
+  const { SEED_TEMPLATES } = await import('data:text/javascript;base64,' + Buffer.from(seedsSrc).toString('base64'));
+  const { parseLabel, b64ToVec, VEC_W, VEC_H } = await load();
+  assert.equal(SEED_TEMPLATES.length, 10);
+  for (const t of SEED_TEMPLATES) {
+    assert.ok(parseLabel(t.label), t.label);
+    assert.equal(b64ToVec(t.v).length, VEC_W * VEC_H);
+  }
+});

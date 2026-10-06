@@ -48,25 +48,10 @@ export function parseScheduleText(text, year) {
   return { rows, skipped };
 }
 
-function hsvOf(r, g, b) {
-  const mx = Math.max(r, g, b);
-  const mn = Math.min(r, g, b);
-  const d = mx - mn;
-  let h = 0;
-  if (d) {
-    if (mx === r) h = ((g - b) / d) % 6;
-    else if (mx === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h /= 6;
-    if (h < 0) h += 1;
-  }
-  return { h, s: mx ? d / mx : 0, v: mx / 255 };
-}
-
-// 밝은 하늘색 글씨. 압축으로 색이 탁해져도 되도록 색상/채도/밝기 범위로 판정(진한 파랑은 g<150이라 제외).
+// 하늘색 글씨의 "파란 기운": 흰 바탕에서 파랑(B)이 빨강(R)보다 훨씬 큰 픽셀. 압축으로 색이 탁해지거나 글자
+// 가장자리가 옅어져도 잡히도록 느슨하게 보되, 진한 파랑(#0070C0, g≈112)은 g로 걸러낸다.
 function isLightBlue(r, g, b) {
-  const { h, s, v } = hsvOf(r, g, b);
-  return h > 0.5 && h < 0.62 && s > 0.28 && g >= 150 && v > 0.62;
+  return b - r >= 70 && g >= 120;
 }
 
 // 주마다 맨 위에 깔린 연한 주황색 "날짜 숫자 띠"(#FCE5D6 계열). 연두 요일줄/흰 칸/노랑 강조와는 구분된다.
@@ -176,4 +161,112 @@ export function detectScheduleCells(img, { year, month, weekdaysOnly = true }) {
     })
     .sort((a, b) => a.date.localeCompare(b.date));
   return { ok: true, cells };
+}
+
+
+// ---------- RM 번호/층 추측: 글자를 읽지 않고 "이미 아는 모양"과 비교 ----------
+// 이 표의 글씨는 매달 같은 글꼴이라, 칸 안의 하늘색 글씨 모양을 고정 크기(VEC_W x VEC_H)로 줄여 비교한다.
+// 처음엔 내장 기준(schedule-seeds.js), 이후엔 사용자가 확인해서 등록한 칸이 기준에 더해진다.
+export const VEC_W = 80;
+export const VEC_H = 14;
+
+// 칸(box) 안의 하늘색 글씨 세기를 VEC_W x VEC_H 격자로 — 확대/축소·압축 정도가 달라도 비슷한 값이 나온다.
+export function cellVector(img, box) {
+  const { data, width } = img;
+  const bw = box.x1 - box.x0 + 1;
+  const bh = box.y1 - box.y0 + 1;
+  const hit = new Float32Array(VEC_W * VEC_H);
+  const cnt = new Float32Array(VEC_W * VEC_H);
+  for (let y = box.y0; y <= box.y1; y++) {
+    const by = Math.min(VEC_H - 1, Math.floor(((y - box.y0) * VEC_H) / bh));
+    for (let x = box.x0; x <= box.x1; x++) {
+      const k = by * VEC_W + Math.min(VEC_W - 1, Math.floor(((x - box.x0) * VEC_W) / bw));
+      const i = (y * width + x) * 4;
+      cnt[k]++;
+      // 하늘색 글씨는 흰 바탕에서 파랑(B)-빨강(R) 차이가 크다 — "맞다/아니다"로 자르지 않고 세기를 그대로 써야 압축/축소에 안 흔들린다.
+      hit[k] += Math.max(0, Math.min(1, (data[i + 2] - data[i]) / 200));
+    }
+  }
+  for (let k = 0; k < hit.length; k++) hit[k] = cnt[k] ? hit[k] / cnt[k] : 0;
+  return hit;
+}
+
+// templates: [{label, v: Float32Array}]. 같은 라벨은 평균을 내고, 라벨끼리 "달라지는 픽셀"(RM 숫자·층 숫자 자리)에
+// 가중치를 줘서 똑같은 부분(R, M, 층, 괄호)은 비교에서 사실상 빼는 모델을 만든다.
+export function buildModel(templates) {
+  const groups = new Map();
+  for (const t of templates) (groups.get(t.label) || groups.set(t.label, []).get(t.label)).push(t.v);
+  const means = [...groups].map(([label, vs]) => {
+    const v = new Float32Array(VEC_W * VEC_H);
+    for (const x of vs) for (let k = 0; k < v.length; k++) v[k] += x[k] / vs.length;
+    return { label, v };
+  });
+  const w = new Float32Array(VEC_W * VEC_H);
+  let sum = 0;
+  for (let k = 0; k < w.length; k++) {
+    const m = means.reduce((a, c) => a + c.v[k], 0) / means.length;
+    w[k] = means.reduce((a, c) => a + (c.v[k] - m) ** 2, 0) / means.length;
+    sum += w[k];
+  }
+  if (sum > 0) for (let k = 0; k < w.length; k++) w[k] /= sum;
+  return { means, w };
+}
+
+// vec를 (dx,dy)칸 옮긴 복사본 — 칸 경계가 1~2픽셀 어긋나도 같은 글씨로 보게 한다.
+function shifted(v, dx, dy) {
+  const o = new Float32Array(v.length);
+  for (let y = 0; y < VEC_H; y++) {
+    const sy = y - dy;
+    if (sy < 0 || sy >= VEC_H) continue;
+    for (let x = 0; x < VEC_W; x++) {
+      const sx = x - dx;
+      if (sx >= 0 && sx < VEC_W) o[y * VEC_W + x] = v[sy * VEC_W + sx];
+    }
+  }
+  return o;
+}
+const SHIFTS = [[0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [0, 1], [0, -1]];
+
+// 가장 가까운 라벨과 그 확신도. ratio = (1등 거리)/(2등 거리) — 작을수록 확실.
+export function classify(vec, model) {
+  if (model.means.length < 2) return null;
+  const vs = SHIFTS.map(([dx, dy]) => (dx || dy ? shifted(vec, dx, dy) : vec));
+  const ds = model.means
+    .map((m) => {
+      let best = Infinity;
+      for (const v of vs) {
+        let d = 0;
+        for (let k = 0; k < v.length; k++) d += model.w[k] * (v[k] - m.v[k]) ** 2;
+        if (d < best) best = d;
+      }
+      return { label: m.label, d: best };
+    })
+    .sort((a, b) => a.d - b.d);
+  return { label: ds[0].label, d: ds[0].d, ratio: ds[0].d / (ds[1].d || 1e-12) };
+}
+
+// 기준 저장용 — 0~1 값을 한 글자(0~255)씩으로 줄여 base64로 (칸 하나가 약 1.5KB).
+export function vecToB64(v) {
+  let s = '';
+  for (let k = 0; k < v.length; k++) s += String.fromCharCode(Math.round(Math.max(0, Math.min(1, v[k])) * 255));
+  return btoa(s);
+}
+export function b64ToVec(b64) {
+  const s = atob(b64);
+  const v = new Float32Array(s.length);
+  for (let k = 0; k < s.length; k++) v[k] = s.charCodeAt(k) / 255;
+  return v;
+}
+
+// 사용자가 확인한 칸을 기준에 더한다 — 라벨당 최근 MAX_PER_LABEL개만 남겨 저장 크기를 묶는다.
+const MAX_PER_LABEL = 4;
+export function addLearned(learned, additions) {
+  const out = [...learned, ...additions];
+  const seen = new Map();
+  for (let i = out.length - 1; i >= 0; i--) {
+    const n = (seen.get(out[i].label) || 0) + 1;
+    seen.set(out[i].label, n);
+    if (n > MAX_PER_LABEL) out.splice(i, 1);
+  }
+  return out;
 }

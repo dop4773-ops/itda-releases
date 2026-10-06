@@ -5,7 +5,22 @@
  */
 import { escapeHtml, toast, errorToast } from './ui-utils.js';
 import { registerEscClose } from './esc-close.js';
-import { detectScheduleCells, cellDate, parseScheduleText, parseLabel, formatLabel, RM_NUMBERS, FLOOR_OPTIONS } from './schedule-image.js';
+import {
+  detectScheduleCells,
+  cellDate,
+  parseScheduleText,
+  parseLabel,
+  formatLabel,
+  RM_NUMBERS,
+  FLOOR_OPTIONS,
+  cellVector,
+  buildModel,
+  classify,
+  vecToB64,
+  b64ToVec,
+  addLearned,
+} from './schedule-image.js';
+import { SEED_TEMPLATES } from './schedule-seeds.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const attr = (v) => escapeHtml(v).replace(/"/g, '&quot;');
@@ -17,6 +32,9 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   let rows = []; // { id, date, title, include, cell?, thumb? } — cell/thumb이 있으면 사진에서 온 행
   let nextId = 1;
   let srcCanvas = null;
+  let learned = []; // 사용자가 확인해서 등록했던 칸 모양 [{label, v(base64)}] — 설정(schedule_templates)에 저장
+  let model = null;
+  const UNSURE_RATIO = 0.55; // 1등/2등 거리 비율이 이 이상이면 "확인 필요" 표시
 
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
@@ -75,6 +93,22 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     return { year: y || base.getFullYear(), month: m || base.getMonth() + 1 };
   };
 
+  function rebuildModel() {
+    model = buildModel([...SEED_TEMPLATES, ...learned].map((t) => ({ label: t.label, v: b64ToVec(t.v) })));
+  }
+  rebuildModel();
+  window.itda.settings
+    .get('schedule_templates')
+    .then((raw) => {
+      try {
+        learned = JSON.parse(raw || '[]');
+      } catch (e) {
+        learned = [];
+      }
+      rebuildModel();
+    })
+    .catch(() => {});
+
   function close() {
     off();
     document.removeEventListener('paste', onPaste);
@@ -92,6 +126,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <input type="date" class="input bulk-date" value="${attr(r.date)}" />
         ${r.thumb ? `<img class="bulk-thumb" src="${r.thumb}" alt="" />` : '<span class="bulk-thumb-empty"></span>'}
         <input type="text" class="input bulk-title" value="${attr(r.title)}" placeholder="오른쪽에서 RM·층 고르기" />
+        ${r.guess ? `<span class="bulk-flag ${r.unsure ? 'warn' : ''}" title="사진 모양으로 추측한 값이에요">${r.unsure ? '확인' : '자동'}</span>` : ''}
         <select class="select bulk-rm"><option value="">RM</option>${RM_NUMBERS.map((n) => `<option value="${n}" ${p && p.rm === n ? 'selected' : ''}>RM${n}</option>`).join('')}</select>
         <select class="select bulk-floor"><option value="">층</option>${floors.map((f) => `<option value="${f}" ${p && p.floors === f ? 'selected' : ''}>${f}층</option>`).join('')}</select>
         <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
@@ -109,11 +144,17 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   }
   const rowOf = (el) => rows.find((r) => r.id === Number(el.closest('.bulk-row').dataset.id));
 
+  function clearGuess(r, rowEl) {
+    r.guess = false;
+    rowEl.querySelector('.bulk-flag')?.remove();
+  }
+
   $('#bulk-list').addEventListener('input', (e) => {
     const r = rowOf(e.target);
     const rowEl = e.target.closest('.bulk-row');
     if (e.target.classList.contains('bulk-title')) {
       r.title = e.target.value;
+      clearGuess(r, rowEl);
       const p = parseLabel(r.title);
       rowEl.querySelector('.bulk-rm').value = p ? String(p.rm) : '';
       rowEl.querySelector('.bulk-floor').value = p ? p.floors : '';
@@ -134,6 +175,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         r.title = formatLabel(rm, fl);
         rowEl.querySelector('.bulk-title').value = r.title;
         rowEl.classList.remove('is-bad');
+        clearGuess(r, rowEl);
       }
     }
   });
@@ -180,8 +222,23 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     } else if (!result.cells.length) {
       $('#bulk-status').textContent = '하늘색 글씨 칸을 찾지 못했어요. 표 전체가 보이게 캡처했는지 확인해주세요.';
     } else {
-      $('#bulk-status').textContent = `${result.cells.length}칸을 찾았어요 — 날짜는 자동으로 채웠어요. 칸 이미지를 보고 RM 번호와 층을 골라주세요.`;
-      result.cells.forEach((c) => rows.push({ id: nextId++, date: c.date, title: '', include: true, cell: c, thumb: cropThumb(c.box) }));
+      result.cells.forEach((c) => {
+        const vec = cellVector(img, c.box);
+        const g = classify(vec, model);
+        rows.push({
+          id: nextId++,
+          date: c.date,
+          title: g ? g.label : '',
+          guess: !!g,
+          unsure: !g || g.ratio >= UNSURE_RATIO,
+          vec,
+          include: true,
+          cell: c,
+          thumb: cropThumb(c.box),
+        });
+      });
+      const unsure = rows.filter((r) => r.guess && r.unsure).length;
+      $('#bulk-status').textContent = `${result.cells.length}칸을 찾았어요 — 날짜와 RM·층을 사진 모양으로 추측해서 채웠어요. 칸 이미지와 맞는지 확인하고 틀린 건 고쳐주세요.${unsure ? ` (노란 "확인" ${unsure}건은 특히 한 번 더 봐주세요)` : ''}`;
     }
     renderRows();
   }
@@ -241,6 +298,13 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     renderRows();
   });
 
+  // 확인해서 등록한 칸의 모양을 기억해 다음 달부터 더 잘 맞히게 한다(틀린 걸 고친 칸이 특히 도움이 됨).
+  function learnFrom(picked) {
+    const add = picked.filter((r) => r.vec && parseLabel(r.title)).map((r) => ({ label: formatLabel(parseLabel(r.title).rm, parseLabel(r.title).floors), v: vecToB64(r.vec) }));
+    if (!add.length) return;
+    window.itda.settings.set({ key: 'schedule_templates', value: JSON.stringify(addLearned(learned, add)) }).catch(() => {});
+  }
+
   // ---------- 등록 ----------
   async function submit() {
     const picked = rows.filter((r) => r.include);
@@ -263,6 +327,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         categoryId: catId ? Number(catId) : null,
       });
       toast(`일정 ${added}건을 등록했어요`);
+      learnFrom(picked);
       close();
       onRegistered?.();
     } catch (e) {

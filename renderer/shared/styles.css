@@ -2352,3 +2352,5 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .bulk-row.is-bad .bulk-title{border-color:var(--danger);}
 .bulk-foot{margin:12px 0 0;}
 .bulk-note{font-size:11.5px;color:var(--text-faint);}
+.bulk-flag{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand);white-space:nowrap;flex-shrink:0;}
+.bulk-flag.warn{background:color-mix(in srgb,var(--warning,#E0A73B) 30%,transparent);color:var(--text);}
