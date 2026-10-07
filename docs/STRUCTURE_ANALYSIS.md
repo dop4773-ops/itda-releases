@@ -303,7 +303,7 @@ fire-and-forget 호출은 `unhandledrejection`이 됨. main이 아니라 **rende
    `commandPalette ⌘⇧P` · `toggleSidebar ⌘\` · `toggleNotifications ⌘⇧N` ·
    `toggleTopbar ⌘⇧H` · `lockNow ⌘⌥L`.
 2. **레지스트리 밖 하드코딩** 뷰별 keydown (findConflict 안 봄):
-   - `shell.js`: `Ctrl/Cmd+1~9` 사이드바 이동 (v2.58.24)
+   - `shell.js`: `Ctrl/Cmd+숫자` 사이드바 이동 (v2.58.24, 숫자는 항목의 `data-nav-key`로 고정 — 오늘 요약은 8)
    - `memo.js`: `⌘N`·`⌘F`, 맨키 `+` `f` `/` `a` `Delete`
    - `todo.js`: 맨키 `+`  · `postit.js`: `⌘N`
    - `calendar.js`: 맨키 `+ Tab m w d t f g ← →`

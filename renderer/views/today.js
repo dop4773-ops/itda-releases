@@ -3,7 +3,8 @@
  * 오늘의 일정·마감 할 일을 시간순으로 섞어서 보여주고, 지난 미완료(최근 7일)·입퇴원(메신저 연동을 켠 경우)·내일 미리보기를 곁들인다.
  * 데이터는 기존 IPC(events/todos/messenger)만 쓰고, 화면은 데이터가 바뀌면 자동으로 다시 그린다.
  */
-import { escapeHtml, errorToast, toast, goToHash } from '../shared/ui-utils.js';
+import { escapeHtml, errorToast, toast, goToHash, isUserTyping } from '../shared/ui-utils.js';
+import { setScreenShortcuts } from '../shared/shell.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { buildTimeline, pickOverdue, OVERDUE_DAYS, toKey, addDays } from '../shared/today-logic.js';
 
@@ -166,6 +167,19 @@ export async function mount(root) {
     }
   });
 
+  // 화면 전용 단축키(Alt 길게 누르면 안내) — 입력 중이거나 모달이 떠 있을 땐 무시
+  const copyBtn = () => $('td-copy');
+  const onKey = (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey || isUserTyping() || document.querySelector('.modal-overlay.open')) return;
+    if (e.key === 'r' || e.key === 'R') load();
+    else if ((e.key === 'c' || e.key === 'C') && $('td-admPanel').style.display !== 'none') copyBtn().click();
+  };
+  document.addEventListener('keydown', onKey);
+  setScreenShortcuts('오늘', [
+    { label: '새로고침', keys: 'R' },
+    { label: '입퇴원 전달 문구 복사', keys: 'C' },
+  ]);
+
   let timer = null;
   const offDataChanged = window.itda.onDataChanged(() => {
     clearTimeout(timer);
@@ -176,6 +190,8 @@ export async function mount(root) {
   return () => {
     unmounted = true;
     clearTimeout(timer);
+    document.removeEventListener('keydown', onKey);
+    setScreenShortcuts(null, []);
     if (typeof offDataChanged === 'function') offDataChanged();
   };
 }

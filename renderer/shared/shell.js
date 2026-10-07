@@ -715,30 +715,31 @@ export async function initShell() {
   initUpdateOverlay(); // 수동 업데이트 모드의 다운로드 진행/재시작 확인을 화면과 무관하게 전역으로 표시
   initErrorSafetyNet();
   initCommandPalette({ openQuickCapture }); // Ctrl/Cmd+Shift+P — 어느 화면에서든 주요 동작을 키보드로 바로 실행
-  initSidebarNavShortcuts(); // Ctrl/Cmd+1~9 — 좌측 사이드바 항목 순서대로 이동
+  initSidebarNavShortcuts(); // Ctrl/Cmd+숫자 — 좌측 사이드바 항목으로 이동(숫자는 항목의 data-nav-key)
   initAltShortcutOverlay();
 }
 
-// 좌측 사이드바 항목을 위에서부터 Ctrl/Cmd+1, 2, 3 … 으로 이동 (브라우저 탭 전환과 같은 관례).
-// 사이드바가 정적이라 DOM 순서 = 표시 순서. 재바인딩 없는 고정 관례라 설정 목록엔 안 넣는다.
+// 좌측 사이드바 항목 이동 단축키 Ctrl/Cmd+숫자 (브라우저 탭 전환과 같은 관례).
+// 숫자는 각 항목의 data-nav-key로 고정한다 — 화면이 새로 생기거나 순서가 바뀌어도 기존 숫자(대시보드 1, Inbox 2, Todo 3 …)가
+// 밀리지 않게 하려는 것(오늘 요약은 8). data-nav-key가 없는 항목은 단축키 없음. 재바인딩 없는 고정 관례라 설정 목록엔 안 넣는다.
 function initSidebarNavShortcuts() {
-  const navEls = [...document.querySelectorAll('.sidebar .nav-item[data-route]')];
-  const routes = navEls.map((el) => el.dataset.route);
-  if (!routes.length) return;
+  const navEls = [...document.querySelectorAll('.sidebar .nav-item[data-route][data-nav-key]')];
+  const routeByKey = new Map(navEls.map((el) => [el.dataset.navKey, el.dataset.route]));
+  if (!routeByKey.size) return;
   // 마우스 올렸을 때 단축키가 보이게 툴팁도 붙여준다
   const isMac = navigator.platform?.toUpperCase().includes('MAC');
-  navEls.slice(0, 9).forEach((el, i) => {
+  navEls.forEach((el) => {
     const name = el.querySelector('.label')?.textContent?.trim() || '';
-    el.title = `${name} (${isMac ? '⌘' : 'Ctrl+'}${i + 1})`;
+    el.title = `${name} (${isMac ? '⌘' : 'Ctrl+'}${el.dataset.navKey})`;
   });
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
     // 모달(빠른입력·커맨드팔레트·일정추가 등)이 떠 있을 땐 뒤 화면을 바꾸지 않는다.
     if (document.querySelector('.modal-overlay.open')) return;
-    const n = Number(e.key);
-    if (!Number.isInteger(n) || n < 1 || n > routes.length) return;
+    const route = routeByKey.get(e.key);
+    if (!route) return;
     e.preventDefault();
-    goToHash(routes[n - 1]);
+    goToHash(route);
   });
 }
 

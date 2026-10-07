@@ -218,6 +218,7 @@ export async function mount(root) {
             <div class="panel-head">
               <span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span>
               <h3>오늘의 업무센터</h3>
+              <a class="wc-today-link" id="d-wcTodayLink" href="#/today" title="오늘 요약 화면으로">오늘 요약 →</a>
               <button class="btn-icon wc-collapse-btn" id="d-wcCollapse" title="접기 / 펼치기">${CHEVRON_LEFT}</button>
             </div>
             <div class="wc-body" id="d-wcBody">
