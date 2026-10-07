@@ -410,6 +410,16 @@ export async function mount(root, initialTab) {
             <div class="panel-head"><h3>편의 기능</h3></div>
             <div class="update-row">
               <div>
+                <div class="settings-row-title">앱을 켤 때 처음 보이는 화면</div>
+                <div class="settings-row-desc">잇다를 새로 켰을 때 먼저 열 화면이에요. "오늘"은 오늘의 일정·마감·지난 미완료·입퇴원을 한눈에 보여줘요.</div>
+              </div>
+              <select class="select" id="conv-startView">
+                <option value="dashboard">대시보드</option>
+                <option value="today">오늘 요약</option>
+              </select>
+            </div>
+            <div class="update-row">
+              <div>
                 <div class="settings-row-title">윈도우 시작 시 자동 실행</div>
                 <div class="settings-row-desc">컴퓨터를 켜면 잇다가 자동으로 함께 실행돼요(트레이로 시작). 패키징된 설치 버전에서만 켤 수 있어요.</div>
               </div>
@@ -1483,6 +1493,16 @@ export async function mount(root, initialTab) {
   // ================= 편의 기능 (윈도우 자동실행 / 관련 항목 자동추천) =================
   // 업데이트 자동 확인 여부는 설정 > 업데이트의 자동/수동 모드 하나로 합쳤다(중복 스위치 제거).
   async function initConveniencePanel() {
+    const startViewSel = $('conv-startView');
+    startViewSel.value = (await window.itda.settings.get('start_view')) === 'today' ? 'today' : 'dashboard';
+    startViewSel.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'start_view', value: startViewSel.value });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    });
+
     const autoLaunchToggle = $('conv-autoLaunchToggle');
     let autoLaunchStatus;
     try {

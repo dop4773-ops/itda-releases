@@ -57,6 +57,7 @@ function buildCommands({ openQuickCapture }) {
     { id: 'bulk', icon: CAL_ICON, label: '일정 일괄 등록', keywords: '일괄 근무표 사진 엑셀 CCRT 평가일 그랜드라운딩 붙여넣기', run: () => goToThen('#/calendar', () => document.getElementById('c-openBulk')?.click()) },
     { id: 'messenger-sync', icon: CAL_ICON, label: '메신저에서 불러오기', keywords: '메신저 입원 퇴원 외출 외박 입퇴원 불러오기 동기화', run: () => goToThen('#/calendar', () => (document.getElementById('c-msgSync')?.style.display === 'none' ? goToThen('#/settings/messenger') : document.getElementById('c-msgSync')?.click())) },
     { id: 'dashboard', icon: HOME_ICON, label: '대시보드 열기', run: () => goToThen('#/dashboard') },
+    { id: 'today', icon: HOME_ICON, label: '오늘 요약 열기', keywords: '오늘 요약 브리핑 아침 today', run: () => goToThen('#/today') },
     { id: 'settings', icon: GEAR_ICON, label: '설정 열기', run: () => goToThen('#/settings') },
     ...SETTINGS_TABS.map((t) => ({
       id: `settings-${t.id}`,

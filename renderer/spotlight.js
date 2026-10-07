@@ -34,6 +34,7 @@ let currentScope = ''; // 활성 타입/태그 프리픽스 표시("메모", "#�
 // "큰 카테고리" — 화면 + 설정 세부 탭. route에 '#/settings/<탭>'을 주면 본체가 그 탭을 바로 연다(router.js).
 const SCREEN_COMMANDS = [
   { icon: '🏠', label: '대시보드', kw: '대시보드 홈 dashboard', route: '#/dashboard' },
+  { icon: '☀️', label: '오늘 (오늘 요약)', kw: '오늘 요약 브리핑 today 아침', route: '#/today' },
   { icon: '📥', label: 'Inbox (빠른 입력함)', kw: 'inbox 인박스', route: '#/inbox' },
   { icon: '✅', label: 'Todo (할 일)', kw: 'todo 투두 할일', route: '#/todo' },
   { icon: '📅', label: '일정 (캘린더)', kw: 'calendar 캘린더 일정', route: '#/calendar' },

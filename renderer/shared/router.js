@@ -1,4 +1,5 @@
 import * as dashboardView from '../views/dashboard.js';
+import * as todayView from '../views/today.js';
 import * as inboxView from '../views/inbox.js';
 import * as todoView from '../views/todo.js';
 import * as calendarView from '../views/calendar.js';
@@ -14,6 +15,7 @@ import { initPerf, perf, now } from './perf.js';
 // 라우트 테이블: 새 화면 추가 시 여기 한 줄만 추가하면 사이드바/URL 해시로 바로 연결됨
 const routes = {
   '#/dashboard': dashboardView,
+  '#/today': todayView,
   '#/inbox': inboxView,
   '#/todo': todoView,
   '#/calendar': calendarView,
@@ -88,6 +90,14 @@ window.addEventListener('DOMContentLoaded', async () => {
   t = now();
   initShell();
   perf('initShell', t);
+  // 주소(해시)가 비어 있는 "처음 켠 상태"에서만 설정의 시작 화면을 따른다 — 새로고침이나 딥링크는 그대로 둔다
+  if (!location.hash) {
+    try {
+      if ((await window.itda.settings.get('start_view')) === 'today') location.hash = '#/today';
+    } catch (e) {
+      /* 설정을 못 읽으면 대시보드 */
+    }
+  }
   navigate();
   perf('DOMContentLoaded→navigate 호출까지', tDom);
   // 위젯 창(별도 BrowserWindow)의 "전체 OO 보기" 클릭 시, 그리고 빠른찾기/Spotlight에서
