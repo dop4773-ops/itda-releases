@@ -722,7 +722,7 @@ export async function mount(root, initialTab) {
               <button class="btn-secondary" id="data-restoreBtn">복원하기</button>
             </div>
             <div class="data-action-row">
-              <div><b>데이터 병합</b><span>백업 파일의 데이터를 현재 데이터에 추가로 합칩니다. (기존 데이터는 유지)</span></div>
+              <div><b>데이터 병합</b><span>백업 파일의 데이터를 현재 데이터에 추가로 합칩니다. (기존 데이터는 유지, 이미 있는 항목은 건너뜀)</span></div>
               <button class="btn-secondary" id="data-mergeBtn">병합하기</button>
             </div>
             <div class="data-action-row">
@@ -730,7 +730,7 @@ export async function mount(root, initialTab) {
               <button class="btn-secondary" id="data-exportBtn">내보내기</button>
             </div>
             <div class="data-action-row">
-              <div><b>JSON 데이터 가져오기</b><span>내보낸 JSON 파일을 지금 잇다에 추가로 불러옵니다(기존 데이터 유지).</span></div>
+              <div><b>JSON 데이터 가져오기</b><span>내보낸 JSON 파일을 지금 잇다에 추가로 불러옵니다(기존 데이터 유지, 이미 있는 항목은 건너뜀).</span></div>
               <button class="btn-secondary" id="data-importBtn">가져오기</button>
             </div>
             <div class="data-action-row">
@@ -2544,13 +2544,19 @@ export async function mount(root, initialTab) {
       }
     });
 
+    // 병합·가져오기에서 "이미 있어서 건너뛴" 항목 수 안내
+    const skippedText = (sk) => {
+      const n = sk ? (sk.todos || 0) + (sk.events || 0) + (sk.memos || 0) + (sk.postits || 0) + (sk.inbox_items || 0) : 0;
+      return n ? ` · 중복 ${n}건 제외` : '';
+    };
+
     $('data-mergeBtn').addEventListener('click', async () => {
       $('data-mergeBtn').disabled = true;
       try {
         const result = await window.itda.data.mergeFromBackup();
         if (!result.cancelled) {
           const c = result.counts || {};
-          toast(`병합했어요 (Todo ${c.todos ?? 0} · 일정 ${c.events ?? 0} · 메모 ${c.memos ?? 0} · 포스트잇 ${c.postits ?? 0})`);
+          toast(`병합했어요 (Todo ${c.todos ?? 0} · 일정 ${c.events ?? 0} · 메모 ${c.memos ?? 0} · 포스트잇 ${c.postits ?? 0})${skippedText(result.skipped)}`);
         }
       } catch (e) {
         errorToast(e, '병합하지 못했어요');
@@ -2577,7 +2583,7 @@ export async function mount(root, initialTab) {
         const result = await window.itda.data.importJson();
         if (!result.cancelled) {
           const c = result.counts || {};
-          toast(`가져왔어요 (Todo ${c.todos ?? 0} · 일정 ${c.events ?? 0} · 메모 ${c.memos ?? 0} · 포스트잇 ${c.postits ?? 0})`);
+          toast(`가져왔어요 (Todo ${c.todos ?? 0} · 일정 ${c.events ?? 0} · 메모 ${c.memos ?? 0} · 포스트잇 ${c.postits ?? 0})${skippedText(result.skipped)}`);
         }
       } catch (e) {
         errorToast(e, '가져오지 못했어요');

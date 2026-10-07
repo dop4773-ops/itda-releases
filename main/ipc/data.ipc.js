@@ -26,8 +26,19 @@ function readAllTablesFromDbFile(filePath) {
 
 // exportJson이 만든 데이터를 실제로 DB에 밀어넣는 로직. IPC 핸들러 밖에 둬서
 // db.transaction으로 통째로 감쌀 수 있게(하나라도 실패하면 전부 롤백) 분리했다.
+//
+// 중복 제외: 이미 같은 항목이 있으면(휴지통에 있는 건 제외하고 비교) 새로 만들지 않고 skipped에만 센다.
+//   Todo 제목+마감일+마감시각 / 일정 제목+시작+끝+종일 / 메모 제목+내용 / 포스트잇 제목+내용 / Inbox 내용
+// 건너뛴 항목의 하위 할 일·태그는 가져오지 않고(이미 있는 쪽을 그대로 둠), 연결(item_links)은 기존 항목에 이어붙인다.
+// 가져올 파일 안에서 이미 휴지통에 있던 항목은 되살리지 않고 같이 건너뛴다.
 function importAllTables(db, data) {
   const counts = { categories: 0, todos: 0, todo_subtasks: 0, todo_tags: 0, events: 0, memos: 0, postits: 0, inbox_items: 0, item_links: 0, holidays: 0 };
+  const skipped = { todos: 0, events: 0, memos: 0, postits: 0, inbox_items: 0, trashed: 0 };
+  const findTodo = db.prepare("SELECT id FROM todos WHERE deleted_at IS NULL AND title = ? AND COALESCE(due_date, '') = ? AND COALESCE(due_time, '') = ?");
+  const findEvent = db.prepare('SELECT id FROM events WHERE deleted_at IS NULL AND title = ? AND start_at = ? AND end_at = ? AND all_day = ?');
+  const findMemo = db.prepare("SELECT id FROM memos WHERE deleted_at IS NULL AND COALESCE(title, '') = ? AND content = ?");
+  const findPostit = db.prepare("SELECT id FROM postits WHERE deleted_at IS NULL AND COALESCE(title, '') = ? AND content = ?");
+  const findInbox = db.prepare('SELECT id FROM inbox_items WHERE content = ?');
 
   const run = db.transaction(() => {
     // ---------- 카테고리: 이름이 같으면 재사용, 없으면 새로 생성 ----------
@@ -48,7 +59,16 @@ function importAllTables(db, data) {
 
     // ---------- Todo ----------
     const todoIdMap = new Map();
+    const skippedTodoIds = new Set(); // 이미 있어서 건너뛴 Todo — 하위 할 일·태그도 안 가져온다
     (data.todos || []).forEach((t) => {
+      if (t.deleted_at) return void skipped.trashed++;
+      const dup = findTodo.get(t.title, t.due_date ?? '', t.due_time ?? '');
+      if (dup) {
+        todoIdMap.set(t.id, dup.id);
+        skippedTodoIds.add(t.id);
+        skipped.todos += 1;
+        return;
+      }
       const info = db
         .prepare(
           `INSERT INTO todos (title, memo, category_id, priority, due_date, due_time, is_done, status, is_favorite, completed_at)
@@ -71,6 +91,7 @@ function importAllTables(db, data) {
     });
 
     (data.todo_subtasks || []).forEach((s) => {
+      if (skippedTodoIds.has(s.todo_id)) return;
       const newTodoId = todoIdMap.get(s.todo_id);
       if (!newTodoId) return; // 부모 todo가 없으면(가져오기 대상에 없었으면) 건너뜀
       db.prepare('INSERT INTO todo_subtasks (todo_id, title, is_done, sort_order) VALUES (?, ?, ?, ?)').run(
@@ -83,6 +104,7 @@ function importAllTables(db, data) {
     });
 
     (data.todo_tags || []).forEach((tg) => {
+      if (skippedTodoIds.has(tg.todo_id)) return;
       const newTodoId = todoIdMap.get(tg.todo_id);
       if (!newTodoId) return;
       db.prepare('INSERT OR IGNORE INTO todo_tags (todo_id, tag) VALUES (?, ?)').run(newTodoId, tg.tag);
@@ -92,6 +114,13 @@ function importAllTables(db, data) {
     // ---------- 일정 ----------
     const eventIdMap = new Map();
     (data.events || []).forEach((e) => {
+      if (e.deleted_at) return void skipped.trashed++;
+      const dup = findEvent.get(e.title, e.start_at, e.end_at, e.all_day ? 1 : 0);
+      if (dup) {
+        eventIdMap.set(e.id, dup.id);
+        skipped.events += 1;
+        return;
+      }
       const info = db
         .prepare(
           `INSERT INTO events (title, category_id, location, start_at, end_at, all_day, recurrence_rule, memo, color_hex, text_color)
@@ -116,6 +145,13 @@ function importAllTables(db, data) {
     // ---------- 메모 ----------
     const memoIdMap = new Map();
     (data.memos || []).forEach((m) => {
+      if (m.deleted_at) return void skipped.trashed++;
+      const dup = findMemo.get(m.title ?? '', m.content);
+      if (dup) {
+        memoIdMap.set(m.id, dup.id);
+        skipped.memos += 1;
+        return;
+      }
       const info = db
         .prepare('INSERT INTO memos (title, content, category_id, color_hex, is_pinned) VALUES (?, ?, ?, ?, ?)')
         .run(m.title ?? null, m.content, mapCategory(m.category_id), m.color_hex || '#FBE28A', m.is_pinned ? 1 : 0);
@@ -126,6 +162,13 @@ function importAllTables(db, data) {
     // ---------- 포스트잇 ----------
     const postitIdMap = new Map();
     (data.postits || []).forEach((p) => {
+      if (p.deleted_at) return void skipped.trashed++;
+      const dup = findPostit.get(p.title ?? '', p.content);
+      if (dup) {
+        postitIdMap.set(p.id, dup.id);
+        skipped.postits += 1;
+        return;
+      }
       const info = db
         .prepare(
           `INSERT INTO postits (title, content, color_hex, pos_x, pos_y, width, height, opacity, is_always_on_top, is_pinned)
@@ -138,6 +181,7 @@ function importAllTables(db, data) {
 
     // ---------- Inbox (연결관계 없음, 그대로 추가) ----------
     (data.inbox_items || []).forEach((i) => {
+      if (findInbox.get(i.content)) return void (skipped.inbox_items += 1);
       db.prepare('INSERT INTO inbox_items (content, is_processed) VALUES (?, ?)').run(i.content, i.is_processed ? 1 : 0);
       counts.inbox_items += 1;
     });
@@ -155,13 +199,12 @@ function importAllTables(db, data) {
       const newA = idMaps[l.a_type]?.get(l.a_id);
       const newB = idMaps[l.b_type]?.get(l.b_id);
       if (!newA || !newB) return;
-      db.prepare('INSERT OR IGNORE INTO item_links (a_type, a_id, b_type, b_id) VALUES (?, ?, ?, ?)').run(l.a_type, newA, l.b_type, newB);
-      counts.item_links += 1;
+      counts.item_links += db.prepare('INSERT OR IGNORE INTO item_links (a_type, a_id, b_type, b_id) VALUES (?, ?, ?, ?)').run(l.a_type, newA, l.b_type, newB).changes;
     });
   });
 
   run();
-  return counts;
+  return { counts, skipped };
 }
 
 // 백업/복원은 repository 계층(개별 도메인 SQL)이 아니라 DB 파일 자체를 다루는 작업이라
@@ -281,12 +324,12 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
       cancelId: 0,
       title: '데이터 병합',
       message: '선택한 백업 파일의 데이터를 지금 잇다에 추가로 불러옵니다.',
-      detail: '기존 데이터는 지워지지 않고, 백업 안의 항목이 전부 새로 추가돼요(같은 이름 카테고리는 재사용). 되돌리려면 미리 백업을 만들어두는 걸 권장해요.',
+      detail: '기존 데이터는 지워지지 않아요. 백업 안의 항목 중 이미 있는 것(Todo·일정·메모·포스트잇·Inbox가 제목·날짜·내용까지 같은 경우)은 건너뛰고 나머지만 추가해요. 같은 이름 카테고리는 재사용해요. 되돌리려면 미리 백업을 만들어두는 걸 권장해요.',
     });
     if (confirm.response !== 1) return { cancelled: true };
 
-    const counts = importAllTables(db, data);
-    return { cancelled: false, counts };
+    const { counts, skipped } = importAllTables(db, data);
+    return { cancelled: false, counts, skipped };
   });
 
   // JSON으로 내보내기: 다른 기기로 옮기거나 눈으로 확인하기 좋은 형태로 전체 데이터를 덤프.
@@ -340,12 +383,12 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
       cancelId: 0,
       title: '데이터 가져오기',
       message: '선택한 파일의 데이터를 지금 잇다에 추가로 불러옵니다.',
-      detail: '기존 데이터는 지워지지 않고, 가져온 항목이 전부 새로 추가돼요. 되돌리려면 미리 백업을 만들어두는 걸 권장해요.',
+      detail: '기존 데이터는 지워지지 않아요. 이미 있는 항목(제목·날짜·내용까지 같은 경우)은 건너뛰고 나머지만 새로 추가해요. 되돌리려면 미리 백업을 만들어두는 걸 권장해요.',
     });
     if (confirm.response !== 1) return { cancelled: true };
 
-    const counts = importAllTables(db, data);
-    return { cancelled: false, counts };
+    const { counts, skipped } = importAllTables(db, data);
+    return { cancelled: false, counts, skipped };
   });
 
   // 전체 삭제: Todo/일정/메모/포스트잇/Inbox/연결/휴지통 내용과 사용자가 추가한 카테고리를 지운다.
@@ -374,3 +417,4 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
     return { cancelled: false };
   });
 };
+module.exports.importAllTables = importAllTables; // 테스트용
