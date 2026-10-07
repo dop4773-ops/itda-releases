@@ -18,6 +18,7 @@ const MESSENGER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="no
 const BACKUP_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/><path d="M3 12a9 3 0 0018 0"/></svg>`;
 const UPDATE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8M3 16l2.64 2.36A9 9 0 0020.49 15"/></svg>`;
 
+const BELL_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0"/></svg>`;
 const TEXT_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>`;
 const LAYOUT_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>`;
 const WIDGET_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`;
@@ -34,19 +35,19 @@ export const TABS = [
   { id: 'layout', group: '화면', label: '레이아웃', desc: '내 이름, 사이드바, 화면에서 숨길 요소를 정해요.', icon: LAYOUT_ICON, tone: 'blue' },
   { id: 'dashboard', group: '홈 화면', label: '대시보드', desc: '대시보드에 보일 카드와 배치를 정해요.', icon: DASHBOARD_TAB_ICON, tone: 'purple' },
   { id: 'widgets', group: '홈 화면', label: '위젯', desc: '바탕화면에 띄우는 위젯의 투명도와 동작을 정해요.', icon: WIDGET_ICON, tone: 'pink' },
+  { id: 'notify', group: '알림', label: '알림', desc: '일정 시작 전 알림과, 켜 둔 일정·할 일을 그날 팝업으로 알려주는 방법을 정해요.', icon: BELL_ICON, tone: 'pink' },
   { id: 'gcal', group: '연동', label: 'Google Calendar', desc: 'Google 캘린더 일정을 잇다에서 함께 봐요.', icon: CAL_ICON, tone: 'green' },
   { id: 'holiday', group: '연동', label: '공휴일', desc: '달력에 빨간 날로 표시할 공휴일을 관리해요.', icon: HOLIDAY_ICON, tone: 'danger' },
   { id: 'messenger', group: '연동', label: '메신저 연동', desc: '메신저의 입퇴원·외출외박을 일정으로 불러와요.', icon: MESSENGER_ICON, tone: 'blue' },
-  { id: 'convenience', group: '동작 · 데이터', label: '편의 기능', desc: '자동 실행, 관련 항목 추천, 알림 등 쓰기 편하게 정해요.', icon: SLIDERS_ICON, tone: 'blue' },
-  { id: 'tags', group: '동작 · 데이터', label: '태그', desc: '카테고리(태그)와 색을 관리해요.', icon: TAG_ICON, tone: 'yellow' },
-  { id: 'shortcuts', group: '동작 · 데이터', label: '단축키', desc: '키보드 단축키를 확인하고 바꿔요.', icon: KEY_ICON, tone: 'green' },
+  { id: 'convenience', group: '동작 · 데이터', label: '편의 기능', desc: '자동 실행, 관련 항목 추천, 완료 보관, 연결 동기화를 정해요.', icon: SLIDERS_ICON, tone: 'blue' },
+  { id: 'tags', group: '동작 · 데이터', label: '태그 · 단축키', desc: '카테고리(태그)와 색, 키보드 단축키를 관리해요.', icon: TAG_ICON, tone: 'yellow' },
   { id: 'security', group: '동작 · 데이터', label: '보안', desc: '비밀번호 잠금과 잠긴 메모 표시 방법을 정해요.', icon: LOCK_ICON, tone: 'danger' },
   { id: 'data', group: '동작 · 데이터', label: '데이터 & 백업', desc: '백업·복원·내보내기와 데이터 정리를 해요.', icon: BACKUP_ICON, tone: 'purple' },
   { id: 'update', group: '동작 · 데이터', label: '업데이트', desc: '버전을 확인하고 업데이트해요.', icon: UPDATE_ICON, tone: 'pink' },
 ];
 
 // 옛 탭 id(다른 화면·북마크에서 들어오는 주소) → 지금 탭. 탭을 합치거나 나눌 때 여기 한 줄.
-const TAB_ALIAS = { display: 'theme' };
+const TAB_ALIAS = { display: 'theme', shortcuts: 'tags' };
 
 export async function mount(root, initialTab) {
   root.innerHTML = `
@@ -302,6 +303,21 @@ export async function mount(root, initialTab) {
 
         <div class="settings-panel" data-panel="tags">
           <div id="tags-panelRoot"></div>
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>단축키</h3></div>
+            <p class="settings-panel-desc">
+              "변경"을 누르고 원하는 키 조합을 누르면 바로 바뀌어요. 다른 단축키와 겹치면 저장하지 않고 알려줘요.
+            </p>
+            <div class="shortcut-list" id="shortcuts-list"></div>
+            <div class="shortcut-list" style="margin-top:8px;">
+              <div class="shortcut-row"><span>열려있는 패널·모달·위젯 닫기</span><kbd>Esc</kbd></div>
+              <div class="shortcut-row"><span>빠른 입력창에서 저장</span><kbd>Enter</kbd></div>
+            </div>
+            <p style="font-size:11px;color:var(--text-faint);margin:10px 0 0;">
+              전역 단축키(다른 프로그램을 쓰고 있어도 동작하는 것)는 다른 프로그램이 같은 조합을 이미 쓰고 있으면 등록되지 않을 수 있어요.
+            </p>
+          </div>
+        
         </div>
 
         <div class="settings-panel" data-panel="widgets">
@@ -339,23 +355,6 @@ export async function mount(root, initialTab) {
               위치와 크기는 옮긴 대로 기억됩니다.
             </p>
             <div id="widget-list"></div>
-          </div>
-        </div>
-
-        <div class="settings-panel" data-panel="shortcuts">
-          <div class="panel">
-            <div class="panel-head"><h3>단축키</h3></div>
-            <p class="settings-panel-desc">
-              "변경"을 누르고 원하는 키 조합을 누르면 바로 바뀌어요. 다른 단축키와 겹치면 저장하지 않고 알려줘요.
-            </p>
-            <div class="shortcut-list" id="shortcuts-list"></div>
-            <div class="shortcut-list" style="margin-top:8px;">
-              <div class="shortcut-row"><span>열려있는 패널·모달·위젯 닫기</span><kbd>Esc</kbd></div>
-              <div class="shortcut-row"><span>빠른 입력창에서 저장</span><kbd>Enter</kbd></div>
-            </div>
-            <p style="font-size:11px;color:var(--text-faint);margin:10px 0 0;">
-              전역 단축키(다른 프로그램을 쓰고 있어도 동작하는 것)는 다른 프로그램이 같은 조합을 이미 쓰고 있으면 등록되지 않을 수 있어요.
-            </p>
           </div>
         </div>
 
@@ -467,9 +466,11 @@ export async function mount(root, initialTab) {
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>일정 알림</h3></div>
+        <div class="settings-panel" data-panel="notify">
+          <div class="panel">
+            <div class="panel-head"><h3>일정 시작 전 알림</h3></div>
             <div class="update-row">
               <div>
                 <div class="settings-row-title">일정 전 알림</div>
@@ -505,9 +506,13 @@ export async function mount(root, initialTab) {
               </select>
             </div>
 
-            <div class="update-row" style="margin-top:18px;">
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>당일 알림 팝업</h3></div>
+            <div class="update-row">
               <div>
-                <div class="settings-row-title">당일 알림 팝업</div>
+                <div class="settings-row-title">켜 둔 일정·할 일을 팝업으로</div>
                 <div class="settings-row-desc">일정·할 일에 "당일 알림"을 켜 두면, 그날 잇다를 켰을 때(창이 닫혀 트레이에만 떠 있어도) 작은 창으로 알려줘요. 확인한 건 그날 다시 안 떠요.</div>
               </div>
               <label class="switch">
