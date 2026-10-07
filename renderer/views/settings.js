@@ -648,6 +648,23 @@ export async function mount(root, initialTab) {
             </div>
             <div class="settings-row-desc">이름은 여기서 정한 대로만 잇다에 저장돼요. 숨김이면 잇다 DB와 백업에 이름이 남지 않아요.</div>
           </div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>전달용 문구 형식</h3></div>
+            <p class="settings-panel-desc">입퇴원 위젯의 "전달용 문구"와 오늘 화면의 "전달 문구 복사"에 쓰는 형식이에요. 중괄호 <code>{ }</code> 안의 항목은 실제 값으로 바뀌고, 값이 없는 줄은 저절로 빠져요. 아래 항목을 눌러 넣거나 직접 써도 돼요.</p>
+            <div class="cf-grid">
+              <label>머리글<textarea id="cf-header" class="input" rows="2" maxlength="300"></textarea></label>
+              <label>환자 한 명<textarea id="cf-person" class="input" rows="4" maxlength="300"></textarea></label>
+            </div>
+            <div class="cf-chips"><span class="cf-chips-label">머리글에 넣기</span><span id="cf-chips-header"></span></div>
+            <div class="cf-chips"><span class="cf-chips-label">환자 줄에 넣기</span><span id="cf-chips-person"></span></div>
+            <div class="form-row" style="margin-top:10px;">
+              <span style="font-size:12.5px;color:var(--text-soft);">환자 사이</span>
+              <select id="cf-gap" class="select" style="width:130px;"><option value="blank">빈 줄 하나</option><option value="line">줄바꿈만</option></select>
+              <button class="btn-secondary" id="cf-reset" style="margin-left:auto;">기본 형식으로</button>
+            </div>
+            <div class="settings-row-title" style="margin-top:12px;">미리보기 <span style="font-weight:400;color:var(--text-faint);">(예시 환자 — 이름은 위의 "이름 표시" 설정대로)</span></div>
+            <pre id="cf-preview" class="cf-preview"></pre>
+          </div>
           <div class="panel">
             <div class="panel-head"><h3>불러오기 주기</h3></div>
             <div class="form-row">
@@ -2576,6 +2593,52 @@ export async function mount(root, initialTab) {
 
     fill();
     await refreshStatus();
+
+    // ---- 전달용 문구 형식: 템플릿 두 칸 + 간격, 바꾸면 미리보기와 저장이 따라온다 ----
+    {
+      const cf = await window.itda.messenger.getCopyFormat();
+      const hEl = $('cf-header');
+      const pEl = $('cf-person');
+      const gEl = $('cf-gap');
+      const fill = (f) => {
+        hEl.value = f.header;
+        pEl.value = f.person;
+        gEl.value = f.gap;
+      };
+      const read = () => ({ header: hEl.value, person: pEl.value, gap: gEl.value });
+      fill(cf.format);
+      const chip = (target) => ([tok, hint]) => `<button type="button" class="cf-chip" data-target="${target}" data-token="${escapeHtml(tok)}" title="${escapeHtml(hint)}">${escapeHtml(tok)}</button>`;
+      $('cf-chips-header').innerHTML = cf.tokens.header.map(chip('cf-header')).join('');
+      $('cf-chips-person').innerHTML = cf.tokens.person.map(chip('cf-person')).join('');
+      const refreshPreview = async () => {
+        try {
+          $('cf-preview').textContent = (await window.itda.messenger.previewCopy({ format: read(), kind: 'admission' })).text || '(비어 있어요)';
+        } catch (e) {
+          $('cf-preview').textContent = '미리보기를 만들지 못했어요';
+        }
+      };
+      let saveTimer = null;
+      const changed = () => {
+        refreshPreview();
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => window.itda.messenger.setCopyFormat(read()).catch((e) => errorToast(e, '저장하지 못했어요')), 500);
+      };
+      [hEl, pEl].forEach((el) => el.addEventListener('input', changed));
+      gEl.addEventListener('change', changed);
+      document.querySelector('[data-panel="messenger"]').addEventListener('click', (e) => {
+        const c = e.target.closest('.cf-chip');
+        if (!c) return;
+        const t = $(c.dataset.target);
+        t.focus();
+        t.setRangeText(c.dataset.token, t.selectionStart, t.selectionEnd, 'end');
+        changed();
+      });
+      $('cf-reset').addEventListener('click', () => {
+        fill(cf.defaults);
+        changed();
+      });
+      refreshPreview();
+    }
   }
 
   // ================= 데이터 & 백업 =================

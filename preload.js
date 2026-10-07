@@ -134,6 +134,9 @@ contextBridge.exposeInMainWorld('itda', {
     status: () => ipcRenderer.invoke('messenger:status'),
     items: (payload) => ipcRenderer.invoke('messenger:items', payload),
     copyText: (payload) => ipcRenderer.invoke('messenger:copyText', payload),
+    getCopyFormat: () => ipcRenderer.invoke('messenger:getCopyFormat'),
+    setCopyFormat: (format) => ipcRenderer.invoke('messenger:setCopyFormat', format),
+    previewCopy: (payload) => ipcRenderer.invoke('messenger:previewCopy', payload), // { format, kind }
     setSupplement: (payload) => ipcRenderer.invoke('messenger:setSupplement', payload), // { id, gender, age, diagnosis, transport }
   },
   data: {

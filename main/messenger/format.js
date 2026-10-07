@@ -208,6 +208,62 @@ function widgetRow(it, mode, sup = null) {
   };
 }
 
+// ---------- 전달용 문구(복사) 형식 — 사용자가 템플릿으로 고친다 ----------
+// 머리글 1개 + 환자 한 명당 템플릿. {토큰}을 값으로 바꾸고, 값이 비어 빈 줄이 되면 그 줄은 버린다.
+// 기본값은 예전에 고정이던 형식 그대로라 아무것도 안 고치면 문구가 달라지지 않는다.
+const DEFAULT_COPY_FORMAT = { header: '{title}\n{date}', person: '{rm} {room} {name}님\n{sup}\n{note}\n{time}', gap: 'blank' };
+const COPY_TOKENS = {
+  header: [['{title}', '입원 3명'], ['{kind}', '입원/퇴원'], ['{count}', '인원수'], ['{date}', '10/7일(수)']],
+  person: [['{rm}', 'RM8'], ['{room}', '504호'], ['{ward}', '병동'], ['{name}', '이름(가림 설정대로)'], ['{time}', '시간'], ['{gender}', '성별'], ['{age}', '나이(75세)'], ['{diagnosis}', '진단'], ['{transport}', '이동수단'], ['{sup}', '보충정보 한 줄'], ['{note}', '비고']],
+};
+const COPY_MAX = 300;
+
+function sanitizeCopyFormat(raw) {
+  const r = raw && typeof raw === 'object' ? raw : {};
+  const text = (v, d) => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n').slice(0, COPY_MAX) : d);
+  return {
+    header: text(r.header, DEFAULT_COPY_FORMAT.header),
+    person: text(r.person, DEFAULT_COPY_FORMAT.person),
+    gap: r.gap === 'line' ? 'line' : 'blank',
+  };
+}
+
+// 템플릿 한 덩어리를 값으로 채운다. 이름이 비면 "{name}님"의 '님'까지 같이 없앤다. 모르는 {토큰}은 그대로 둬서 오타가 미리보기에 보이게 한다.
+function renderTemplate(tpl, vars) {
+  const fill = (str) => str.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+  return String(tpl)
+    .replace(/\{name\}님/g, vars.name ? `${vars.name}님` : '')
+    .split('\n')
+    // 값이 비어 구분자만 남은 경우("여/75세"에서 둘 다 없으면 "/", "()")를 걷어낸다. '-'는 목록 머리표일 수 있어 건드리지 않는다
+    .map((line) => fill(line).replace(/\(\s*[/·,|]*\s*\)/g, '').replace(/[ \t]+/g, ' ').replace(/^[\s/·,|]+|[\s/·,|]+$/g, '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function buildCopyText(kind, date, items, { nameMode, supplements = null, format = DEFAULT_COPY_FORMAT } = {}) {
+  const f = sanitizeCopyFormat(format);
+  const kindLabel = kind === 'admission' ? '입원' : '퇴원';
+  const header = renderTemplate(f.header, { kind: kindLabel, count: String(items.length), title: `${kindLabel} ${items.length}명`, date: dateLabel(date) });
+  const people = [...items].sort(sortItems).map((it) => {
+    const sup = (supplements && supplements[`${it.source}:${it.ext_id}`]) || null;
+    return renderTemplate(f.person, {
+      rm: String(it.rm || '').trim(),
+      room: roomLabel(it.room),
+      ward: String(it.ward || '').trim(),
+      name: maskName(it.patient, nameMode),
+      time: timeLabel(it.time_text),
+      gender: sup ? sup.gender || '' : '',
+      age: sup && sup.age != null && sup.age !== '' ? `${sup.age}세` : '',
+      diagnosis: sup ? sup.diagnosis || '' : '',
+      transport: sup ? sup.transport || '' : '',
+      sup: supplementLine(sup),
+      note: String(it.note || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).join('\n'),
+    });
+  }).filter(Boolean);
+  const body = people.join(f.gap === 'line' ? '\n' : '\n\n');
+  return [header, body].filter(Boolean).join('\n');
+}
+
 const linkKeyDay = (kind, date) => `day:${kind}:${date}`;
 const linkKeyItem = (source, extId) => `item:${source}:${extId}`;
 
@@ -223,6 +279,11 @@ module.exports = {
   buildDaySummary,
   buildItemEvent,
   supplementLine,
+  DEFAULT_COPY_FORMAT,
+  COPY_TOKENS,
+  sanitizeCopyFormat,
+  renderTemplate,
+  buildCopyText,
   timeBucket,
   stricterMode,
   widgetRow,

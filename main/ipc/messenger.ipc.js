@@ -147,15 +147,40 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db, getMainWindow
     return { enabled: true, storedMode: config.nameMode, mode, kinds: Object.fromEntries(cfgStore.GROUPS.map((g) => [g, config.kinds[g].on])), items };
   });
 
-  // 전달용 문구(채팅에 붙여넣기) — 일정 메모와 같은 형식, 위젯에 보이는 이름 표시 그대로
+  // 전달용 문구(채팅에 붙여넣기) — 위젯에 보이는 이름 표시 그대로, 형식은 설정의 "전달용 문구 형식"(템플릿)대로
+  const COPY_KEY = 'messenger_copy_format';
+  const loadCopyFormat = () => {
+    try {
+      return F.sanitizeCopyFormat(JSON.parse(settings.get(COPY_KEY) || '{}'));
+    } catch (e) {
+      return F.sanitizeCopyFormat({});
+    }
+  };
   ipcMain.handle('messenger:copyText', (event, { date, kind, viewMode } = {}) => {
     if (kind !== 'admission' && kind !== 'discharge') return { text: '' };
     const config = cfgStore.load(settings);
     const mode = F.stricterMode(['full', 'mask', 'hide'].includes(viewMode) ? viewMode : config.nameMode, config.nameMode);
     const items = messenger.itemsBetween(String(date), String(date)).filter((it) => it.kind === kind);
     if (!items.length) return { text: '' };
-    const s = F.buildDaySummary(kind, String(date), items, { nameMode: mode, supplements: messenger.supplementsBetween(String(date), String(date)) });
-    return { text: `${s.title}\n${s.auto}` };
+    return { text: F.buildCopyText(kind, String(date), items, { nameMode: mode, supplements: messenger.supplementsBetween(String(date), String(date)), format: loadCopyFormat() }) };
+  });
+
+  // 형식 설정 화면용 — 현재 형식·기본값·쓸 수 있는 토큰, 저장, 예시 미리보기(가상 환자라 실제 데이터와 무관)
+  ipcMain.handle('messenger:getCopyFormat', () => ({ format: loadCopyFormat(), defaults: F.DEFAULT_COPY_FORMAT, tokens: F.COPY_TOKENS }));
+  ipcMain.handle('messenger:setCopyFormat', (event, format) => {
+    const clean = F.sanitizeCopyFormat(format);
+    settings.set(COPY_KEY, JSON.stringify(clean));
+    return clean;
+  });
+  ipcMain.handle('messenger:previewCopy', (event, { format, kind } = {}) => {
+    const config = cfgStore.load(settings);
+    const day = '2026-10-07';
+    const sample = [
+      { source: 's', ext_id: '1', kind: 'admission', date: day, patient: '김영자', rm: 'RM8', ward: '5병동', room: '504', time_text: '오후1시', note: '뇌출혈 / 타병원 수술 후 재입원', time_text2: '' },
+      { source: 's', ext_id: '2', kind: 'admission', date: day, patient: '박철수', rm: 'RM4', ward: '8병동', room: '802', time_text: '오후3시', note: '', time_text2: '' },
+    ];
+    const supplements = { 's:1': { gender: '여', age: 75, diagnosis: '요추 골절', transport: '휠체어' } };
+    return { text: F.buildCopyText(kind === 'discharge' ? 'discharge' : 'admission', day, sample, { nameMode: config.nameMode, supplements, format }) };
   });
 
   // 입퇴원 환자별 보충 입력 저장 — 입력값은 길이·형식을 정리해서 저장하고, 모두 비우면 지운다
