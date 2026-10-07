@@ -16,7 +16,8 @@ const { chosung } = require('./shared/hangul');
 //   v7: holidays 테이블 (공휴일 자동 불러오기/직접 추가, 달력에 빨간 날짜 표시)
 //   v8: messenger_items/messenger_links/messenger_log (메신저 입퇴원·외출외박·병동이동 불러오기)
 //   v9: events/todos에 remind_day 컬럼 (당일 알림 — 앱을 켠 날 작은 팝업창으로 알려줌)
-const SCHEMA_VERSION = 9;
+//   v10: postits에 expires_at 컬럼 (포스트잇 위젯 만료 시각 — 그때까지만 화면에 붙어 있음)
+const SCHEMA_VERSION = 10;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -287,6 +288,10 @@ function applyLightweightMigrations(db) {
   if (!hasColumn('events', 'remind_day')) {
     db.exec(`ALTER TABLE events ADD COLUMN remind_day INTEGER NOT NULL DEFAULT 0`);
     console.log('[itda] 마이그레이션: events.remind_day 컬럼 추가');
+  }
+  if (!hasColumn('postits', 'expires_at')) {
+    db.exec(`ALTER TABLE postits ADD COLUMN expires_at TEXT`);
+    console.log('[itda] 마이그레이션: postits.expires_at 컬럼 추가');
   }
   if (!hasColumn('todos', 'remind_day')) {
     db.exec(`ALTER TABLE todos ADD COLUMN remind_day INTEGER NOT NULL DEFAULT 0`);

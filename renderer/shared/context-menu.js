@@ -248,6 +248,7 @@ function openMenu(x, y, item, opts) {
     ${remindItem}
     ${memoItems}
     ${convertItems}
+    ${opts.onExpiry ? '<button class="ctx-menu-item" data-action="expiry">⏰ 만료 시간</button>' : ''}
     <button class="ctx-menu-item" data-action="link">🔗 연결</button>
     <button class="ctx-menu-item" data-action="widget">🗗 위젯으로 보기</button>
     <button class="ctx-menu-item ctx-menu-danger" data-action="delete">🗑 삭제</button>
@@ -365,6 +366,11 @@ function openMenu(x, y, item, opts) {
       }
     });
   }
+
+  menu.querySelector('[data-action="expiry"]')?.addEventListener('click', () => {
+    closeMenu();
+    opts.onExpiry();
+  });
 
   menu.querySelector('[data-action="link"]').addEventListener('click', () => {
     openLinkPopover(pos.left, pos.top, item);

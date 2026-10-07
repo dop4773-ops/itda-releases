@@ -17,8 +17,8 @@ module.exports = function createPostitsRepository(db) {
     insert({ title, content, colorHex, categoryId, posX, posY, width, height }) {
       const info = db
         .prepare(
-          `INSERT INTO postits (title, content, color_hex, category_id, pos_x, pos_y, width, height)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO postits (title, content, color_hex, category_id, pos_x, pos_y, width, height, is_always_on_top)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`
         )
         .run(title ?? null, content, colorHex ?? '#FBE28A', categoryId ?? null, posX ?? null, posY ?? null, width ?? 295, height ?? 295);
       return { id: info.lastInsertRowid };
@@ -29,6 +29,11 @@ module.exports = function createPostitsRepository(db) {
         `UPDATE postits SET title = ?, content = ?, color_hex = ?, category_id = ?, pos_x = ?, pos_y = ?, width = ?, height = ?, opacity = ?
          WHERE id = ?`
       ).run(title, content, colorHex, categoryId, posX, posY, width, height, opacity, id);
+    },
+
+    // 위젯 만료 시각 — null이면 계속(만료로 위젯이 닫히며 해제할 때도 씀). 트리거 때문에 수정 시각은 갱신된다.
+    setExpiresAt(id, expiresAt) {
+      db.prepare('UPDATE postits SET expires_at = ? WHERE id = ?').run(expiresAt ?? null, id);
     },
 
     setPinned(id, isPinned) {

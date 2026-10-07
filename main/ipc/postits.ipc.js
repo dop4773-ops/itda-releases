@@ -50,6 +50,15 @@ module.exports = function registerPostitsIpc(ipcMain, repos, { closeWidgetIfOpen
     }
   );
 
+  // 포스트잇 위젯 만료 시각(null=계속) — 우클릭 "만료 시간"에서 설정, 만료되면 위젯이 스스로 닫고 해제한다
+  ipcMain.handle('postits:setExpiry', (event, { id, expiresAt }) => {
+    if (!postits.getById(id)) throw new Error('포스트잇을 찾을 수 없습니다.');
+    if (expiresAt != null && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(String(expiresAt))) throw new Error('만료 시각 형식이 올바르지 않아요.');
+    postits.setExpiresAt(id, expiresAt);
+    broadcastDataChanged('postit', id);
+    return { id, expiresAt: expiresAt ?? null };
+  });
+
   ipcMain.handle('postits:togglePin', (event, id) => {
     const p = postits.getById(id);
     if (!p) return null;

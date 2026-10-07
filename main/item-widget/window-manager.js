@@ -53,6 +53,16 @@ function openWidget(item, { onClosed } = {}) {
   });
 
   win.setMenu(null);
+  // 항상 위 — 다른 위젯 창(포스트잇·보드)과 같은 방식: 가장 높은 레벨로 걸고, 윈도우에서 슬며시 풀리는 걸 막으려 주기적으로도 다시 올린다.
+  const reassertAlwaysOnTop = () => {
+    if (win.isDestroyed() || !win.isAlwaysOnTop()) return;
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.moveTop();
+  };
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.on('blur', reassertAlwaysOnTop);
+  win.on('show', reassertAlwaysOnTop);
+  const reassertTimer = setInterval(reassertAlwaysOnTop, 1500);
   attachExternalLinkHandler(win);
   win.loadFile(path.join(__dirname, '..', '..', 'renderer', 'widget.html'), {
     query: { type: `${item.type}-item`, id: String(item.id) },
@@ -60,6 +70,7 @@ function openWidget(item, { onClosed } = {}) {
   windows.set(key, win);
 
   win.on('closed', () => {
+    clearInterval(reassertTimer);
     windows.delete(key);
     onClosed?.(item.type, item.id);
   });

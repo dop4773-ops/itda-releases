@@ -78,6 +78,7 @@ contextBridge.exposeInMainWorld('itda', {
     get: (id) => ipcRenderer.invoke('postits:get', id),
     add: (payload) => ipcRenderer.invoke('postits:add', payload),
     update: (payload) => ipcRenderer.invoke('postits:update', payload),
+    setExpiry: (payload) => ipcRenderer.invoke('postits:setExpiry', payload),
     togglePin: (id) => ipcRenderer.invoke('postits:togglePin', id),
     toggleAlwaysOnTop: (id) => ipcRenderer.invoke('postits:toggleAlwaysOnTop', id),
     delete: (id) => ipcRenderer.invoke('postits:delete', id),

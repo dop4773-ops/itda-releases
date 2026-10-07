@@ -20,10 +20,11 @@ module.exports = function registerPostitWidgetIpc(ipcMain, repos) {
           title: current.title,
           content: current.content,
           colorHex: current.color_hex,
+          categoryId: current.category_id,
           posX: bounds.posX,
           posY: bounds.posY,
-          width: bounds.width,
-          height: bounds.height,
+          width: current.width, // 포스트잇 위젯은 크기 고정 — 창 크기(그림자 여백 포함)를 저장하지 않는다
+          height: current.height,
           opacity: current.opacity,
         });
       },

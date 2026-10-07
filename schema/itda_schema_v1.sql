@@ -223,6 +223,7 @@ CREATE TABLE postits (
   opacity            REAL NOT NULL DEFAULT 1.0,
   is_always_on_top   INTEGER NOT NULL DEFAULT 0,   -- 화면에 항상 띄우기
   is_pinned          INTEGER NOT NULL DEFAULT 0,   -- 대시보드 상단 고정
+  expires_at         TEXT,                          -- 위젯 만료 시각('YYYY-MM-DD HH:MM:SS'), NULL이면 계속 — 위젯 창만 닫히고 포스트잇은 남음
   created_at         TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at         TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   deleted_at         TEXT
