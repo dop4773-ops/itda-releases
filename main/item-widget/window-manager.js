@@ -11,7 +11,7 @@ const windows = new Map();
 
 const SIZE_BY_TYPE = {
   todo: { width: 260, height: 140 },
-  memo: { width: 260, height: 200 },
+  memo: { width: 384, height: 340 }, // 문서 시트(그림자 여백 12px 포함) — 내용 길이에 맞춰 높이는 자동으로 조절됨
   event: { width: 260, height: 150 },
 };
 const MIN_SIZE = { width: 220, height: 110 };

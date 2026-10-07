@@ -53,24 +53,28 @@ function bindWindowControls() {
 // 그 기능이 꺼지는 게 아니다.
 function fitToContent(root) {
   requestAnimationFrame(() => {
-    const card = root.querySelector('.widget-card');
+    const wrap = root.querySelector('.memo-wrap');
     const contentEl = root.querySelector('#w-content');
-    if (!card || !contentEl) return;
-    const cardStyle = getComputedStyle(card);
-    const paddingV = parseFloat(cardStyle.paddingTop) + parseFloat(cardStyle.paddingBottom);
-    const sumOffsetHeight = (el) => {
-      if (!el) return 0;
-      const s = getComputedStyle(el);
-      return el.offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
-    };
-    const titlebarH = sumOffsetHeight(card.querySelector('.widget-titlebar'));
-    const colorRowH = sumOffsetHeight(card.querySelector('.mi-color-row'));
-    const attachH = sumOffsetHeight(card.querySelector('.mi-attach-strip'));
-    const textH = contentEl.scrollHeight; // overflow-y:auto라도 scrollHeight는 잘린 부분까지 포함한 전체 높이
-    const total = Math.round(paddingV + titlebarH + colorRowH + attachH + textH + 6);
+    if (!wrap || !contentEl) return;
+    const h = (sel) => root.querySelector(sel)?.offsetHeight || 0;
+    const wrapPad = parseFloat(getComputedStyle(wrap).paddingTop) * 2;
+    const cs = getComputedStyle(contentEl);
+    const bodyPad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const textH = contentEl.scrollHeight - bodyPad; // overflow-y:auto라도 scrollHeight는 잘린 부분까지 포함한 전체 높이
+    const total = Math.round(wrapPad + h('.memo-head') + h('.memo-tools') + h('.mi-color-row') + h('.mi-attach-strip') + h('.memo-foot') + bodyPad + Math.max(textH, 90) + 6);
     window.itda.widgetWindow?.fitToContent?.({ height: total }).catch(() => {});
   });
 }
+
+// 제목 줄: 메모 제목이 있으면 그것, 없으면 본문 첫 줄(글자만)
+function titleOf(memo) {
+  if (memo.title && memo.title.trim()) return memo.title.trim();
+  const tmp = document.createElement('div');
+  tmp.innerHTML = sanitizeRichHtml(memo.content || '');
+  const first = (tmp.textContent || '').trim().split(/\n/)[0].trim();
+  return first.slice(0, 40) || '새 메모';
+}
+const plainLen = (el) => (el.textContent || '').replace(/\s/g, '').length;
 
 async function mount() {
   const root = document.getElementById('widget-root');
@@ -97,17 +101,19 @@ async function mount() {
   // 안내만 보여주고, 잠금을 풀려면 메인 화면으로 가라고 안내한다.
   if (memo.is_locked) {
     root.innerHTML = `
-      <div class="widget-card" style="background:#E8E8EC;">
-        <div class="mi-titlebar">
-          <span class="mi-titlebar-label">메모</span>
-          <div class="mi-titlebar-buttons widget-controls-hover">
-            <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
-            <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+      <div class="memo-wrap">
+        <div class="memo-sheet">
+          <div class="memo-head" style="background:#E8E8EC;">
+            <span class="memo-title">🔒 잠긴 메모</span>
+            <div class="memo-head-btns">
+              <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+              <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+            </div>
           </div>
-        </div>
-        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-size:12px;color:rgba(0,0,0,.6);">
-          <div>🔒 잠긴 메모예요</div>
-          <div id="w-openMain" style="text-decoration:underline;cursor:pointer;-webkit-app-region:no-drag;">메모 화면에서 열기</div>
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;font-size:12.5px;color:rgba(0,0,0,.6);">
+            <div>내용은 비밀번호로 보호돼 있어요</div>
+            <div id="w-openMain" style="text-decoration:underline;cursor:pointer;-webkit-app-region:no-drag;">메모 화면에서 열기</div>
+          </div>
         </div>
       </div>`;
     bindWindowControls();
@@ -124,45 +130,55 @@ async function mount() {
     attachments = [];
   }
 
+  const color = memo.color_hex || DEFAULT_WIDGET_COLOR;
+  const lenProbe = document.createElement('div');
+  lenProbe.innerHTML = sanitizeRichHtml(memo.content || '');
+  const initLen = plainLen(lenProbe);
   root.innerHTML = `
-    <div class="widget-card" style="background:${memo.color_hex || DEFAULT_WIDGET_COLOR}">
-      <div class="mi-titlebar">
-        <span class="mi-titlebar-label">메모</span>
-        <div class="mi-titlebar-buttons widget-controls-hover">
-          <button class="widget-btn" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
-          <button class="widget-btn" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
-          <button class="widget-btn" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
-          <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
-          <button class="widget-btn" id="w-newMemo" title="새 메모">${PLUS_ICON}</button>
-          <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
-          <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+    <div class="memo-wrap">
+      <div class="memo-sheet">
+        <div class="memo-head" style="background:${color}">
+          <button class="memo-color-dot" id="w-colorBtn" title="색 바꾸기" style="background:${color}"></button>
+          <span class="memo-title" id="w-title" title="${escapeHtml(titleOf(memo))}">${escapeHtml(titleOf(memo))}</span>
+          <div class="memo-head-btns">
+            <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
+            <button class="widget-btn" id="w-newMemo" title="새 메모">${PLUS_ICON}</button>
+            <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
+            <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
+          </div>
         </div>
+        <div class="memo-tools">
+          <button class="memo-tool" id="w-bold" title="굵게 (${MOD_LABEL}B)">${BOLD_ICON}</button>
+          <button class="memo-tool" id="w-underline" title="밑줄 (${MOD_LABEL}U)">${UNDERLINE_ICON}</button>
+          <button class="memo-tool" id="w-checklist" title="체크박스 추가">${CHECKLIST_ICON}</button>
+        </div>
+        <div class="mi-color-row" id="w-colorRow" hidden>
+          ${WIDGET_COLORS.map(
+            (c, i) =>
+              `<span class="mi-color-swatch ${i === 0 ? 'mi-color-default' : ''} ${color === c ? 'selected' : ''}" data-color="${c}" style="background:${c}" title="색 바꾸기"></span>`
+          ).join('')}
+        </div>
+        ${
+          attachments.length
+            ? `<div class="mi-attach-strip" id="mi-attachStrip">
+                ${attachments
+                  .map((a) =>
+                    a.mime_type?.startsWith('image/')
+                      ? `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb" id="mi-thumb-${a.id}"></div></div>`
+                      : `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb mi-attach-file">${FILE_ICON}</div></div>`
+                  )
+                  .join('')}
+              </div>`
+            : ''
+        }
+        <div id="w-content" class="widget-textarea memo-body" contenteditable="true" data-placeholder="메모를 입력하세요…">${sanitizeRichHtml(memo.content || '')}</div>
+        <div class="memo-foot"><span id="w-count">${initLen}자</span><span>${escapeHtml((memo.updated_at || '').slice(5, 16).replace('-', '/'))} 수정</span></div>
       </div>
-      <div class="mi-color-row">
-        ${WIDGET_COLORS.map(
-          (c, i) =>
-            `<span class="mi-color-swatch ${i === 0 ? 'mi-color-default' : ''} ${(memo.color_hex || DEFAULT_WIDGET_COLOR) === c ? 'selected' : ''}" data-color="${c}" style="background:${c};" title="${i === 0 ? '기본 디자인' : ''}"></span>`
-        ).join('')}
-      </div>
-      ${
-        attachments.length
-          ? `<div class="mi-attach-strip" id="mi-attachStrip">
-              ${attachments
-                .map((a) =>
-                  a.mime_type?.startsWith('image/')
-                    ? `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb" id="mi-thumb-${a.id}"></div></div>`
-                    : `<div class="mi-attach-chip" data-id="${a.id}" title="${escapeHtml(a.file_name)}"><div class="mi-attach-thumb mi-attach-file">${FILE_ICON}</div></div>`
-                )
-                .join('')}
-            </div>`
-          : ''
-      }
-      <div id="w-content" class="widget-textarea" contenteditable="true" data-placeholder="메모를 입력하세요…">${sanitizeRichHtml(memo.content || '')}</div>
     </div>
     <div class="toast" id="toast"></div>
   `;
 
-  const shell = root.querySelector('.widget-card');
+  const shell = root.querySelector('.memo-sheet');
   const contentEl = document.getElementById('w-content');
   linkifyUrls(contentEl); // 불러올 때 한 번만 — 입력 중엔 호출 금지(커서 깨짐)
 
@@ -202,6 +218,9 @@ async function mount() {
     }
   });
   contentEl.addEventListener('input', scheduleSave);
+  contentEl.addEventListener('input', () => {
+    document.getElementById('w-count').textContent = `${plainLen(contentEl)}자`;
+  });
   bindChecklistToggle(contentEl, scheduleSave);
   bindChecklistEnterKey(contentEl);
   bindChecklistBackspaceKey(contentEl, scheduleSave);
@@ -277,12 +296,19 @@ async function mount() {
       const colorHex = sw.dataset.color;
       try {
         await window.itda.memos.update({ id, colorHex });
-        shell.style.background = colorHex;
+        root.querySelector('.memo-head').style.background = colorHex;
+        document.getElementById('w-colorBtn').style.background = colorHex;
         root.querySelectorAll('.mi-color-swatch').forEach((s) => s.classList.toggle('selected', s === sw));
       } catch (err) {
         errorToast(err, '색상을 바꾸지 못했어요');
       }
     });
+  });
+
+  document.getElementById('w-colorBtn').addEventListener('click', () => {
+    const row = document.getElementById('w-colorRow');
+    row.hidden = !row.hidden;
+    fitToContent(root);
   });
 
   bindWindowControls();
