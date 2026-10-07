@@ -134,7 +134,7 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db) {
   ipcMain.handle('messenger:applyPending', (event, { deletes = false, vanished = false } = {}) =>
     syncOnce({ trigger: 'manual', confirm: { deletes: !!deletes, vanished: !!vanished } })
   );
-  ipcMain.handle('messenger:status', () => ({ log: messenger.listLog(8) }));
+  ipcMain.handle('messenger:status', () => ({ log: messenger.listLog(50) }));
 
   return {
     startMessengerScheduler: () => startMessengerScheduler({ getConfig: () => cfgStore.load(settings), run: (trigger) => syncOnce({ trigger }) }),

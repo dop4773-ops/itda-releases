@@ -2392,6 +2392,9 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .msg-box{background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;font-size:12.5px;margin:10px 0;line-height:1.55;}
 .msg-warn{background:color-mix(in srgb,var(--warning,#E0A73B) 18%,transparent);}
 .msg-pending-list{font-size:12px;color:var(--text-soft);margin:6px 0 8px;}
+.msg-log-wrap{margin-top:4px;}
+.msg-log-wrap summary{cursor:pointer;font-size:12px;color:var(--text-soft);padding:2px 0;}
+#msg-log{max-height:220px;overflow-y:auto;margin-top:4px;}
 .msg-log-row{display:flex;gap:12px;font-size:11.5px;color:var(--text-faint);padding:3px 0;}
 .msg-log-row span:first-child{width:90px;flex-shrink:0;}
 .msg-log-row span:nth-child(2){width:64px;flex-shrink:0;}

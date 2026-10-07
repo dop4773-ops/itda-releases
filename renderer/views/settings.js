@@ -591,7 +591,10 @@ export async function mount(root, initialTab) {
             </div>
             <div id="msg-pending"></div>
             <div id="msg-last" class="settings-row-desc"></div>
-            <div id="msg-log"></div>
+            <details class="msg-log-wrap">
+              <summary id="msg-log-sum">불러오기 기록 펼치기</summary>
+              <div id="msg-log"></div>
+            </details>
           </div>
         </div>
 
@@ -2239,8 +2242,9 @@ export async function mount(root, initialTab) {
           ? `마지막 시도: ${log[0].at} · ${log[0].summary.error}`
           : `마지막 불러오기: ${log[0].at} · ${describe(log[0].summary)}`
         : '아직 불러온 적이 없어요.';
+      $('msg-log-sum').parentElement.style.display = log.length ? '' : 'none'; // 기록이 없으면 펼치기도 숨김
+      $('msg-log-sum').textContent = `불러오기 기록 펼치기 (최근 ${log.length}회 · 최대 50회까지만 보관)`;
       $('msg-log').innerHTML = log
-        .slice(0, 5)
         .map((l) => `<div class="msg-log-row"><span>${escapeHtml(l.at.slice(5, 16))}</span><span>${l.trigger === 'auto' ? '자동' : l.trigger === 'config' ? '설정 변경' : '수동'}</span><span>${l.summary.error ? escapeHtml(l.summary.error) : describe(l.summary)}</span></div>`)
         .join('');
       // 확인이 필요한 변경(가장 최근에 성공한 실행 기준)
