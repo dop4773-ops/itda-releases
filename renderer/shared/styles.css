@@ -2380,3 +2380,56 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .msg-log-row{display:flex;gap:12px;font-size:11.5px;color:var(--text-faint);padding:3px 0;}
 .msg-log-row span:first-child{width:90px;flex-shrink:0;}
 .msg-log-row span:nth-child(2){width:64px;flex-shrink:0;}
+
+/* 입퇴원 현황 위젯 — 대시보드 카드와 떠 있는 위젯 창이 같이 씀(자체 변수로 두 곳의 색 체계를 모두 받는다) */
+.adm-widget{--a-text:var(--text,#1f2430);--a-soft:var(--text-soft,#6b7385);--a-faint:var(--text-faint,#9aa1b2);--a-line:var(--divider,#eceef3);--a-bg:var(--bg,#f5f6f9);--a-in:var(--brand,#6C8CF5);--a-out:var(--danger,#E2686B);--a-go:var(--warning,#E0A73B);color:var(--a-text);font-size:12.5px;display:flex;flex-direction:column;min-height:0;}
+.adm-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.adm-nav{display:flex;align-items:center;gap:4px;}
+.adm-nav b{font-weight:600;font-size:13px;min-width:78px;text-align:center;}
+.adm-nav button,.adm-eye{border:none;background:transparent;color:var(--a-soft);cursor:pointer;border-radius:6px;padding:2px 7px;font-size:15px;line-height:1.3;}
+.adm-nav button:hover,.adm-eye:hover{background:var(--a-bg);}
+.adm-eye:disabled{opacity:.35;cursor:default;}
+.adm-nav .adm-today{font-size:11.5px;color:var(--a-in);}
+.adm-tools{display:flex;align-items:center;gap:4px;}
+.adm-tools select{font-size:11.5px;padding:3px 6px;border:1px solid var(--a-line);border-radius:6px;background:transparent;color:var(--a-soft);}
+.adm-body{overflow-y:auto;min-height:0;}
+.adm-pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;white-space:nowrap;font-style:normal;flex-shrink:0;}
+.adm-pill.in{background:color-mix(in srgb,var(--a-in) 16%,transparent);color:var(--a-in);}
+.adm-pill.out{background:color-mix(in srgb,var(--a-out) 16%,transparent);color:var(--a-out);}
+.adm-pill.go{background:color-mix(in srgb,var(--a-go) 22%,transparent);color:var(--a-text);}
+.adm-pill.tr{background:var(--a-bg);color:var(--a-soft);}
+.adm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(70px,1fr));gap:6px;margin-bottom:6px;}
+.adm-tile{border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;font-size:11.5px;}
+.adm-tile b{font-size:20px;font-weight:600;line-height:1.1;}
+.adm-tile.in{background:color-mix(in srgb,var(--a-in) 13%,transparent);color:var(--a-in);}
+.adm-tile.out{background:color-mix(in srgb,var(--a-out) 13%,transparent);color:var(--a-out);}
+.adm-tile.go{background:color-mix(in srgb,var(--a-go) 18%,transparent);color:var(--a-text);}
+.adm-sec{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--a-faint);font-weight:600;padding:8px 0 2px;}
+.adm-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid var(--a-line);}
+.adm-sec + .adm-row{border-top:none;}
+.adm-main{display:flex;flex-direction:column;min-width:0;flex:1;}
+.adm-person{font-size:12.5px;}
+.adm-note{font-size:11.5px;color:var(--a-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.adm-slot{display:grid;grid-template-columns:78px 1fr;gap:8px;padding:6px 0;border-top:1px solid var(--a-line);}
+.adm-slot:first-child{border-top:none;}
+.adm-slot-time{font-size:11.5px;color:var(--a-soft);padding-top:7px;}
+.adm-slot-body .adm-row{border-top:none;padding:3px 0;}
+.adm-ward{display:flex;align-items:center;justify-content:space-between;padding:8px 0 3px;border-top:1px solid var(--a-line);}
+.adm-ward:first-child{border-top:none;}
+.adm-ward b{font-weight:600;}
+.adm-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-bottom:6px;}
+.adm-day{border:none;background:transparent;border-radius:8px;padding:5px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;font-size:11px;color:var(--a-soft);}
+.adm-day b{font-size:13px;font-weight:600;color:var(--a-text);}
+.adm-day i{display:flex;flex-direction:column;align-items:center;gap:2px;margin-top:3px;min-height:36px;}
+.adm-day i em{min-width:20px;text-align:center;}
+.adm-day:hover{background:var(--a-bg);}
+.adm-day.sel{background:color-mix(in srgb,var(--a-in) 13%,transparent);}
+.adm-day.today b{color:var(--a-in);}
+.adm-pre{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.7;background:var(--a-bg);border-radius:8px;padding:8px 12px;margin:2px 0 6px;}
+.adm-copy{font-size:11.5px;border:1px solid var(--a-line);background:transparent;color:var(--a-soft);border-radius:6px;padding:2px 10px;cursor:pointer;}
+.adm-copy:hover{background:var(--a-bg);}
+.adm-empty{color:var(--a-faint);text-align:center;padding:16px 4px;font-size:12px;line-height:1.6;}
+#d-card-admission{display:flex;flex-direction:column;min-height:0;}
+#d-admission{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+.adm-widget{flex:1 1 auto;}
+.adm-body{flex:1 1 auto;}

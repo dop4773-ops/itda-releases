@@ -10,6 +10,7 @@ const REGISTRY = {
   'google-calendar-mini': () => import('./widgets/google-calendar-mini.js'),
   inbox: () => import('./widgets/inbox-widget.js'),
   dday: () => import('./widgets/dday.js'),
+  admission: () => import('./widgets/admission.js'),
   'todo-item': () => import('./widgets/todo-item.js'),
   'memo-item': () => import('./widgets/memo-item.js'),
   'event-item': () => import('./widgets/event-item.js'),

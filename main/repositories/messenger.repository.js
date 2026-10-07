@@ -43,6 +43,12 @@ module.exports = function createMessengerRepository(db) {
         .prepare("SELECT * FROM messenger_items WHERE state = 'active' AND date <= ? AND COALESCE(end_date, date) >= ?")
         .all(toDate, fromDate),
 
+    // 위젯용 — 기간과 겹치는 활성 항목(날짜·시각순)
+    itemsBetween: (fromDate, toDate) =>
+      db
+        .prepare("SELECT * FROM messenger_items WHERE state = 'active' AND date <= ? AND COALESCE(end_date, date) >= ? ORDER BY date, ext_id")
+        .all(toDate, fromDate),
+
     // "이름 표시" 설정을 더 엄격하게 바꿨을 때 저장돼 있던 이름을 바로 가린다(숨김이면 비움)
     scrubNames(mode) {
       const upd = db.prepare('UPDATE messenger_items SET patient = ? WHERE source = ? AND ext_id = ?');

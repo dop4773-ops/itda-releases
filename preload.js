@@ -131,6 +131,8 @@ contextBridge.exposeInMainWorld('itda', {
     syncNow: () => ipcRenderer.invoke('messenger:syncNow'),
     applyPending: (payload) => ipcRenderer.invoke('messenger:applyPending', payload),
     status: () => ipcRenderer.invoke('messenger:status'),
+    items: (payload) => ipcRenderer.invoke('messenger:items', payload),
+    copyText: (payload) => ipcRenderer.invoke('messenger:copyText', payload),
   },
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),

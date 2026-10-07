@@ -9,6 +9,7 @@ const CARD_SIZE = {
   workCenter: { w: 12, h: 3 },
   todo: { w: 4, h: 2 },
   event: { w: 4, h: 2 },
+  admission: { w: 4, h: 3 },
   memo: { w: 4, h: 2 },
   postit: { w: 4, h: 2 },
   linked: { w: 8, h: 1 },
@@ -58,19 +59,19 @@ export const LAYOUT_PRESETS = [
   {
     id: 'default',
     label: '기본형 — 골고루',
-    order: ['workCenter', 'todo', 'event', 'memo', 'postit', 'linked', 'quickAdd', 'activity', 'weekSummary'],
+    order: ['workCenter', 'todo', 'event', 'admission', 'memo', 'postit', 'linked', 'quickAdd', 'activity', 'weekSummary'],
     sizes: {},
   },
   {
     id: 'work',
     label: '업무형 — 할 일 중심',
-    order: ['workCenter', 'todo', 'quickAdd', 'memo', 'postit', 'event', 'linked', 'activity', 'weekSummary'],
+    order: ['workCenter', 'todo', 'quickAdd', 'memo', 'postit', 'event', 'admission', 'linked', 'activity', 'weekSummary'],
     sizes: { todo: { w: 8, h: 3 }, quickAdd: { w: 4, h: 3 } },
   },
   {
     id: 'calendar',
     label: '일정형 — 일정 중심',
-    order: ['workCenter', 'event', 'linked', 'todo', 'memo', 'postit', 'quickAdd', 'activity', 'weekSummary'],
+    order: ['workCenter', 'event', 'admission', 'linked', 'todo', 'memo', 'postit', 'quickAdd', 'activity', 'weekSummary'],
     sizes: { event: { w: 8, h: 3 }, linked: { w: 4, h: 3 } },
   },
 ];

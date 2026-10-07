@@ -104,3 +104,30 @@ test('병동이동: 이전→이후, 시각 있으면 1시간짜리 시간 일�
   assert.equal(e.endAt, '2026-10-07 15:00:00');
   assert.match(e.auto, /병실 조정/);
 });
+
+test('위젯: 시간대 칸 — 시각이면 "오후 1시", 못 읽으면 오전/오후 시간미정 또는 시간 미정', () => {
+  assert.equal(F.timeBucket('13:00'), '오후 1시');
+  assert.equal(F.timeBucket('0900'), '오전 9시');
+  assert.equal(F.timeBucket('오전(시간미정)'), '오전 시간미정');
+  assert.equal(F.timeBucket('오후 중'), '오후 시간미정');
+  assert.equal(F.timeBucket(''), '시간 미정');
+});
+
+test('위젯: 이름 표시는 저장된 설정보다 덜 엄격하게는 못 바꾼다(stricterMode)', () => {
+  assert.equal(F.stricterMode('full', 'mask'), 'mask');
+  assert.equal(F.stricterMode('hide', 'mask'), 'hide');
+  assert.equal(F.stricterMode('mask', 'mask'), 'mask');
+  assert.equal(F.stricterMode('full', 'hide'), 'hide');
+});
+
+test('위젯 한 줄(widgetRow): 사람 줄·시간 라벨·시간대·이름 가림을 미리 계산', () => {
+  const it = { source: 'admission', ext_id: 'a1', kind: 'admission', date: '2026-10-07', end_date: null, patient: '김가람', rm: 'RM8', ward: '5병동', room: '504', to_ward: '', to_room: '', time_text: '13:00', time_text2: '', note: ' 뇌출혈 ', reason: '' };
+  const r = F.widgetRow(it, 'mask');
+  assert.equal(r.person, 'RM8 504호 김○람님');
+  assert.equal(r.time, '오후 1시');
+  assert.equal(r.bucket, '오후 1시');
+  assert.equal(r.note, '뇌출혈');
+  assert.equal(r.id, 'admission:a1');
+  assert.equal(F.widgetRow(it, 'hide').person, 'RM8 504호');
+  assert.equal(F.widgetRow(it, 'full').name, '김가람');
+});

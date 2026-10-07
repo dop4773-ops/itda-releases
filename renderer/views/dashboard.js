@@ -1,5 +1,6 @@
 import { escapeHtml, toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, goToHash } from '../shared/ui-utils.js';
 import { STICKY_COLORS } from '../shared/theme.js';
+import { createAdmissionWidget } from '../shared/admission-widget.js';
 import { periodLabel, queryRange, groupByDateKey, buildMonthGridHtml, buildCompactAgendaHtml, loadHolidays } from './calendar.js';
 import { computeNotifications } from '../shared/notifications.js';
 import { computeRecentActivity } from '../shared/recent-activity.js';
@@ -57,6 +58,7 @@ export const DASHBOARD_CARDS = [
   { id: 'workCenter', label: '오늘의 업무센터', default: true },
   { id: 'todo', label: '오늘 할 일', default: true },
   { id: 'event', label: '오늘 일정', default: true },
+  { id: 'admission', label: '입퇴원 현황 (메신저 연동)', default: false },
   { id: 'memo', label: '최근 메모', default: true },
   { id: 'postit', label: '고정 포스트잇', default: true },
   { id: 'linked', label: '연결된 업무', default: true },
@@ -250,6 +252,10 @@ export async function mount(root) {
             <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>오늘 일정</h3><a class="btn-icon" href="#/calendar">더보기 ›</a></div>
             <div id="d-eventList"></div>
             <div class="empty" id="d-eventEmpty" style="display:none;">일정이 없어요.</div>
+          </div>
+          <div class="panel dash-widget" id="d-card-admission" data-card="admission">
+            <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>입퇴원 현황</h3><a class="btn-icon" href="#/settings/messenger">설정 ›</a></div>
+            <div id="d-admission"></div>
           </div>
           <div class="panel dash-widget" id="d-card-memo" data-card="memo">
             <div class="panel-head"><span class="dash-widget-grip" title="드래그해서 위치 바꾸기">${GRIP_ICON}</span><h3>최근 메모</h3><a class="btn-icon" href="#/memo">더보기 ›</a></div>
@@ -2223,7 +2229,7 @@ export async function mount(root) {
         <div class="todo-focus-view" data-id="${next.id}">
           <span class="tfv-eyebrow">다음 일정</span>
           <b class="tfv-title">${escapeHtml(next.title)}</b>
-          <span class="tfv-due">${(next.start_at || '').slice(11, 16)}${end}</span>
+          <span class="tfv-due">${next.all_day ? '종일' : `${(next.start_at || '').slice(11, 16)}${end}`}</span>
           ${events.length > 1 ? `<span class="tfv-more dash-row-link" data-nav="#/calendar">그 외 ${events.length - 1}개 →</span>` : ''}
         </div>`;
       bindDashRowNav(listEl);
@@ -2243,7 +2249,7 @@ export async function mount(root) {
         <div class="todo-row event-row" data-id="${e.id}">
           <span class="cat" style="background:${e.color_hex || CATEGORY_FALLBACK_COLOR}"></span>
           <span class="txt">${escapeHtml(e.title)}</span>
-          <span class="due">${(e.start_at || '').slice(11, 16)}</span>
+          <span class="due">${e.all_day ? '종일' : (e.start_at || '').slice(11, 16)}</span>
         </div>`
         )
         .join('') +
@@ -2763,6 +2769,10 @@ export async function mount(root) {
     });
   }
 
+  // 입퇴원 현황 — 메신저에서 불러온 데이터라 일정 변경(불러오기 끝) 때 같이 새로고침된다
+  const admissionWidget = createAdmissionWidget($('d-admission'), { openRoute: (route) => goToHash(route) });
+  const loadAdmission = () => admissionWidget.refresh();
+
   await Promise.allSettled([
     guardWidget('업무센터', 'workCenter', loadWorkCenter),
     guardWidget('오늘 할 일', 'todo', loadTodos),
@@ -2794,6 +2804,7 @@ export async function mount(root) {
       pendingEntities = new Set();
       if (entities.has('todo')) guardWidget('오늘 할 일', 'todo', loadTodos);
       if (entities.has('event')) guardWidget('오늘 일정', 'event', loadEvents);
+      if (entities.has('event')) guardWidget('입퇴원 현황', 'admission', loadAdmission);
       if (entities.has('todo') || entities.has('event')) guardWidget('업무센터', 'workCenter', loadWorkCenter);
       if (entities.has('memo')) guardWidget('최근 메모', 'memo', loadMemos);
       if (entities.has('postit')) {

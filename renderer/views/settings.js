@@ -1623,6 +1623,7 @@ export async function mount(root, initialTab) {
     'today-todo': { label: '오늘 할 일', desc: '오늘 마감인 할 일 체크리스트' },
     'postit-board': { label: '포스트잇', desc: '최근 포스트잇 미니 보드' },
     'google-calendar-mini': { label: '구글 캘린더', desc: '이번 달 미니 달력 (읽기 전용)' },
+    admission: { label: '입퇴원 현황', desc: '메신저에서 불러온 입원·퇴원·외출외박 (메신저 연동을 켜야 해요)' },
     inbox: { label: '받은 업무 (Inbox)', desc: '아직 처리 안 한 Inbox 항목' },
     dday: { label: 'D-DAY', desc: '가까운 마감일 순으로' },
   };
@@ -2265,7 +2266,21 @@ export async function mount(root, initialTab) {
     }
 
     // ---- 연결 ----
-    $('msg-enabled').addEventListener('change', () => save({ enabled: $('msg-enabled').checked }));
+    $('msg-enabled').addEventListener('change', async () => {
+      await save({ enabled: $('msg-enabled').checked });
+      if (!$('msg-enabled').checked) return;
+      // 처음 켤 때 대시보드에 "입퇴원 현황" 카드를 같이 켜 준다(이미 켜고 끈 적이 있으면 그 선택을 존중)
+      try {
+        const raw = await window.itda.settings.get('dashboard_cards');
+        const cards = raw ? JSON.parse(raw) : {};
+        if (cards.admission === undefined) {
+          await window.itda.settings.set({ key: 'dashboard_cards', value: JSON.stringify({ ...cards, admission: true }) });
+          toast('대시보드에 "입퇴원 현황" 카드를 켰어요');
+        }
+      } catch (e) {
+        /* 카드는 설정 > 대시보드에서 직접 켤 수 있음 */
+      }
+    });
     $('msg-path').addEventListener('change', () => save({ dbPath: $('msg-path').value }));
     $('msg-choose').addEventListener('click', async () => {
       const f = await window.itda.messenger.chooseDb();

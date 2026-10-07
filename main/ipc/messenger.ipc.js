@@ -6,6 +6,7 @@ const { openMessengerDb, checkCompat, readAll, MessengerError } = require('../me
 const { runSync, windowOf } = require('../messenger/sync');
 const { findMessengerDbs } = require('../messenger/detect');
 const { startMessengerScheduler } = require('../messenger/scheduler');
+const F = require('../messenger/format');
 
 const STRICT = { full: 0, mask: 1, hide: 2 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -104,6 +105,29 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db) {
     } catch (e) {
       return { ok: false, error: e instanceof MessengerError ? e.message : `읽지 못했어요: ${e.message}` };
     }
+  });
+
+  // 위젯용 — 기간 안의 활성 항목을 화면에 그릴 모양으로(이름은 표시 모드대로 가려서) 돌려준다.
+  ipcMain.handle('messenger:items', (event, { fromDate, toDate, viewMode } = {}) => {
+    const config = cfgStore.load(settings);
+    if (!config.enabled) return { enabled: false, items: [] };
+    const mode = F.stricterMode(['full', 'mask', 'hide'].includes(viewMode) ? viewMode : config.nameMode, config.nameMode);
+    const items = messenger
+      .itemsBetween(String(fromDate), String(toDate))
+      .map((it) => F.widgetRow(it, mode))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.timeKey - b.timeKey || a.ward.localeCompare(b.ward) || a.room.localeCompare(b.room));
+    return { enabled: true, storedMode: config.nameMode, mode, kinds: Object.fromEntries(cfgStore.GROUPS.map((g) => [g, config.kinds[g].on])), items };
+  });
+
+  // 전달용 문구(채팅에 붙여넣기) — 일정 메모와 같은 형식, 위젯에 보이는 이름 표시 그대로
+  ipcMain.handle('messenger:copyText', (event, { date, kind, viewMode } = {}) => {
+    if (kind !== 'admission' && kind !== 'discharge') return { text: '' };
+    const config = cfgStore.load(settings);
+    const mode = F.stricterMode(['full', 'mask', 'hide'].includes(viewMode) ? viewMode : config.nameMode, config.nameMode);
+    const items = messenger.itemsBetween(String(date), String(date)).filter((it) => it.kind === kind);
+    if (!items.length) return { text: '' };
+    const s = F.buildDaySummary(kind, String(date), items, { nameMode: mode });
+    return { text: `${s.title}\n${s.auto}` };
   });
 
   ipcMain.handle('messenger:syncNow', () => syncOnce({ trigger: 'manual' }));

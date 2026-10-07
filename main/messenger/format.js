@@ -156,6 +156,46 @@ function buildItemEvent(item, { nameMode }) {
   };
 }
 
+
+// ---------- 위젯 표시용 ----------
+// 시간대 칸: 시각을 읽을 수 있으면 "오후 1시", 못 읽으면 "오전/오후 시간미정" 또는 "시간 미정"
+function timeBucket(text) {
+  const t = parseTime(text);
+  if (t) return `${t.h < 12 ? '오전' : '오후'} ${t.h % 12 === 0 ? 12 : t.h % 12}시`;
+  const raw = String(text || '');
+  if (/오전/.test(raw)) return '오전 시간미정';
+  if (/오후/.test(raw)) return '오후 시간미정';
+  return '시간 미정';
+}
+
+const STRICT = { full: 0, mask: 1, hide: 2 };
+// 위젯이 요청한 표시(눈 아이콘)와 저장된 설정 중 더 엄격한 쪽 — 저장된 값보다 더 보이게는 못 한다
+const stricterMode = (a, b) => (STRICT[a] >= STRICT[b] ? a : b);
+
+// 위젯 한 줄에 필요한 값을 미리 계산(이름은 표시 모드대로 가림) — 화면은 계산 없이 그리기만 한다
+function widgetRow(it, mode) {
+  const name = maskName(it.patient, mode);
+  return {
+    id: `${it.source}:${it.ext_id}`,
+    kind: it.kind,
+    date: it.date,
+    endDate: it.end_date || null,
+    ward: it.ward,
+    room: roomLabel(it.room),
+    toWard: it.to_ward,
+    toRoom: roomLabel(it.to_room),
+    rm: it.rm,
+    name,
+    person: personLine(it, mode),
+    time: timeLabel(it.time_text),
+    returnTime: timeLabel(it.time_text2),
+    timeKey: timeKey(it.time_text),
+    bucket: timeBucket(it.time_text),
+    note: String(it.note || '').trim(),
+    reason: String(it.reason || '').trim(),
+  };
+}
+
 const linkKeyDay = (kind, date) => `day:${kind}:${date}`;
 const linkKeyItem = (source, extId) => `item:${source}:${extId}`;
 
@@ -170,6 +210,9 @@ module.exports = {
   splitMemo,
   buildDaySummary,
   buildItemEvent,
+  timeBucket,
+  stricterMode,
+  widgetRow,
   linkKeyDay,
   linkKeyItem,
   AUTO_HEAD,

@@ -2,7 +2,7 @@ const windowManager = require('../widgets/window-manager');
 const postitWindowManager = require('../postit-widget/window-manager');
 const { forceShowAndFocus } = require('../shared/window-focus');
 
-const WIDGET_TYPES = ['today-schedule', 'today-todo', 'postit-board', 'google-calendar-mini', 'inbox', 'dday'];
+const WIDGET_TYPES = ['today-schedule', 'today-todo', 'postit-board', 'google-calendar-mini', 'inbox', 'dday', 'admission'];
 
 const boundsKey = (type) => `widget_bounds:${type}`;
 
