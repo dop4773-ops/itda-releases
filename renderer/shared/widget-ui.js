@@ -6,7 +6,30 @@ const CLOSE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" 
  * "흰 카드 + 헤더 + 본문 + 전체보기 링크" 틀을 쓰기 때문에 여기서 한 번만 만든다.
  * 최소화/닫기 버튼은 평소엔 숨겨져 있다가 카드에 마우스를 올리면 나타난다(hover-reveal).
  */
-export function renderBoardWidgetShell(root, { title, headerRight = '', bodyHtml, footerLabel, footerRoute }) {
+// 포스트잇 위젯의 항상 위 버튼과 같은 아이콘 — 켜짐=채움, 꺼짐=윤곽선
+export const PIN_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
+export const PIN_OUTLINE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l1.5 5.5L19 9l-4.5 3.5L16 18l-4-3-4 3 1.5-5.5L5 9l5.5-1.5z"/></svg>`;
+
+// 낱개 항목 위젯(할 일/일정/메모)의 "항상 앞으로" 버튼 연결 — 상태는 메인이 창 단위로 저장한다(기본 켜짐)
+export async function bindPinButton(btn) {
+  if (!btn) return;
+  const paint = (on) => {
+    btn.innerHTML = on ? PIN_ICON : PIN_OUTLINE_ICON;
+    btn.classList.toggle('active', !!on);
+    btn.title = on ? '항상 앞으로 (켜짐)' : '항상 앞으로 (꺼짐)';
+  };
+  paint(await window.itda.widgetControls.getPin().catch(() => true));
+  btn.addEventListener('click', async () => {
+    const next = !btn.classList.contains('active');
+    try {
+      paint(await window.itda.widgetControls.setPin(next));
+    } catch (e) {
+      /* 상태가 안 바뀌었으면 버튼도 그대로 */
+    }
+  });
+}
+
+export function renderBoardWidgetShell(root, { title, headerRight = '', bodyHtml, footerLabel, footerRoute, pin = false }) {
   root.innerHTML = `
     <div class="board-widget">
       <div class="board-widget-titlebar" id="bw-titlebar">
@@ -14,6 +37,7 @@ export function renderBoardWidgetShell(root, { title, headerRight = '', bodyHtml
           <b>${title}</b>
           <div class="board-widget-header-right">${headerRight}</div>
           <div class="board-widget-controls">
+            ${pin ? '<button class="bw-control-btn" id="bw-pin" title="항상 앞으로"></button>' : ''}
             <button class="bw-control-btn" id="bw-minimize" title="최소화">${MINIMIZE_ICON}</button>
             <button class="bw-control-btn" id="bw-close" title="닫기">${CLOSE_ICON}</button>
           </div>
@@ -30,6 +54,7 @@ export function renderBoardWidgetShell(root, { title, headerRight = '', bodyHtml
     });
   }
 
+  if (pin) bindPinButton(root.querySelector('#bw-pin'));
   root.querySelector('#bw-minimize').addEventListener('click', () => {
     window.itda.widgetControls.minimize();
   });

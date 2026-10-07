@@ -18,6 +18,7 @@ import {
 import { STICKY_COLORS } from '../../shared/theme.js';
 import { wrapAutosave } from '../../shared/pending-saves.js';
 import { attachContextMenu } from '../../shared/context-menu.js';
+import { bindPinButton } from '../../shared/widget-ui.js';
 
 const BOLD_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8"><path d="M6 4h6a3.5 3.5 0 010 7H6zM6 11h7a3.5 3.5 0 010 7H6z"/></svg>`;
 const UNDERLINE_ICON = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 4v7a6 6 0 0012 0V4"/><path d="M4 20h16"/></svg>`;
@@ -43,6 +44,7 @@ function getIdFromQuery() {
 }
 
 function bindWindowControls() {
+  bindPinButton(document.getElementById('w-pin'));
   document.getElementById('w-minimize')?.addEventListener('click', () => window.itda.widgetControls.minimize());
   document.getElementById('w-close')?.addEventListener('click', () => window.close()); // 창만 닫힘 — 데이터는 그대로
 }
@@ -106,6 +108,7 @@ async function mount() {
           <div class="memo-head" style="background:#E8E8EC;">
             <span class="memo-title">🔒 잠긴 메모</span>
             <div class="memo-head-btns">
+              <button class="widget-btn" id="w-pin" title="항상 앞으로"></button>
               <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>
               <button class="widget-btn" id="w-close" title="닫기">${CLOSE_ICON}</button>
             </div>
@@ -141,6 +144,7 @@ async function mount() {
           <button class="memo-color-dot" id="w-colorBtn" title="색 바꾸기" style="background:${color}"></button>
           <span class="memo-title" id="w-title" title="${escapeHtml(titleOf(memo))}">${escapeHtml(titleOf(memo))}</span>
           <div class="memo-head-btns">
+            <button class="widget-btn" id="w-pin" title="항상 앞으로"></button>
             <button class="widget-btn" id="w-lock" title="잠금">${LOCK_OPEN_ICON}</button>
             <button class="widget-btn" id="w-newMemo" title="새 메모">${PLUS_ICON}</button>
             <button class="widget-btn" id="w-minimize" title="최소화">${MINIMIZE_ICON}</button>

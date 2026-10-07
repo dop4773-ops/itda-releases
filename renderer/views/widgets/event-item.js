@@ -42,6 +42,7 @@ async function mount() {
   `;
 
   renderBoardWidgetShell(root, {
+    pin: true,
     title: '일정',
     bodyHtml,
     footerLabel: '캘린더에서 열기',

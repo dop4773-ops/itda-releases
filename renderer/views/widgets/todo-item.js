@@ -37,6 +37,7 @@ async function mount() {
       ${todo.memo ? `<div style="font-size:11.5px;line-height:1.5;color:var(--bw-soft);margin-top:8px;white-space:pre-wrap;word-break:break-word;">${escapeHtml(todo.memo)}</div>` : ''}
     `;
     renderBoardWidgetShell(root, {
+      pin: true,
       title: '할 일',
       bodyHtml,
       footerLabel: '전체 Todo 보기',

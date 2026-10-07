@@ -9,6 +9,21 @@ const { attachExternalLinkHandler } = require('../shared/external-links');
  */
 const windows = new Map();
 
+// "항상 앞으로"를 끈 위젯만 설정(item_widget_unpinned = ["memo:3", ...])에 기록한다 — 기본은 켜짐이라 대부분은 기록이 없다.
+const UNPINNED_KEY = 'item_widget_unpinned';
+let settingsRepo = null;
+function initPinStore(settings) {
+  settingsRepo = settings;
+}
+function readUnpinned() {
+  try {
+    const list = JSON.parse(settingsRepo?.get(UNPINNED_KEY) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 const SIZE_BY_TYPE = {
   todo: { width: 260, height: 140 },
   memo: { width: 384, height: 340 }, // 문서 시트(그림자 여백 12px 포함) — 내용 길이에 맞춰 높이는 자동으로 조절됨
@@ -32,6 +47,7 @@ function openWidget(item, { onClosed } = {}) {
   }
 
   const size = SIZE_BY_TYPE[item.type] || SIZE_BY_TYPE.todo;
+  const pinned = !readUnpinned().includes(key);
   const win = new BrowserWindow({
     width: size.width,
     height: size.height,
@@ -42,7 +58,7 @@ function openWidget(item, { onClosed } = {}) {
     resizable: true, // 내용이 많은 일정/메모는 기본 크기로 다 안 보일 수 있어 직접 키울 수 있게(내부 스크롤도 됨)
     frame: false,
     transparent: true,
-    alwaysOnTop: true,
+    alwaysOnTop: pinned,
     skipTaskbar: true,
     webPreferences: {
       preload: path.join(__dirname, '..', '..', 'preload.js'),
@@ -55,11 +71,11 @@ function openWidget(item, { onClosed } = {}) {
   win.setMenu(null);
   // 항상 위 — 다른 위젯 창(포스트잇·보드)과 같은 방식: 가장 높은 레벨로 걸고, 윈도우에서 슬며시 풀리는 걸 막으려 주기적으로도 다시 올린다.
   const reassertAlwaysOnTop = () => {
-    if (win.isDestroyed() || !win.isAlwaysOnTop()) return;
+    if (win.isDestroyed() || !win.isAlwaysOnTop()) return; // 항상 앞으로를 끈 위젯은 건드리지 않는다
     win.setAlwaysOnTop(true, 'screen-saver');
     win.moveTop();
   };
-  win.setAlwaysOnTop(true, 'screen-saver');
+  if (pinned) win.setAlwaysOnTop(true, 'screen-saver');
   win.on('blur', reassertAlwaysOnTop);
   win.on('show', reassertAlwaysOnTop);
   const reassertTimer = setInterval(reassertAlwaysOnTop, 1500);
@@ -76,6 +92,25 @@ function openWidget(item, { onClosed } = {}) {
   });
 
   return win;
+}
+
+function findKey(win) {
+  for (const [key, w] of windows) if (w === win) return key;
+  return null;
+}
+
+// 창에서 호출(widgetControls IPC) — 이 창의 항상 앞으로 상태를 읽고/바꾸고/저장
+function getPin(win) {
+  return !!win && !win.isDestroyed() && win.isAlwaysOnTop();
+}
+function setPin(win, pinned) {
+  const key = findKey(win);
+  if (!key) return null;
+  if (pinned) win.setAlwaysOnTop(true, 'screen-saver');
+  else win.setAlwaysOnTop(false);
+  const rest = readUnpinned().filter((k) => k !== key);
+  settingsRepo?.set(UNPINNED_KEY, JSON.stringify(pinned ? rest : [...rest, key]));
+  return pinned;
 }
 
 function isOpen(type, id) {
@@ -102,4 +137,4 @@ function getOpenItems() {
     });
 }
 
-module.exports = { openWidget, isOpen, closeIfOpen, getOpenItems };
+module.exports = { openWidget, isOpen, closeIfOpen, getOpenItems, initPinStore, getPin, setPin };

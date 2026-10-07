@@ -156,6 +156,8 @@ contextBridge.exposeInMainWorld('itda', {
   widgetControls: {
     minimize: () => ipcRenderer.invoke('widgetControls:minimize'),
     close: () => ipcRenderer.invoke('widgetControls:close'),
+    getPin: () => ipcRenderer.invoke('widgetControls:getPin'),
+    setPin: (pinned) => ipcRenderer.invoke('widgetControls:setPin', pinned),
   },
   widgets: {
     open: (type) => ipcRenderer.invoke('widgets:open', type),
