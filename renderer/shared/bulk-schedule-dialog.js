@@ -31,6 +31,9 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   // 근무표는 보통 월말에 다음 달 것이 나오므로, 20일 이후엔 다음 달을 기본값으로
   const base = now.getDate() >= 20 ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : now;
   let rows = []; // { id, date, title, include, cell?, thumb?, xl? } — cell/thumb이 있으면 사진, xl이면 CCRT 엑셀에서 온 행
+  let xcatSet = false;
+  let existing = []; // 이미 있는 일정 [{date, title, cat}] — 등록 전에 겹치는지 보려고 목록 날짜 범위만큼 읽어 둔다
+  let existingSpan = null; // 읽어 둔 날짜 범위 [from, to]
   let ccrt = null; // 읽어 둔 CCRT명단 시트(달/이름 표시를 바꿀 때 다시 쓴다)
   let nextId = 1;
   let srcCanvas = null;
@@ -38,6 +41,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   let model = null;
   const UNSURE_RATIO = 0.55; // 1등/2등 거리 비율이 이 이상이면 "확인 필요" 표시
 
+  const catOptions = `<option value="">없음</option>${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}`;
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay bulk-overlay open';
   overlay.innerHTML = `
@@ -47,14 +51,19 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <button class="btn-icon" data-act="close" title="닫기">✕</button>
       </div>
       <div class="bulk-controls">
-        <label>대상 달
-          <input type="month" id="bulk-month" class="input" value="${base.getFullYear()}-${pad(base.getMonth() + 1)}" />
+        <div class="bulk-month">
+          <span class="bulk-month-label">대상 달</span>
+          <button class="btn-icon" id="bulk-prev" title="이전 달">‹</button>
+          <button class="btn-secondary bulk-month-btn" id="bulk-month-btn"></button>
+          <button class="btn-icon" id="bulk-next" title="다음 달">›</button>
+          <input type="hidden" id="bulk-month" value="${base.getFullYear()}-${pad(base.getMonth() + 1)}" />
+          <div class="bulk-month-pop" id="bulk-month-pop" hidden></div>
+        </div>
+        <label>사진·글 카테고리
+          <select id="bulk-cat" class="select">${catOptions}</select>
         </label>
-        <label>카테고리
-          <select id="bulk-cat" class="select">
-            <option value="">없음</option>
-            ${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
-          </select>
+        <label id="bulk-xcat-wrap" style="display:none">엑셀 카테고리
+          <select id="bulk-xcat" class="select">${catOptions}</select>
         </label>
         <label id="bulk-name-wrap" style="display:none">CCRT 이름
           <select id="bulk-name" class="select">
@@ -98,10 +107,51 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     return { year: y || base.getFullYear(), month: m || base.getMonth() + 1 };
   };
 
+  // 대상 달 선택 — 브라우저 기본 달 선택창 대신 ‹ 2026년 10월 › 와 월 격자 팝업을 쓴다. 값은 숨은 input(#bulk-month)에 두고 change를 낸다.
+  const monthBtn = $('#bulk-month-btn');
+  const pop = $('#bulk-month-pop');
+  const setMonth = (y, m) => {
+    const d = new Date(y, m - 1, 1);
+    $('#bulk-month').value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    monthBtn.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    $('#bulk-month').dispatchEvent(new Event('change'));
+  };
+  const showMonth = () => (monthBtn.textContent = `${ym().year}년 ${ym().month}월`);
+  const shiftMonth = (n) => setMonth(ym().year, ym().month + n);
+  let popYear = 0;
+  function drawPop() {
+    const { year, month } = ym();
+    pop.innerHTML = `
+      <div class="bulk-pop-head"><button class="btn-icon" data-y="-1">‹</button><b>${popYear}년</b><button class="btn-icon" data-y="1">›</button></div>
+      <div class="bulk-pop-grid">${Array.from({ length: 12 }, (_, i) => `<button class="bulk-pop-m${popYear === year && i + 1 === month ? ' on' : ''}" data-m="${i + 1}">${i + 1}월</button>`).join('')}</div>`;
+  }
+  monthBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    popYear = ym().year;
+    drawPop();
+    pop.hidden = !pop.hidden;
+  });
+  pop.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const y = e.target.closest('[data-y]');
+    const m = e.target.closest('[data-m]');
+    if (y) {
+      popYear += Number(y.dataset.y);
+      drawPop();
+    } else if (m) {
+      pop.hidden = true;
+      setMonth(popYear, Number(m.dataset.m));
+    }
+  });
+  overlay.addEventListener('click', () => (pop.hidden = true));
+  $('#bulk-prev').addEventListener('click', () => shiftMonth(-1));
+  $('#bulk-next').addEventListener('click', () => shiftMonth(1));
+
   function rebuildModel() {
     model = buildModel([...SEED_TEMPLATES, ...learned].map((t) => ({ label: t.label, v: b64ToVec(t.v) })));
   }
   rebuildModel();
+  showMonth();
   window.itda.settings
     .get('schedule_templates')
     .then((raw) => {
@@ -121,6 +171,50 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   }
   const off = registerEscClose(() => overlay.isConnected, close);
 
+  // ---------- 중복 ----------
+  // 같은 날·같은 제목이 이미 있으면 "이미 있음"(처음엔 체크 해제 — 다시 체크하면 그대로 등록), 같은 날 같은 카테고리에 제목만 다른 일정이 있으면 "비슷함"(경고만).
+  const catOf = (r) => ($(r.xl ? '#bulk-xcat' : '#bulk-cat').value || null);
+  const norm = (t) => String(t).replace(/\s+/g, '').toLowerCase();
+  function dupOf(r) {
+    const same = existing.filter((e) => e.date === r.date);
+    if (same.some((e) => norm(e.title) === norm(r.title))) return { kind: 'same' };
+    const cat = catOf(r);
+    const like = cat && same.find((e) => String(e.cat) === cat);
+    return like ? { kind: 'like', title: like.title } : null;
+  }
+  // 한 칸에 하나만: 이미 있음 > 사진 추측(자동/확인) > 비슷함
+  const dupHtml = (r) => {
+    const d = r.dup;
+    if (d?.kind === 'same') return '<span class="bulk-flag dup" title="같은 날 같은 제목의 일정이 이미 있어요. 체크하면 한 번 더 등록돼요">이미 있음</span>';
+    if (r.guess) return `<span class="bulk-flag ${r.unsure ? 'warn' : ''}" title="사진 모양으로 추측한 값이에요">${r.unsure ? '확인' : '자동'}</span>`;
+    if (d) return `<span class="bulk-flag warn" title="${attr(`같은 날 같은 카테고리에 "${d.title}" 일정이 있어요`)}">비슷함</span>`;
+    return '';
+  };
+  function markDups() {
+    rows.forEach((r) => {
+      r.dup = r.date ? dupOf(r) : null;
+      if (r.dup?.kind === 'same' && !r.dupSeen) {
+        r.dupSeen = true;
+        r.include = false; // 처음 발견했을 때만 자동으로 뺀다(사용자가 다시 체크한 건 존중)
+      }
+    });
+  }
+  // 목록의 날짜 범위가 읽어 둔 범위 밖이면 다시 읽고 표시를 갱신한다
+  async function loadExisting() {
+    const dates = rows.map((r) => r.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+    if (!dates.length) return;
+    const [from, to] = [dates[0], dates[dates.length - 1]];
+    if (existingSpan && existingSpan[0] <= from && existingSpan[1] >= to) return;
+    try {
+      const list = await window.itda.events.range({ fromDate: from, toDate: to });
+      existing = list.map((e) => ({ date: String(e.start_at).slice(0, 10), title: e.title, cat: e.category_id }));
+      existingSpan = [from, to];
+      if (overlay.isConnected) renderRows(true);
+    } catch (e) {
+      /* 중복 표시는 보조 기능 — 못 읽어도 등록은 그대로 */
+    }
+  }
+
   // ---------- 목록 ----------
   function rowHtml(r) {
     if (r.xl) {
@@ -129,6 +223,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <input type="checkbox" class="bulk-inc" ${r.include ? 'checked' : ''} />
         <input type="date" class="input bulk-date" value="${attr(r.date)}" />
         <input type="text" class="input bulk-title" value="${attr(r.title)}" />
+        <span class="bulk-dup-slot">${dupHtml(r)}</span>
         <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
       </div>`;
     }
@@ -140,7 +235,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <input type="date" class="input bulk-date" value="${attr(r.date)}" />
         ${r.thumb ? `<img class="bulk-thumb" src="${r.thumb}" alt="" />` : '<span></span>'}
         <input type="text" class="input bulk-title" value="${attr(r.title)}" placeholder="RM·층 선택 또는 직접 입력" />
-        <span class="bulk-flag-slot">${r.guess ? `<span class="bulk-flag ${r.unsure ? 'warn' : ''}" title="사진 모양으로 추측한 값이에요">${r.unsure ? '확인' : '자동'}</span>` : ''}</span>
+        <span class="bulk-flag-slot">${dupHtml(r)}</span>
         <select class="select bulk-rm"><option value="">RM</option>${RM_NUMBERS.map((n) => `<option value="${n}" ${p && p.rm === n ? 'selected' : ''}>RM${n}</option>`).join('')}</select>
         <select class="select bulk-floor"><option value="">층</option>${floors.map((f) => `<option value="${f}" ${p && p.floors === f ? 'selected' : ''}>${f}층</option>`).join('')}</select>
         <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
@@ -151,30 +246,39 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     $('#bulk-submit').textContent = n ? `${n}건 등록` : '등록';
     $('#bulk-submit').disabled = !n;
   }
-  function renderRows() {
+  function renderRows(skipLoad) {
+    markDups();
     rows.sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
     $('#bulk-list').innerHTML = rows.length ? rows.map(rowHtml).join('') : '';
     updateSubmit();
+    if (!skipLoad) loadExisting();
   }
   const rowOf = (el) => rows.find((r) => r.id === Number(el.closest('.bulk-row').dataset.id));
 
   function clearGuess(r, rowEl) {
     r.guess = false;
-    rowEl.querySelector('.bulk-flag-slot').textContent = '';
+    renderRowFlags(rowEl, r);
   }
 
+  // 날짜·제목을 고친 줄의 중복 표시만 다시 계산(전체를 다시 그리면 입력 중인 칸의 포커스를 잃는다)
+  function renderRowFlags(rowEl, r) {
+    r.dup = r.date ? dupOf(r) : null;
+    rowEl.querySelector(r.xl ? '.bulk-dup-slot' : '.bulk-flag-slot').innerHTML = dupHtml(r);
+  }
   $('#bulk-list').addEventListener('input', (e) => {
     const r = rowOf(e.target);
     const rowEl = e.target.closest('.bulk-row');
     if (e.target.classList.contains('bulk-title')) {
       r.title = e.target.value;
       if (!r.xl) clearGuess(r, rowEl);
+      else renderRowFlags(rowEl, r);
       if (r.xl) return;
       const p = parseLabel(r.title);
       rowEl.querySelector('.bulk-rm').value = p ? String(p.rm) : '';
       rowEl.querySelector('.bulk-floor').value = p ? p.floors : '';
     } else if (e.target.classList.contains('bulk-date')) {
       r.date = e.target.value;
+      renderRowFlags(rowEl, r);
     }
   });
   $('#bulk-list').addEventListener('change', (e) => {
@@ -295,7 +399,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   }
 
   // ---------- CCRT 엑셀 ----------
-  // 엑셀(COSAS) 일정은 "평가" 카테고리로 — 위 카테고리 선택(사진·글 행용)과 따로 정한다. 없으면 선택된 카테고리를 쓴다.
+  // 엑셀(COSAS) 일정은 "평가" 카테고리가 기본 — 사진·글 카테고리와 따로 고른다(바꿀 수 있음).
   const evalCat = categories.find((c) => c.name.trim() === '평가') || categories.find((c) => /평가/.test(c.name));
   function applyCcrt() {
     const { year, month } = ym();
@@ -303,7 +407,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     rows = rows.filter((r) => !r.xl);
     found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, include: true, xl: true }));
     $('#bulk-status').textContent = found.length
-      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요 · ${evalCat ? `"${evalCat.name}" 카테고리로 등록돼요` : '"평가" 카테고리가 없어 위에서 고른 카테고리로 등록돼요'}${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
+      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
       : `CCRT명단에 ${year}년 ${month}월 평가일이 없어요.${skipped.length ? ` (${skipped.join(', ')})` : ''}`;
     renderRows();
   }
@@ -321,11 +425,16 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
       return;
     }
     $('#bulk-name-wrap').style.display = '';
+    $('#bulk-xcat-wrap').style.display = '';
+    if (!xcatSet) $('#bulk-xcat').value = evalCat ? String(evalCat.id) : ''; // 처음 불러올 때만 기본값(그 뒤 사용자가 바꾼 값은 유지)
+    xcatSet = true;
     $('#bulk-desc').style.display = 'none';
     $('#bulk-drop').classList.add('compact');
     applyCcrt();
   }
   $('#bulk-name').addEventListener('change', () => ccrt && applyCcrt());
+  $('#bulk-cat').addEventListener('change', () => renderRows(true));
+  $('#bulk-xcat').addEventListener('change', () => renderRows(true));
   const loadFile = (f) => (/\.xlsx$/i.test(f.name) ? loadXlsx(f) : loadImage(f));
 
   $('#bulk-month').addEventListener('change', () => {
@@ -399,9 +508,10 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     try {
       const catId = $('#bulk-cat').value;
       const toItems = (list) => list.map((r) => ({ title: r.title.trim(), date: r.date }));
+      const xCat = $('#bulk-xcat').value;
       const groups = [
-        [picked.filter((r) => !r.xl || !evalCat), catId ? Number(catId) : null],
-        [picked.filter((r) => r.xl && evalCat), evalCat ? evalCat.id : null],
+        [picked.filter((r) => !r.xl), catId ? Number(catId) : null],
+        [picked.filter((r) => r.xl), xCat ? Number(xCat) : null],
       ].filter(([list]) => list.length);
       let added = 0;
       for (const [list, categoryId] of groups) added += (await window.itda.events.addMany({ items: toItems(list), categoryId })).added;
