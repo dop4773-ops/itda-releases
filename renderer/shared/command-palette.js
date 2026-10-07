@@ -1,5 +1,6 @@
 import { escapeHtml, debounce, goToHash } from './ui-utils.js';
 import { TABS as SETTINGS_TABS } from '../views/settings.js';
+import { SETTINGS_TAB_KEYWORDS } from './settings-index.js';
 import { TAG_ICON } from '../views/tags.js';
 import { TYPE_EMOJI, TYPE_ROUTE, plainLabel } from './links-ui.js';
 import { getCachedBinding, matchesAccelerator } from './shortcuts.js';
@@ -7,16 +8,7 @@ import { parseQuery, describeScope, eventDateLabel } from './quick-find-core.js'
 
 // 설정 화면 하위 탭(화면/위젯/단축키/보안/Google Calendar/데이터 & 백업/업데이트)마다 실제
 // 설정 화면과 같은 목록(settings.js의 TABS)을 그대로 써서, 탭이 추가/변경돼도 여기서 따로 안 고쳐도 된다.
-// keywords는 그 탭 안에 있는 세부 설정 이름 — 사용자가 "배율"을 검색해도 "화면" 탭이 걸리게 하기 위함.
-const SETTINGS_TAB_KEYWORDS = {
-  display: '배율 다크모드 테마 화면크기 글꼴 폰트 글자색 텍스트색',
-  security: '잠금 비밀번호 PIN',
-  convenience: '편의기능 업데이트자동확인 자동실행 시작프로그램 자동추천 관련항목',
-  holiday: '공휴일 휴일 빨간날 대체공휴일 연휴',
-  messenger: '메신저 미래워크 입원 퇴원 외출 외박 병동이동 연동 불러오기',
-  data: '백업 복원 내보내기 가져오기',
-  update: '버전 업데이트확인',
-};
+// keywords(settings-index.js)는 그 탭 안에 있는 세부 설정 이름 — 사용자가 "배율"을 검색해도 "화면" 탭이 걸리게 하기 위함.
 
 // 잇다 안에서 쓰는 "빠른 찾기" (전역 Spotlight 창 = renderer/spotlight.js 의 잇다-안 버전).
 // 화면·태그·항목 검색은 Spotlight와 같은 규칙(quick-find-core.js)을 쓰고, 여기엔 "새 메모
@@ -62,6 +54,8 @@ function buildCommands({ openQuickCapture }) {
       label: '오늘 일정 보기',
       run: () => goToThen('#/calendar', () => document.querySelector('.tab[data-view="day"]')?.click()),
     },
+    { id: 'bulk', icon: CAL_ICON, label: '일정 일괄 등록', keywords: '일괄 근무표 사진 엑셀 CCRT 평가일 그랜드라운딩 붙여넣기', run: () => goToThen('#/calendar', () => document.getElementById('c-openBulk')?.click()) },
+    { id: 'messenger-sync', icon: CAL_ICON, label: '메신저에서 불러오기', keywords: '메신저 입원 퇴원 외출 외박 입퇴원 불러오기 동기화', run: () => goToThen('#/calendar', () => (document.getElementById('c-msgSync')?.style.display === 'none' ? goToThen('#/settings/messenger') : document.getElementById('c-msgSync')?.click())) },
     { id: 'dashboard', icon: HOME_ICON, label: '대시보드 열기', run: () => goToThen('#/dashboard') },
     { id: 'settings', icon: GEAR_ICON, label: '설정 열기', run: () => goToThen('#/settings') },
     ...SETTINGS_TABS.map((t) => ({

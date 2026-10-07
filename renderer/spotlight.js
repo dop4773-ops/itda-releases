@@ -2,6 +2,7 @@
 // main/spotlight/window-manager.js 가 이 페이지를 frameless 창에 띄운다.
 import { debounce } from './shared/ui-utils.js';
 import { stripHtmlToPlainText } from './shared/rich-text.js';
+import { SETTINGS_TAB_KEYWORDS } from './shared/settings-index.js';
 import { parseQuery, describeScope, eventDateLabel, TYPE_EMOJI, TYPE_LABEL, ITEM_ROUTE } from './shared/quick-find-core.js';
 
 // 이 작은 팝업에는 다크모드 + UI 테마 팔레트만 맞춰준다(배율/폰트는 굳이 안 함 — shell.js
@@ -54,6 +55,11 @@ const SCREEN_COMMANDS = [
   { icon: '💾', label: '설정 · 데이터 & 백업', kw: '설정 데이터 백업 복원 내보내기 가져오기', route: '#/settings/data' },
   { icon: '🔄', label: '설정 · 업데이트', kw: '설정 업데이트 버전 최신', route: '#/settings/update' },
 ];
+// 설정 세부 탭의 검색 키워드는 빠른 찾기(command-palette.js)와 같은 표(settings-index.js)를 쓴다 — 두 곳이 어긋나지 않게.
+SCREEN_COMMANDS.forEach((c) => {
+  const m = /^#\/settings\/(\w+)$/.exec(c.route);
+  if (m && SETTINGS_TAB_KEYWORDS[m[1]]) c.kw = `설정 ${SETTINGS_TAB_KEYWORDS[m[1]]}`;
+});
 let tagCommands = []; // 카테고리 태그 → '#/settings/tags'
 let tagNames = []; // 태그 프리픽스(#재활) 해석용 — 존재하는 태그명만 프리픽스로 인정
 

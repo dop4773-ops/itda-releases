@@ -412,6 +412,7 @@ export async function mount(root, deepLinkId) {
       <div style="display:flex;gap:8px;align-items:center;">
         ${widgetLaunchButtonHtml('c-scheduleWidgetBtn', '오늘 일정 위젯 열기')}
         <button class="btn-secondary" id="c-openBulk" title="근무표 사진·CCRT 평가일 엑셀·글로 여러 일정을 한 번에 등록">일괄 등록</button>
+        <button class="btn-secondary" id="c-msgSync" style="display:none;" title="메신저에서 입퇴원·외출외박을 지금 불러와요 (불러오기 주기가 '수동'일 때만 보여요)">메신저 불러오기</button>
         <button class="btn" id="c-openAdd">+ 새 일정</button>
       </div>
     </div>
@@ -961,6 +962,38 @@ export async function mount(root, deepLinkId) {
 
   $('c-openAdd').addEventListener('click', () => openModal());
   $('c-openBulk').addEventListener('click', () => openBulkScheduleDialog({ categories, onRegistered: load }));
+
+  // 메신저 연동의 불러오기 주기가 "수동"일 때만 보이는 즉시 불러오기 버튼 — 자동(켤 때/주기/매일)이면 버튼이 없다.
+  window.itda.messenger
+    .getConfig()
+    .then((cfg) => {
+      if (!unmounted && cfg.enabled && cfg.schedule && cfg.schedule.mode === 'manual') $('c-msgSync').style.display = '';
+    })
+    .catch(() => {});
+  $('c-msgSync').addEventListener('click', async () => {
+    const btn = $('c-msgSync');
+    btn.disabled = true;
+    btn.textContent = '불러오는 중…';
+    try {
+      const r = await window.itda.messenger.syncNow();
+      if (!r.ok) {
+        toast(r.error || '불러오지 못했어요');
+      } else {
+        const s = r.summary.stats;
+        const p = r.summary.pending || { deletes: [], vanished: [] };
+        toast(
+          p.deletes.length || p.vanished.length
+            ? '확인이 필요한 변경이 있어요 — 설정 > 메신저 연동에서 확인해주세요'
+            : `메신저에서 불러왔어요 (추가 ${s.added} · 수정 ${s.updated} · 삭제 ${s.removed})`
+        );
+      }
+    } catch (e) {
+      errorToast(e, '메신저에서 불러오지 못했어요');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '메신저 불러오기';
+    }
+  });
   $('c-cancelAdd').addEventListener('click', closeModal);
 
   // "★ 템플릿 저장" — 지금 폼에 입력된 제목/카테고리/장소/종일 여부를 즐겨찾는 템플릿으로 저장
