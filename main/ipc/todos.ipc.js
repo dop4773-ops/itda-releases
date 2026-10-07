@@ -28,13 +28,13 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
   });
 
   // link/fromInbox가 오면(다른 항목에서 전환·Inbox 캡처) "항목 생성 + 연결/처리표시"를 한 트랜잭션으로 묶는다.
-  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, link, fromInbox }) => {
+  ipcMain.handle('todos:add', (event, { title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, link, fromInbox, remindDay }) => {
     assertNonEmpty(title, '할 일 제목을 입력해주세요.');
     if (recurrenceRule) assertNonEmpty(dueDate, '반복하려면 마감일이 필요해요.');
     const create = () => {
       const result = todos.insert({
         title: title.trim(), memo, categoryId, dueDate, dueTime, priority,
-        sourceInboxId: sourceInboxId ?? fromInbox, recurrenceRule,
+        sourceInboxId: sourceInboxId ?? fromInbox, recurrenceRule, remindDay,
       });
       if (recurrenceRule) {
         const occurrences = generateOccurrenceDates(dueDate, recurrenceRule);
@@ -64,7 +64,7 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     return { id };
   });
 
-  ipcMain.handle('todos:update', (event, { id, title, memo, categoryId, dueDate, dueTime, priority }) => {
+  ipcMain.handle('todos:update', (event, { id, title, memo, categoryId, dueDate, dueTime, priority, remindDay }) => {
     const todo = todos.getById(id);
     if (!todo) throw new Error('할 일을 찾을 수 없습니다.');
     // undefined="이 필드는 안 건드림", null="명시적으로 값을 지움" — ??는 null도 걸러버려서 값 지우기가 안 되므로 직접 구분한다
@@ -77,6 +77,7 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
       dueDate: pick(dueDate, todo.due_date),
       dueTime: pick(dueTime, todo.due_time),
       priority: pick(priority, todo.priority),
+      remindDay: pick(remindDay, todo.remind_day),
     });
     broadcastDataChanged('todo', id);
     scheduleContentSync(repos, 'todo', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)

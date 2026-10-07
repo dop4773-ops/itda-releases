@@ -462,6 +462,9 @@ export async function mount(root, deepLinkId) {
           <label class="checkbox-row"><input type="checkbox" id="c-allDay" /> 하루종일</label>
         </div>
         <div class="form-row">
+          <label class="checkbox-row" title="앱을 켜면 그날 작은 팝업창으로 알려줘요"><input type="checkbox" id="c-remind" /> 당일 알림</label>
+        </div>
+        <div class="form-row">
           <input type="datetime-local" id="c-start" class="input" style="flex:1;" />
           <input type="datetime-local" id="c-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
         </div>
@@ -857,6 +860,7 @@ export async function mount(root, deepLinkId) {
     // 새 일정은 "하루종일"이 기본값 — 대부분의 일정 등록이 종일이라는 피드백 반영.
     const isAllDay = isEdit ? !!evt.all_day : true;
     $('c-allDay').checked = isAllDay;
+    $('c-remind').checked = isEdit && !!evt.remind_day;
     $('c-start').type = isAllDay ? 'date' : 'datetime-local';
     $('c-start').value = isEdit
       ? isAllDay
@@ -935,6 +939,7 @@ export async function mount(root, deepLinkId) {
     $('c-location').value = '';
     $('c-memo').value = '';
     $('c-allDay').checked = false;
+    $('c-remind').checked = false;
     $('c-start').type = 'datetime-local';
     $('c-start').value = '';
     $('c-end').type = 'datetime-local';
@@ -1036,6 +1041,7 @@ export async function mount(root, deepLinkId) {
           memo,
           colorHex,
           textColor,
+          remindDay: $('c-remind').checked ? 1 : 0,
         });
         toast('일정을 수정했어요');
       } else {
@@ -1050,6 +1056,7 @@ export async function mount(root, deepLinkId) {
           colorHex,
           textColor,
           recurrenceRule: $('c-recurrence').value || null,
+          remindDay: $('c-remind').checked ? 1 : 0,
         });
       }
       closeModal();

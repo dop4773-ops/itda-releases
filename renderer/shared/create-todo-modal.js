@@ -29,6 +29,7 @@ function ensureModal() {
           <option value="3">낮음</option>
         </select>
       </div>
+      <div class="form-row"><label class="checkbox-row" title="마감일에 앱을 켜면 작은 팝업창으로 알려줘요"><input type="checkbox" id="ctm-remind" /> 당일 알림 (마감일이 있어야 해요)</label></div>
       <div class="form-row"><textarea id="ctm-memo" class="input" rows="3" style="flex:1;resize:vertical;" placeholder="설명 (선택)"></textarea></div>
       <div class="modal-actions">
         <button class="btn-secondary" id="ctm-cancel">취소</button>
@@ -86,7 +87,7 @@ export function openCreateTodoModal({ title = '', memo = '', dueDate = null, lin
         const dueDateVal = $('ctm-due').value || null;
         const priority = Number($('ctm-priority').value);
         const memoVal = $('ctm-memo').value.trim() || null;
-        const newTodo = await window.itda.todos.add({ title: titleVal, categoryId, dueDate: dueDateVal, priority, memo: memoVal, link, fromInbox });
+        const newTodo = await window.itda.todos.add({ title: titleVal, categoryId, dueDate: dueDateVal, priority, memo: memoVal, link, fromInbox, remindDay: $('ctm-remind').checked && dueDateVal ? 1 : 0 });
         toast('Todo로 등록했어요');
         finish(newTodo);
       } catch (e) {
@@ -113,6 +114,7 @@ export function openCreateTodoModal({ title = '', memo = '', dueDate = null, lin
       $('ctm-title').value = title;
       $('ctm-memo').value = memo;
       $('ctm-due').value = dueDate || '';
+      $('ctm-remind').checked = false;
       $('ctm-priority').value = '2';
 
       el.classList.add('open');

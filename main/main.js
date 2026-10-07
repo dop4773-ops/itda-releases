@@ -5,6 +5,7 @@ const registerIpcHandlers = require('./ipc');
 const { initUpdater } = require('./updater');
 const { initGlobalShortcut } = require('./global-shortcut');
 const { initSpotlight } = require('./spotlight');
+const { initDayAlert } = require('./day-alert');
 const { initTray } = require('./tray');
 const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
@@ -122,6 +123,7 @@ if (!gotLock) {
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
     const { openSpotlight } = initSpotlight(); // Spotlight식 작은 창(빠른입력/빠른찾기) — main/spotlight
     initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db), { openSpotlight }); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
+    initDayAlert(db, ipcMain); // 당일 알림 작은 팝업창 — main/day-alert 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고
     initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
     perf('독립 모듈 초기화(updater/spotlight/shortcut/tray/backup)', t);

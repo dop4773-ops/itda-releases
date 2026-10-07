@@ -156,6 +156,7 @@ function runSync({ itdaDb, repos, config, read, now = new Date(), trigger = 'man
         memo: contentChanged ? composeMemo(d.auto, sp.user) : ev.memo,
         colorHex: c.color_hex ?? null,
         textColor: c.text_color ?? null,
+        remindDay: ev.remind_day, // 사용자가 켠 당일 알림은 그대로 둔다
       });
       messenger.saveLink({
         ...link,

@@ -25,7 +25,7 @@ function ensureModal() {
         <select id="cem-category" class="select" style="flex:1;"></select>
         <input type="text" id="cem-location" class="input" placeholder="장소" style="flex:1;" />
       </div>
-      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="cem-allDay" /> 하루종일</label></div>
+      <div class="form-row"><label class="checkbox-row"><input type="checkbox" id="cem-allDay" /> 하루종일</label><label class="checkbox-row" style="margin-left:16px;" title="앱을 켜면 그날 작은 팝업창으로 알려줘요"><input type="checkbox" id="cem-remind" /> 당일 알림</label></div>
       <div class="form-row">
         <input type="datetime-local" id="cem-start" class="input" style="flex:1;" />
         <input type="datetime-local" id="cem-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
@@ -108,6 +108,7 @@ export function openCreateEventModal({ title = '', memo = '', dueDate = null, li
           memo: memoVal,
           link,
           fromInbox,
+          remindDay: $('cem-remind').checked ? 1 : 0,
         });
         toast('일정으로 등록했어요');
         finish(newEvent);
@@ -140,6 +141,7 @@ export function openCreateEventModal({ title = '', memo = '', dueDate = null, li
       $('cem-memo').value = memo;
       $('cem-location').value = '';
       $('cem-allDay').checked = isAllDay;
+      $('cem-remind').checked = false;
       $('cem-start').type = isAllDay ? 'date' : 'datetime-local';
       $('cem-start').value = date ? (isAllDay ? date : `${date}T${guess.time}`) : '';
       $('cem-end').style.display = isAllDay ? 'none' : '';

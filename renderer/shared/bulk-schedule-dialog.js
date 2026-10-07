@@ -72,6 +72,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
             <option value="hide">숨김 (COSAS 2명)</option>
           </select>
         </label>
+        <label title="등록하는 모든 일정에 '당일 알림'을 켜요 — 그날 잇다를 켜면 작은 팝업으로 알려줘요"><input type="checkbox" id="bulk-remind" /> 당일 알림 켜기</label>
         <span class="bulk-note">하루종일 일정으로 등록돼요</span>
       </div>
       <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. "CCRT명단" 시트가 있는 엑셀 파일을 넣으면 그 달 평가일을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
@@ -514,7 +515,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         [picked.filter((r) => r.xl), xCat ? Number(xCat) : null],
       ].filter(([list]) => list.length);
       let added = 0;
-      for (const [list, categoryId] of groups) added += (await window.itda.events.addMany({ items: toItems(list), categoryId })).added;
+      for (const [list, categoryId] of groups) added += (await window.itda.events.addMany({ items: toItems(list), categoryId, remindDay: $('#bulk-remind').checked ? 1 : 0 })).added;
       toast(`일정 ${added}건을 등록했어요`);
       learnFrom(picked);
       close();

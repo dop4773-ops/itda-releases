@@ -59,6 +59,7 @@ CREATE TABLE todos (
   is_done          INTEGER NOT NULL DEFAULT 0,
   status           TEXT NOT NULL DEFAULT 'todo',  -- 칸반 상태: 'todo'|'doing'|'done' (is_done과 함께 동기화됨)
   is_favorite      INTEGER NOT NULL DEFAULT 0,    -- 중요 표시(별표)
+  remind_day       INTEGER NOT NULL DEFAULT 0,    -- 1이면 마감일 당일 앱을 켤 때 팝업으로 알림
   completed_at     TEXT,
   source_inbox_id  INTEGER REFERENCES inbox_items(id) ON DELETE SET NULL,
   recurrence_rule       TEXT,        -- 'daily'|'weekly'|'monthly', 반복 없으면 NULL (RRULE 표준 아님 — 3가지 단순 패턴만)
@@ -128,6 +129,7 @@ CREATE TABLE events (
   memo                  TEXT,
   color_hex             TEXT,            -- 카테고리 없음일 때만 쓰는 이벤트 자체 색상(있으면). 카테고리가 있으면 카테고리 색이 우선.
   text_color            TEXT,            -- color_hex와 짝을 이루는 글자색('#000000'/'#ffffff')
+  remind_day            INTEGER NOT NULL DEFAULT 0, -- 1이면 일정 당일 앱을 켤 때 팝업으로 알림
   created_at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   deleted_at            TEXT

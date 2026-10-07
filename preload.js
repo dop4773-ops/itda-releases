@@ -196,6 +196,19 @@ contextBridge.exposeInMainWorld('itda', {
     ipcRenderer.on('itda:openQuickFind', listener);
     return () => ipcRenderer.removeListener('itda:openQuickFind', listener);
   },
+  // 당일 알림 팝업창(renderer/day-alert.js) 전용 + 설정의 미리보기
+  dayAlert: {
+    get: () => ipcRenderer.invoke('dayAlert:get'),
+    ack: () => ipcRenderer.invoke('dayAlert:ack'),
+    close: () => ipcRenderer.invoke('dayAlert:close'),
+    openFull: () => ipcRenderer.invoke('dayAlert:openFull'),
+    preview: () => ipcRenderer.invoke('dayAlert:preview'),
+    onUpdate: (cb) => {
+      const listener = () => cb();
+      ipcRenderer.on('dayAlert:update', listener);
+      return () => ipcRenderer.removeListener('dayAlert:update', listener);
+    },
+  },
   // Spotlight식 작은 창(renderer/spotlight.js) 전용
   spotlight: {
     close: () => ipcRenderer.invoke('spotlight:close'),

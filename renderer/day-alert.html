@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-src 'none'" />
+<title>잇다 오늘 알림</title>
+<link rel="stylesheet" href="shared/styles.css" />
+<style>
+  html, body { background: transparent; margin: 0; overflow: hidden; height: 100%; }
+  #da-root { padding: 8px; height: 100%; box-sizing: border-box; }
+  .da-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 16px; height: 100%;
+    box-shadow: 0 14px 40px rgba(16,24,40,.26), 0 2px 8px rgba(16,24,40,.12);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .da-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px; flex-shrink: 0; }
+  .da-head .da-ico { font-size: 20px; }
+  .da-head h3 { margin: 0; font-size: 14.5px; font-weight: 600; }
+  .da-head small { display: block; font-size: 11.5px; color: var(--text-faint); font-weight: 400; margin-top: 1px; }
+  .da-x { margin-left: auto; border: 0; background: transparent; color: var(--text-faint); font-size: 15px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+  .da-x:hover { background: var(--divider); }
+  .da-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .da-sec { font-size: 10.5px; color: var(--text-faint); padding: 8px 16px 3px; }
+  .da-it { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--divider); font-size: 13px; }
+  .da-it .da-t { flex: 1; min-width: 0; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .da-it .da-t:hover { color: var(--brand); }
+  .da-it .da-s { font-size: 11.5px; color: var(--text-faint); flex-shrink: 0; }
+  .da-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--brand); }
+  .da-it input[type=checkbox] { flex-shrink: 0; }
+  .da-it.done .da-t { text-decoration: line-through; color: var(--text-faint); }
+  .da-hi { font-size: 10.5px; color: var(--danger, #d44); flex-shrink: 0; }
+  .da-note { padding: 0 16px 8px; font-size: 11.5px; color: var(--text-faint); }
+  .da-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--divider); flex-shrink: 0; }
+</style>
+</head>
+<body>
+<div id="da-root"></div>
+<script type="module" src="day-alert.js"></script>
+</body>
+</html>

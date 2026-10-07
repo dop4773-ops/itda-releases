@@ -43,7 +43,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
 
   ipcMain.handle(
     'events:add',
-    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo, colorHex, textColor, link, fromInbox }) => {
+    (event, { title, categoryId, location, startAt, endAt, allDay, recurrenceRule, memo, colorHex, textColor, link, fromInbox, remindDay }) => {
       assertNonEmpty(title, '일정 제목을 입력해주세요.');
       assertNonEmpty(startAt, '시작 시각이 필요합니다.');
 
@@ -64,6 +64,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
           // 카테고리 없음일 때만 실제로 쓰인다.
           colorHex,
           textColor,
+          remindDay,
         });
         // 반복 지정 시: 방금 만든 걸 부모로 삼아 앞으로 180일치 발생일을 실제 행으로 미리 채워둔다
         if (recurrenceRule) {
@@ -86,7 +87,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
   );
 
   // 일괄 등록(근무표 사진/글 붙여넣기) — 전부 종일 일정, 하나라도 잘못되면 통째로 롤백.
-  ipcMain.handle('events:addMany', (event, { items, categoryId }) => {
+  ipcMain.handle('events:addMany', (event, { items, categoryId, remindDay }) => {
     if (!Array.isArray(items) || !items.length) throw new Error('등록할 일정이 없어요.');
     if (items.length > 200) throw new Error('한 번에 200건까지 등록할 수 있어요.');
     const ids = repos.transaction(() =>
@@ -95,7 +96,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
         if (!title) throw new Error('일정 제목을 입력해주세요.');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.date))) throw new Error('날짜 형식이 올바르지 않아요.');
         const startAt = `${it.date} 00:00:00`;
-        return events.insert({ title, categoryId: categoryId ?? null, startAt, endAt: resolveEndAt(startAt, null, true), allDay: true }).id;
+        return events.insert({ title, categoryId: categoryId ?? null, startAt, endAt: resolveEndAt(startAt, null, true), allDay: true, remindDay }).id;
       })
     )();
     broadcastDataChanged('event', ids[ids.length - 1]);
@@ -104,7 +105,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
 
   ipcMain.handle(
     'events:update',
-    (event, { id, title, categoryId, location, startAt, endAt, allDay, memo, colorHex, textColor }) => {
+    (event, { id, title, categoryId, location, startAt, endAt, allDay, memo, colorHex, textColor, remindDay }) => {
       const ev = events.getById(id);
       if (!ev) throw new Error('일정을 찾을 수 없습니다.');
       // categoryId/location/memo/colorHex/textColor는 "카테고리 없음으로 바꾸기"·"내용 지우기"처럼
@@ -120,6 +121,7 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
         memo: memo !== undefined ? memo : ev.memo,
         colorHex: colorHex !== undefined ? colorHex : ev.color_hex,
         textColor: textColor !== undefined ? textColor : ev.text_color,
+        remindDay: remindDay != null ? remindDay : ev.remind_day,
       });
       broadcastDataChanged('event', id);
       scheduleContentSync(repos, 'event', id); // 연결된 항목 내용 동기화(설정에 따라 확인/자동/생략)

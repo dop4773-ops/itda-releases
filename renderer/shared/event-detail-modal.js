@@ -30,6 +30,9 @@ export function mountEventDetailModal(root, { onChange } = {}) {
           <label class="checkbox-row"><input type="checkbox" id="ed-allDay" /> 하루종일</label>
         </div>
         <div class="form-row">
+          <label class="checkbox-row" title="앱을 켜면 그날 작은 팝업창으로 알려줘요"><input type="checkbox" id="ed-remind" /> 당일 알림</label>
+        </div>
+        <div class="form-row">
           <input type="datetime-local" id="ed-start" class="input" style="flex:1;" />
           <input type="datetime-local" id="ed-end" class="input" style="flex:1;" placeholder="종료 시각 (선택)" />
         </div>
@@ -136,6 +139,7 @@ export function mountEventDetailModal(root, { onChange } = {}) {
 
       const isAllDay = isEdit ? !!evt.all_day : false;
       $('ed-allDay').checked = isAllDay;
+      $('ed-remind').checked = isEdit && !!evt.remind_day;
       $('ed-start').type = isAllDay ? 'date' : 'datetime-local';
       $('ed-start').value = isEdit ? (isAllDay ? (evt.start_at || '').slice(0, 10) : (evt.start_at || '').slice(0, 16).replace(' ', 'T')) : '';
       $('ed-end').style.display = isAllDay ? 'none' : '';
@@ -154,6 +158,7 @@ export function mountEventDetailModal(root, { onChange } = {}) {
     $('ed-location').value = '';
     $('ed-memo').value = '';
     $('ed-allDay').checked = false;
+    $('ed-remind').checked = false;
     $('ed-start').type = 'datetime-local';
     $('ed-start').value = '';
     $('ed-end').value = '';
@@ -215,10 +220,11 @@ export function mountEventDetailModal(root, { onChange } = {}) {
           endAt: endAt ?? (isAllDay ? `${startRaw} 23:59:59` : undefined),
           allDay: isAllDay,
           memo,
+          remindDay: $('ed-remind').checked ? 1 : 0,
         });
         toast('일정을 수정했어요');
       } else {
-        await window.itda.events.add({ title, categoryId, location, startAt, endAt, allDay: isAllDay, memo });
+        await window.itda.events.add({ title, categoryId, location, startAt, endAt, allDay: isAllDay, memo, remindDay: $('ed-remind').checked ? 1 : 0 });
       }
       closeForm();
       onChange?.();

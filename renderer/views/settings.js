@@ -481,6 +481,28 @@ export async function mount(root, initialTab) {
                 <option value="1440">내일</option>
               </select>
             </div>
+
+            <div class="update-row" style="margin-top:18px;">
+              <div>
+                <div class="settings-row-title">당일 알림 팝업</div>
+                <div class="settings-row-desc">일정·할 일에 "당일 알림"을 켜 두면, 그날 잇다를 켰을 때(창이 닫혀 트레이에만 떠 있어도) 작은 창으로 알려줘요. 확인한 건 그날 다시 안 떠요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="dayalert-enabled" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div style="margin-top:8px;">
+              <label class="data-action-row" style="cursor:pointer;">
+                <div><b>가운데 팝업</b><span>화면 가운데에 전체 목록 — 할 일은 여기서 바로 완료 체크할 수 있어요</span></div>
+                <input type="checkbox" id="dayalert-a" />
+              </label>
+              <label class="data-action-row" style="cursor:pointer;">
+                <div><b>구석 카드</b><span>화면 오른쪽 아래에 작게 요약(3건까지) — 작업을 덜 가려요</span></div>
+                <input type="checkbox" id="dayalert-b" />
+              </label>
+              <div style="margin-top:8px;"><button class="btn-secondary" id="dayalert-preview">미리보기</button></div>
+            </div>
           </div>
         </div>
 
@@ -1454,6 +1476,26 @@ export async function mount(root, initialTab) {
         errorToast(e, '저장하지 못했어요');
       }
     });
+
+    // 당일 알림 팝업 — 가운데 팝업/구석 카드는 각각 켜고 끌 수 있고 둘 다 켜면 둘 다 뜬다(둘 다 끄면 가운데 팝업으로 뜸)
+    const dayEnabled = $('dayalert-enabled');
+    const dayA = $('dayalert-a');
+    const dayB = $('dayalert-b');
+    dayEnabled.checked = (await window.itda.settings.get('day_alert_enabled')) !== '0';
+    dayA.checked = (await window.itda.settings.get('day_alert_a')) !== '0';
+    dayB.checked = (await window.itda.settings.get('day_alert_b')) === '1';
+    const saveDay = (key, el, on) => async () => {
+      try {
+        await window.itda.settings.set({ key, value: on(el) });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        el.checked = !el.checked;
+      }
+    };
+    dayEnabled.addEventListener('change', saveDay('day_alert_enabled', dayEnabled, (el) => (el.checked ? '1' : '0')));
+    dayA.addEventListener('change', saveDay('day_alert_a', dayA, (el) => (el.checked ? '1' : '0')));
+    dayB.addEventListener('change', saveDay('day_alert_b', dayB, (el) => (el.checked ? '1' : '0')));
+    $('dayalert-preview').addEventListener('click', () => window.itda.dayAlert.preview().catch((e) => errorToast(e, '미리보기를 열지 못했어요')));
 
     const snoozeSelect = $('notif-snoozeSelect');
     snoozeSelect.value = (await window.itda.settings.get('notif_snooze_minutes')) || '10';

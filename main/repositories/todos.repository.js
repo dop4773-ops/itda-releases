@@ -109,11 +109,11 @@ module.exports = function createTodosRepository(db) {
       return db.prepare("SELECT COUNT(*) AS n FROM todos WHERE deleted_at IS NULL AND is_done = 1").get().n;
     },
 
-    insert({ title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, recurrenceParentId }) {
+    insert({ title, memo, categoryId, dueDate, dueTime, priority, sourceInboxId, recurrenceRule, recurrenceParentId, remindDay }) {
       const info = db
         .prepare(
-          `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, source_inbox_id, recurrence_rule, recurrence_parent_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, source_inbox_id, recurrence_rule, recurrence_parent_id, remind_day)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           title,
@@ -124,7 +124,8 @@ module.exports = function createTodosRepository(db) {
           priority ?? 2,
           sourceInboxId ?? null,
           recurrenceRule ?? null,
-          recurrenceParentId ?? null
+          recurrenceParentId ?? null,
+          remindDay ? 1 : 0
         );
       return { id: info.lastInsertRowid };
     },
@@ -133,12 +134,12 @@ module.exports = function createTodosRepository(db) {
     // 부모의 제목/카테고리/시간/우선순위는 그대로 복사하고 날짜만 다르게.
     insertSeries(parent, occurrenceDates) {
       const stmt = db.prepare(
-        `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, recurrence_rule, recurrence_parent_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO todos (title, memo, category_id, due_date, due_time, priority, recurrence_rule, recurrence_parent_id, remind_day)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const insertMany = db.transaction((dates) => {
         for (const date of dates) {
-          stmt.run(parent.title, parent.memo, parent.category_id, date, parent.due_time, parent.priority, parent.recurrence_rule, parent.id);
+          stmt.run(parent.title, parent.memo, parent.category_id, date, parent.due_time, parent.priority, parent.recurrence_rule, parent.id, parent.remind_day);
         }
       });
       insertMany(occurrenceDates);
@@ -159,11 +160,11 @@ module.exports = function createTodosRepository(db) {
       return db.prepare(`SELECT id FROM todos WHERE ${clauses.join(' AND ')}`).all(...params);
     },
 
-    update({ id, title, memo, categoryId, dueDate, dueTime, priority }) {
+    update({ id, title, memo, categoryId, dueDate, dueTime, priority, remindDay }) {
       db.prepare(
-        `UPDATE todos SET title = ?, memo = ?, category_id = ?, due_date = ?, due_time = ?, priority = ?
+        `UPDATE todos SET title = ?, memo = ?, category_id = ?, due_date = ?, due_time = ?, priority = ?, remind_day = ?
          WHERE id = ?`
-      ).run(title, memo, categoryId, dueDate, dueTime, priority, id);
+      ).run(title, memo, categoryId, dueDate, dueTime, priority, remindDay ? 1 : 0, id);
     },
 
     // 체크박스 토글용: is_done만 뒤집고 status/completed_at을 함께 동기화

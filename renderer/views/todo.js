@@ -549,6 +549,12 @@ export async function mount(root, deepLinkId) {
             <option value="3" ${todo.priority === 3 ? 'selected' : ''}>낮음</option>
           </select>
         </label>
+        <label>당일 알림
+          <select id="tp-remind" class="select" title="마감일에 앱을 켜면 작은 팝업창으로 알려줘요">
+            <option value="0" ${todo.remind_day ? '' : 'selected'}>끔</option>
+            <option value="1" ${todo.remind_day ? 'selected' : ''}>마감일에 알림</option>
+          </select>
+        </label>
         <label>상태
           <select id="tp-status" class="select">
             <option value="todo" ${todo.status === 'todo' ? 'selected' : ''}>해야 할 일</option>
@@ -643,6 +649,9 @@ export async function mount(root, deepLinkId) {
         }
       });
     }
+    $('tp-remind').addEventListener('change', (e) => {
+      saveField({ remindDay: Number(e.target.value) });
+    });
     $('tp-priority').addEventListener('change', (e) => {
       saveField({ priority: Number(e.target.value) });
     });
