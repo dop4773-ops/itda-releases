@@ -13,6 +13,7 @@ const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="non
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
 const CAL_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
 const HOLIDAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22V4"/><path d="M4 4h13l-2.5 4L17 12H4"/></svg>`;
+const MESSENGER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.07 0l2.83-2.83a5 5 0 00-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 00-7.07 0L4.1 13.83a5 5 0 007.07 7.07l1.5-1.5"/></svg>`;
 const BACKUP_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/><path d="M3 12a9 3 0 0018 0"/></svg>`;
 const UPDATE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8M3 16l2.64 2.36A9 9 0 0020.49 15"/></svg>`;
 
@@ -33,6 +34,7 @@ export const TABS = [
   { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON, tone: 'blue' },
   { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON, tone: 'green' },
   { id: 'holiday', label: '공휴일', icon: HOLIDAY_ICON, tone: 'danger' },
+  { id: 'messenger', label: '메신저 연동', icon: MESSENGER_ICON, tone: 'blue' },
   { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON, tone: 'purple' },
   { id: 'update', label: '업데이트', icon: UPDATE_ICON, tone: 'pink' },
 ];
@@ -524,6 +526,72 @@ export async function mount(root, initialTab) {
               <select id="hol-listYear" class="select" style="width:100px;margin-left:auto;"></select>
             </div>
             <div id="hol-list"></div>
+          </div>
+        </div>
+
+        <div class="settings-panel" data-panel="messenger">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>메신저 연동</h3></div>
+            <p class="settings-panel-desc">
+              미래워크 메신저에 등록된 입퇴원·외출외박·병동이동을 읽어와 일정으로 만들어요. 메신저 파일은 <b>읽기만</b> 하고 절대 수정하지 않으며, 대화 내용은 읽지 않아요. 잇다에서 고친 내용도 메신저에는 영향이 없어요.
+            </p>
+            <div class="update-row">
+              <div>
+                <div class="settings-row-title">메신저에서 불러오기</div>
+                <div class="settings-row-desc">켜면 아래 설정대로 일정을 만들고, 메신저에서 지워진 항목은 일정에서도 지워요(휴지통에서 30일 복구).</div>
+              </div>
+              <label class="switch"><input type="checkbox" id="msg-enabled" /><span class="switch-track"><span class="switch-thumb"></span></span></label>
+            </div>
+            <div class="form-row" style="margin-top:12px;">
+              <input type="text" id="msg-path" class="input" style="flex:1;min-width:220px;" placeholder="메신저 DB 파일(messenger.db) 위치" />
+              <button class="btn-secondary" id="msg-detect">자동 찾기</button>
+              <button class="btn-secondary" id="msg-choose">파일 선택…</button>
+              <button class="btn-secondary" id="msg-test">연결 테스트</button>
+            </div>
+            <div id="msg-candidates"></div>
+            <div id="msg-testResult" class="settings-row-desc"></div>
+          </div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>불러올 항목</h3></div>
+            <div id="msg-kinds"></div>
+          </div>
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>거르기와 표시</h3></div>
+            <div class="form-row">
+              <label class="msg-field">내 병동<input type="text" id="msg-wards" class="input" placeholder="예: 5병동, 8병동 (비우면 전체)" /></label>
+              <label class="msg-field">RM<input type="text" id="msg-rms" class="input" placeholder="예: RM8 (비우면 전체)" /></label>
+            </div>
+            <div class="form-row">
+              <label class="msg-field msg-field-sm">지난<span><input type="number" id="msg-past" class="input" min="0" max="365" /> 일</span></label>
+              <label class="msg-field msg-field-sm">앞으로<span><input type="number" id="msg-future" class="input" min="0" max="365" /> 일</span></label>
+              <label class="msg-field">환자 이름 표시
+                <select id="msg-name" class="select">
+                  <option value="mask">가운데 가림 (김○람)</option>
+                  <option value="hide">숨김</option>
+                  <option value="full">전체 표시</option>
+                </select>
+              </label>
+            </div>
+            <div class="settings-row-desc">이름은 여기서 정한 대로만 잇다에 저장돼요. 숨김이면 잇다 DB와 백업에 이름이 남지 않아요.</div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h3>불러오기 주기</h3></div>
+            <div class="form-row">
+              <select id="msg-mode" class="select" style="width:170px;">
+                <option value="manual">수동 (버튼을 누를 때만)</option>
+                <option value="start">잇다를 켤 때</option>
+                <option value="interval">일정 간격마다</option>
+                <option value="daily">매일 정한 시각에</option>
+              </select>
+              <select id="msg-every" class="select" style="width:110px;">
+                <option value="15">15분마다</option><option value="30">30분마다</option><option value="60">1시간마다</option><option value="120">2시간마다</option><option value="360">6시간마다</option>
+              </select>
+              <input type="time" id="msg-daily" class="input" style="width:120px;" />
+              <button class="btn" id="msg-sync" style="margin-left:auto;">지금 불러오기</button>
+            </div>
+            <div id="msg-pending"></div>
+            <div id="msg-last" class="settings-row-desc"></div>
+            <div id="msg-log"></div>
           </div>
         </div>
 
@@ -2092,6 +2160,188 @@ export async function mount(root, initialTab) {
     await renderList();
   }
 
+  // ================= 메신저 연동 =================
+  async function initMessengerPanel() {
+    const GROUPS = [
+      { id: 'admission', label: '입원' },
+      { id: 'discharge', label: '퇴원' },
+      { id: 'outing', label: '외출·외박' },
+      { id: 'transfer', label: '병동이동' },
+    ];
+    let cfg = await window.itda.messenger.getConfig();
+    let categories = [];
+    try {
+      categories = await window.itda.categories.list();
+    } catch (e) {
+      /* 카테고리 없이도 동작 */
+    }
+    const nameModeLabel = { mask: '가운데 가림', hide: '숨김', full: '전체 표시' };
+
+    function fill() {
+      $('msg-enabled').checked = cfg.enabled;
+      $('msg-path').value = cfg.dbPath;
+      $('msg-wards').value = cfg.wards.join(', ');
+      $('msg-rms').value = cfg.rms.join(', ');
+      $('msg-past').value = cfg.pastDays;
+      $('msg-future').value = cfg.futureDays;
+      $('msg-name').value = cfg.nameMode;
+      $('msg-mode').value = cfg.schedule.mode;
+      $('msg-every').value = String(cfg.schedule.everyMin);
+      $('msg-daily').value = cfg.schedule.dailyAt;
+      $('msg-every').style.display = cfg.schedule.mode === 'interval' ? '' : 'none';
+      $('msg-daily').style.display = cfg.schedule.mode === 'daily' ? '' : 'none';
+      $('msg-kinds').innerHTML = GROUPS.map(
+        (g) => `
+        <div class="msg-kind-row" data-group="${g.id}">
+          <label class="checkbox-row" style="min-width:110px;"><input type="checkbox" class="msg-kind-on" ${cfg.kinds[g.id].on ? 'checked' : ''} /> ${g.label}</label>
+          <span class="sm-label">카테고리</span>
+          <select class="select msg-kind-cat">
+            <option value="">없음</option>
+            ${categories.map((c) => `<option value="${c.id}" ${cfg.kinds[g.id].categoryId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>`
+      ).join('');
+    }
+
+    const timers = {};
+    function describe(summary) {
+      const s = summary.stats;
+      return `추가 ${s.added} · 수정 ${s.updated} · 삭제 ${s.removed}${s.conflicts ? ` · 충돌 ${s.conflicts}` : ''}`;
+    }
+    async function save(patch, { quiet = false } = {}) {
+      try {
+        const { config, result } = await window.itda.messenger.setConfig(patch);
+        cfg = config;
+        if (result && !quiet) {
+          if (result.ok) toast(`설정을 일정에 반영했어요 (${describe(result.summary)})`);
+          else errorToast(new Error(result.error), result.error);
+        }
+        await refreshStatus();
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+      }
+    }
+    const later = (key, fn) => {
+      clearTimeout(timers[key]);
+      timers[key] = setTimeout(fn, 600);
+    };
+
+    async function refreshStatus() {
+      let log = [];
+      try {
+        log = (await window.itda.messenger.status()).log;
+      } catch (e) {
+        /* 기록 없이 표시 */
+      }
+      $('msg-last').textContent = log.length
+        ? log[0].summary.error
+          ? `마지막 시도: ${log[0].at} · ${log[0].summary.error}`
+          : `마지막 불러오기: ${log[0].at} · ${describe(log[0].summary)}`
+        : '아직 불러온 적이 없어요.';
+      $('msg-log').innerHTML = log
+        .slice(0, 5)
+        .map((l) => `<div class="msg-log-row"><span>${escapeHtml(l.at.slice(5, 16))}</span><span>${l.trigger === 'auto' ? '자동' : l.trigger === 'config' ? '설정 변경' : '수동'}</span><span>${l.summary.error ? escapeHtml(l.summary.error) : describe(l.summary)}</span></div>`)
+        .join('');
+      // 확인이 필요한 변경(가장 최근에 성공한 실행 기준)
+      const p = log[0] && log[0].summary.pending ? log[0].summary.pending : { deletes: [], vanished: [] };
+      let html = '';
+      if (p.deletes.length)
+        html += `<div class="msg-box msg-warn"><b>일정 ${p.deletes.length}건을 지워야 해요</b> — 한 번에 많이 지우는 거라 확인이 필요해요. 메신저에서 지워졌거나 설정에서 빠진 항목이에요(휴지통에서 30일 복구).
+          <div class="msg-pending-list">${p.deletes.slice(0, 6).map((d) => `<div>${escapeHtml(d.date.slice(5))} · ${escapeHtml(d.title)}</div>`).join('')}${p.deletes.length > 6 ? `<div>…외 ${p.deletes.length - 6}건</div>` : ''}</div>
+          <button class="btn-secondary" id="msg-apply-deletes">삭제 적용</button></div>`;
+      if (p.vanished.length)
+        html += `<div class="msg-box msg-warn"><b>메신저 기록에서 사라진 항목 ${p.vanished.length}건</b> — 메신저 DB가 복원되거나 정리된 경우일 수 있어서 자동으로 지우지 않았어요. 그대로 두면 일정은 유지돼요.
+          <button class="btn-secondary" id="msg-apply-vanished" style="margin-top:8px;">일정에서도 지우기</button></div>`;
+      $('msg-pending').innerHTML = html;
+      $('msg-apply-deletes')?.addEventListener('click', () => runApply({ deletes: true }));
+      $('msg-apply-vanished')?.addEventListener('click', () => runApply({ vanished: true }));
+    }
+
+    async function runApply(payload) {
+      const r = await window.itda.messenger.applyPending(payload);
+      if (r.ok) toast(`적용했어요 (${describe(r.summary)})`);
+      else errorToast(new Error(r.error), r.error);
+      await refreshStatus();
+    }
+
+    // ---- 연결 ----
+    $('msg-enabled').addEventListener('change', () => save({ enabled: $('msg-enabled').checked }));
+    $('msg-path').addEventListener('change', () => save({ dbPath: $('msg-path').value }));
+    $('msg-choose').addEventListener('click', async () => {
+      const f = await window.itda.messenger.chooseDb();
+      if (f) {
+        $('msg-path').value = f;
+        await save({ dbPath: f });
+      }
+    });
+    $('msg-detect').addEventListener('click', async () => {
+      const box = $('msg-candidates');
+      box.innerHTML = '<div class="settings-row-desc">찾는 중…</div>';
+      const found = await window.itda.messenger.detect();
+      box.innerHTML = found.length
+        ? found.map((f) => `<div class="msg-cand"><span>${escapeHtml(f.path)}</span><button class="btn-secondary" data-path="${escapeHtml(f.path).replace(/"/g, '&quot;')}">선택</button></div>`).join('')
+        : '<div class="settings-row-desc">이 PC에서 메신저 DB를 찾지 못했어요. "파일 선택…"으로 직접 골라주세요.</div>';
+      box.querySelectorAll('button[data-path]').forEach((b) =>
+        b.addEventListener('click', async () => {
+          $('msg-path').value = b.dataset.path;
+          box.innerHTML = '';
+          await save({ dbPath: b.dataset.path });
+        })
+      );
+    });
+    $('msg-test').addEventListener('click', async () => {
+      const out = $('msg-testResult');
+      out.textContent = '확인하는 중…';
+      const r = await window.itda.messenger.test($('msg-path').value);
+      if (!r.ok && r.error) out.textContent = `연결하지 못했어요 — ${r.error}`;
+      else if (!r.ok) {
+        const bad = Object.values(r.compat.sources).filter((x) => !x.ok).map((x) => `${x.table}(${x.missing.join(', ')})`);
+        out.textContent = `메신저 구조가 달라요 — ${bad.join(' / ')}. 메신저 버전이 바뀐 것 같아요.`;
+      } else
+        out.textContent = `읽을 수 있어요 (${r.mode === 'copy' ? '메신저가 꺼져 있어 복사본으로' : '메신저가 켜진 채로'}) · 설정한 기간 안에 입퇴원 ${r.counts.admissions}건 · 외출·외박 ${r.counts.outings}건 · 병동이동 ${r.counts.transfers}건${r.unknownTypes.length ? ` · 알 수 없는 구분값: ${r.unknownTypes.join(', ')}` : ''}`;
+    });
+
+    // ---- 항목 / 거르기 ----
+    $('msg-kinds').addEventListener('change', (e) => {
+      const row = e.target.closest('.msg-kind-row');
+      if (!row) return;
+      const cat = row.querySelector('.msg-kind-cat').value;
+      save({ kinds: { [row.dataset.group]: { on: row.querySelector('.msg-kind-on').checked, categoryId: cat ? Number(cat) : null } } });
+    });
+    $('msg-wards').addEventListener('input', () => later('w', () => save({ wards: $('msg-wards').value })));
+    $('msg-rms').addEventListener('input', () => later('r', () => save({ rms: $('msg-rms').value })));
+    $('msg-past').addEventListener('input', () => later('p', () => save({ pastDays: $('msg-past').value })));
+    $('msg-future').addEventListener('input', () => later('f', () => save({ futureDays: $('msg-future').value })));
+    $('msg-name').addEventListener('change', async () => {
+      await save({ nameMode: $('msg-name').value });
+      toast(`환자 이름: ${nameModeLabel[cfg.nameMode]}`);
+    });
+
+    // ---- 주기 / 실행 ----
+    const saveSchedule = () => save({ schedule: { mode: $('msg-mode').value, everyMin: Number($('msg-every').value), dailyAt: $('msg-daily').value || '08:00' } }, { quiet: true }).then(fill);
+    $('msg-mode').addEventListener('change', saveSchedule);
+    $('msg-every').addEventListener('change', saveSchedule);
+    $('msg-daily').addEventListener('change', saveSchedule);
+    $('msg-sync').addEventListener('click', async () => {
+      $('msg-sync').disabled = true;
+      $('msg-sync').textContent = '불러오는 중…';
+      try {
+        const r = await window.itda.messenger.syncNow();
+        if (r.ok) toast(`불러왔어요 (${describe(r.summary)})`);
+        else errorToast(new Error(r.error), r.error);
+      } catch (e) {
+        errorToast(e, '불러오지 못했어요');
+      } finally {
+        $('msg-sync').disabled = false;
+        $('msg-sync').textContent = '지금 불러오기';
+        await refreshStatus();
+      }
+    });
+
+    fill();
+    await refreshStatus();
+  }
+
   // ================= 데이터 & 백업 =================
   function initDataPanel() {
     $('data-openLogsBtn').addEventListener('click', async () => {
@@ -2372,6 +2622,7 @@ export async function mount(root, initialTab) {
   await initAutoBackupPanel();
   initDataPanel();
   await initHolidayPanel();
+  await initMessengerPanel();
   await initUpdatePanel();
   await loadGcalPanel();
 

@@ -13,6 +13,7 @@ const SETTINGS_TAB_KEYWORDS = {
   security: '잠금 비밀번호 PIN',
   convenience: '편의기능 업데이트자동확인 자동실행 시작프로그램 자동추천 관련항목',
   holiday: '공휴일 휴일 빨간날 대체공휴일 연휴',
+  messenger: '메신저 미래워크 입원 퇴원 외출 외박 병동이동 연동 불러오기',
   data: '백업 복원 내보내기 가져오기',
   update: '버전 업데이트확인',
 };

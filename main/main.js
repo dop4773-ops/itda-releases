@@ -111,7 +111,7 @@ if (!gotLock) {
 
     perf('initDb', t);
     t = now();
-    const { openWidgetByType, openPostitById, autoFetchHolidays } = registerIpcHandlers(ipcMain, db, () => mainWindow);
+    const { openWidgetByType, openPostitById, autoFetchHolidays, startMessengerScheduler } = registerIpcHandlers(ipcMain, db, () => mainWindow);
     perf('registerIpcHandlers', t);
     t = now();
     createWindow();
@@ -126,6 +126,7 @@ if (!gotLock) {
     initAutoBackup(db, createSettingsRepository(db)); // 마찬가지로 독립 모듈 — main/auto-backup/index.js 참고
     perf('독립 모듈 초기화(updater/spotlight/shortcut/tray/backup)', t);
     autoFetchHolidays(); // 비동기(네트워크) — 앱 시작을 막지 않고 백그라운드에서
+    startMessengerScheduler(); // 메신저 연동 주기 실행(설정에서 켠 경우에만 동작) — 메신저 파일은 읽기만 한다
     // 위젯은 사용자가 직접 켜기 전에는 절대 자동으로 열리지 않는다(의도적 설계).
     // 위치/크기는 여전히 기억되지만(widget_bounds:*), "다시 켜기"는 사용자가 직접 해야 함.
     // 단, 자동 업데이트로 재시작된 직후만 예외 — 재시작 직전에 열려있던 위젯을 그대로

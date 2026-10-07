@@ -365,7 +365,7 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
     if (confirm.response !== 1) return { cancelled: true };
 
     const tx = db.transaction(() => {
-      ['item_links', 'todo_subtasks', 'todo_tags', 'todos', 'events', 'memos', 'postits', 'inbox_items', 'google_calendar_events'].forEach(
+      ['item_links', 'todo_subtasks', 'todo_tags', 'todos', 'events', 'memos', 'postits', 'inbox_items', 'google_calendar_events', 'messenger_items', 'messenger_links', 'messenger_log'].forEach(
         (t) => db.prepare(`DELETE FROM ${t}`).run()
       );
       db.prepare(`DELETE FROM categories WHERE is_system = 0`).run();

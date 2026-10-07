@@ -14,7 +14,8 @@ const { chosung } = require('./shared/hangul');
 //   v5: inbox_items에 is_favorite 컬럼 (Inbox 별표)
 //   v6: events에 color_hex/text_color 컬럼 (카테고리 없는 일정도 색을 고를 수 있게)
 //   v7: holidays 테이블 (공휴일 자동 불러오기/직접 추가, 달력에 빨간 날짜 표시)
-const SCHEMA_VERSION = 7;
+//   v8: messenger_items/messenger_links/messenger_log (메신저 입퇴원·외출외박·병동이동 불러오기)
+const SCHEMA_VERSION = 8;
 
 // SQLite에 초성 추출 함수를 등록 — search_index 트리거와 초성 검색 쿼리가 SQL 안에서 바로 쓴다.
 // 커넥션마다 등록해야 하므로 initDb / 테스트 양쪽에서 이 함수를 부른다.
@@ -280,6 +281,31 @@ function applyLightweightMigrations(db) {
       );
     `);
     console.log('[itda] 마이그레이션: holidays 테이블 생성');
+  }
+
+  if (!hasTable('messenger_items')) {
+    db.exec(`
+      CREATE TABLE messenger_items (
+        source TEXT NOT NULL, ext_id TEXT NOT NULL, kind TEXT NOT NULL, date TEXT NOT NULL, end_date TEXT,
+        patient TEXT NOT NULL DEFAULT '', rm TEXT NOT NULL DEFAULT '', ward TEXT NOT NULL DEFAULT '', room TEXT NOT NULL DEFAULT '',
+        to_ward TEXT NOT NULL DEFAULT '', to_room TEXT NOT NULL DEFAULT '',
+        time_text TEXT NOT NULL DEFAULT '', time_text2 TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL DEFAULT '',
+        revision INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'active',
+        first_seen_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')), last_seen_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        PRIMARY KEY (source, ext_id)
+      );
+      CREATE INDEX idx_messenger_items_date ON messenger_items(date);
+      CREATE TABLE messenger_links (
+        link_key TEXT PRIMARY KEY, event_id INTEGER NOT NULL,
+        last_title TEXT NOT NULL DEFAULT '', last_auto TEXT NOT NULL DEFAULT '', last_start TEXT NOT NULL DEFAULT '', last_end TEXT NOT NULL DEFAULT '', last_category INTEGER,
+        dismissed INTEGER NOT NULL DEFAULT 0, synced_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+      );
+      CREATE TABLE messenger_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        trigger TEXT NOT NULL DEFAULT 'manual', summary_json TEXT NOT NULL
+      );
+    `);
+    console.log('[itda] 마이그레이션: messenger_items/links/log 테이블 생성');
   }
 
   // 메모 폴더(애플 메모장 스타일 분류) — 카테고리 태그와는 별개 축.

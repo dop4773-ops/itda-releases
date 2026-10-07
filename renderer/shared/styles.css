@@ -2362,3 +2362,21 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .bulk-flag.warn{background:color-mix(in srgb,var(--warning,#E0A73B) 30%,transparent);color:var(--text);}
 .bulk-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;padding-top:10px;margin-top:6px;border-top:1px solid var(--divider);}
 .bulk-bar-right{display:flex;gap:8px;}
+
+/* 설정 > 메신저 연동 */
+.msg-field{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-faint);flex:1;min-width:180px;}
+.msg-field-sm{flex:0 0 auto;min-width:0;}
+.msg-field-sm span{display:flex;align-items:center;gap:6px;color:var(--text-soft);}
+.msg-field-sm .input{width:90px;}
+#msg-name{max-width:260px;}
+.msg-kind-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--divider);}
+.msg-kind-row:last-child{border-bottom:none;}
+.msg-kind-row .select{width:200px;}
+.sm-label{font-size:12px;color:var(--text-faint);}
+.msg-cand{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;margin-bottom:4px;background:var(--bg);border-radius:var(--radius-md);font-size:12px;word-break:break-all;}
+.msg-box{background:var(--bg);border-radius:var(--radius-md);padding:10px 12px;font-size:12.5px;margin:10px 0;line-height:1.55;}
+.msg-warn{background:color-mix(in srgb,var(--warning,#E0A73B) 18%,transparent);}
+.msg-pending-list{font-size:12px;color:var(--text-soft);margin:6px 0 8px;}
+.msg-log-row{display:flex;gap:12px;font-size:11.5px;color:var(--text-faint);padding:3px 0;}
+.msg-log-row span:first-child{width:90px;flex-shrink:0;}
+.msg-log-row span:nth-child(2){width:64px;flex-shrink:0;}

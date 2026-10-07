@@ -60,7 +60,7 @@ function copyAndOpen(dbPath) {
       db.close();
       throw new MessengerError('BUSY', '메신저가 저장하는 중이라 복사본이 온전하지 않아요. 잠시 후 다시 시도해주세요.');
     }
-    return { db, mode: 'copy', close: () => (db.close(), cleanup()) };
+    return { db, mode: 'copy', tmpDir: dir, close: () => (db.close(), cleanup()) };
   } catch (e) {
     cleanup();
     throw e;

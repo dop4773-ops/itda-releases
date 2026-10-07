@@ -92,14 +92,14 @@ test('호환성 검사: 정상 / 컬럼이 빠진 구조 / 표가 없는 DB', (t
 
 test('원본 불변(메신저 꺼짐): 복사본으로 읽고 폴더에 아무것도 안 남기며 임시 폴더도 지운다', (t) => {
   const { dir, file } = setup(t);
-  const tmpBefore = fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith('itda-messenger-')).length;
   const before = { files: listing(dir), hash: sha(file), mtime: fs.statSync(file).mtimeMs };
-  const mode = withReader(file, (h) => (readAll(h.db, WINDOW), h.mode));
+  const { mode, tmpDir, existedWhileOpen } = withReader(file, (h) => (readAll(h.db, WINDOW), { mode: h.mode, tmpDir: h.tmpDir, existedWhileOpen: fs.existsSync(h.tmpDir) }));
   assert.equal(mode, 'copy');
+  assert.ok(existedWhileOpen, '읽는 동안에는 임시 복사본이 있음');
+  assert.ok(!fs.existsSync(tmpDir), '임시 복사본 폴더는 닫은 뒤 지워져야 함');
   assert.deepEqual(listing(dir), before.files, '폴더에 -shm/-wal 같은 보조 파일이 생기면 안 됨');
   assert.equal(sha(file), before.hash);
   assert.equal(fs.statSync(file).mtimeMs, before.mtime);
-  assert.equal(fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith('itda-messenger-')).length, tmpBefore, '임시 복사본 폴더는 지워져야 함');
 });
 
 test('원본 불변(메신저 켜짐): 제자리에서 읽되 아직 반영 안 된 최신 데이터까지 보고, 본체 파일·폴더는 그대로', (t) => {

@@ -1,0 +1,118 @@
+const { app, dialog, BrowserWindow } = require('electron');
+const path = require('node:path');
+const { broadcastDataChanged } = require('../broadcast');
+const cfgStore = require('../messenger/config');
+const { openMessengerDb, checkCompat, readAll, MessengerError } = require('../messenger/reader');
+const { runSync, windowOf } = require('../messenger/sync');
+const { findMessengerDbs } = require('../messenger/detect');
+const { startMessengerScheduler } = require('../messenger/scheduler');
+
+const STRICT = { full: 0, mask: 1, hide: 2 };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+module.exports = function registerMessengerIpc(ipcMain, repos, db) {
+  const { settings, messenger } = repos;
+  let running = false;
+
+  // 메신저를 읽어 잇다 일정에 반영. 읽기 실패는 던지지 않고 {ok:false}로 — 자동 실행이 조용히 넘어갈 수 있게.
+  function syncOnce({ trigger = 'manual', confirm = {}, skipRead = false } = {}) {
+    const config = cfgStore.load(settings);
+    if (!config.enabled) return { ok: false, error: '메신저 연동이 꺼져 있어요.' };
+    if (!skipRead && !config.dbPath) return { ok: false, error: '메신저 DB 파일을 먼저 정해주세요.' };
+    if (running) return { ok: false, error: '이미 불러오는 중이에요.' };
+    running = true;
+    try {
+      const read = (win) => {
+        const h = openMessengerDb(config.dbPath);
+        try {
+          return readAll(h.db, win);
+        } finally {
+          h.close();
+        }
+      };
+      const summary = runSync({ itdaDb: db, repos, config, read, trigger, confirm, skipRead });
+      broadcastDataChanged('event');
+      return { ok: true, summary };
+    } catch (e) {
+      const error = e instanceof MessengerError ? e.message : `불러오지 못했어요: ${e.message}`;
+      messenger.addLog(trigger, { at: new Date().toISOString(), trigger, error });
+      return { ok: false, code: e.code, error };
+    } finally {
+      running = false;
+    }
+  }
+
+  const getWin = () => BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0] || null;
+
+  ipcMain.handle('messenger:getConfig', () => cfgStore.load(settings));
+
+  // 설정 저장. 표시/범위가 바뀌면 바로 일정에 반영한다(이름을 더 엄격하게 바꾸면 저장된 이름부터 즉시 가림 —
+  // 메신저를 못 읽어도 되도록 다시 읽지 않고 일정만 다시 만든다).
+  ipcMain.handle('messenger:setConfig', (event, patch) => {
+    const prev = cfgStore.load(settings);
+    const next = cfgStore.save(settings, patch || {});
+    let result = null;
+    if (next.enabled && prev.enabled) {
+      if (STRICT[next.nameMode] > STRICT[prev.nameMode]) {
+        messenger.scrubNames(next.nameMode);
+        result = syncOnce({ trigger: 'config', skipRead: true });
+      } else {
+        const scope = (c) => ({ k: c.kinds, w: c.wards, r: c.rms, p: c.pastDays, f: c.futureDays, n: c.nameMode, d: c.dbPath });
+        if (!same(scope(prev), scope(next))) result = syncOnce({ trigger: 'config', confirm: { deletes: true } }); // 방금 바꾼 설정으로 인한 삭제는 의도된 것
+      }
+    } else if (next.enabled && !prev.enabled && next.dbPath) {
+      result = syncOnce({ trigger: 'config' });
+    }
+    return { config: next, result };
+  });
+
+  ipcMain.handle('messenger:detect', () => {
+    const roots = [process.env.APPDATA, process.env.LOCALAPPDATA, process.env.PROGRAMDATA, app.getPath('documents')];
+    return findMessengerDbs(roots);
+  });
+
+  ipcMain.handle('messenger:chooseDb', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getWin(), {
+      title: '메신저 DB 파일(messenger.db) 선택',
+      properties: ['openFile'],
+      filters: [{ name: 'SQLite DB', extensions: ['db'] }, { name: '모든 파일', extensions: ['*'] }],
+    });
+    return canceled || !filePaths[0] ? null : filePaths[0];
+  });
+
+  // 연결 테스트 — 읽을 수 있는지, 구조가 맞는지, 기간 안에 몇 건인지만 알려준다(이름 등 내용은 돌려주지 않음).
+  ipcMain.handle('messenger:test', (event, filePath) => {
+    const config = cfgStore.load(settings);
+    const target = String(filePath || config.dbPath || '');
+    try {
+      const h = openMessengerDb(target);
+      try {
+        const compat = checkCompat(h.db);
+        const counts = { admissions: 0, outings: 0, transfers: 0 };
+        let unknownTypes = [];
+        if (compat.ok) {
+          const r = readAll(h.db, windowOf(new Date(), config));
+          counts.admissions = r.admissions.filter((a) => !a.deleted).length;
+          counts.outings = r.outings.filter((o) => !o.deleted && !o.cancelled).length;
+          counts.transfers = r.transfers.filter((t) => !t.deleted).length;
+          unknownTypes = r.unknownAdmissionTypes;
+        }
+        return { ok: compat.ok, mode: h.mode, file: path.basename(target), compat, counts, unknownTypes };
+      } finally {
+        h.close();
+      }
+    } catch (e) {
+      return { ok: false, error: e instanceof MessengerError ? e.message : `읽지 못했어요: ${e.message}` };
+    }
+  });
+
+  ipcMain.handle('messenger:syncNow', () => syncOnce({ trigger: 'manual' }));
+  ipcMain.handle('messenger:applyPending', (event, { deletes = false, vanished = false } = {}) =>
+    syncOnce({ trigger: 'manual', confirm: { deletes: !!deletes, vanished: !!vanished } })
+  );
+  ipcMain.handle('messenger:status', () => ({ log: messenger.listLog(8) }));
+
+  return {
+    startMessengerScheduler: () => startMessengerScheduler({ getConfig: () => cfgStore.load(settings), run: (trigger) => syncOnce({ trigger }) }),
+  };
+};

@@ -294,6 +294,56 @@ CREATE TABLE holidays (
 
 
 -- ------------------------------------------------------------
+-- 12. messenger_* : 메신저(MiraeLanMessenger) 연동 — 읽기 전용으로 불러온 입퇴원/외출외박/병동이동
+--     messenger_items  불러온 항목(환자명은 "이름 표시" 설정대로 가린 값만 저장 — 숨김이면 비어 있음)
+--     messenger_links  잇다 일정과의 연결(+ 마지막으로 우리가 쓴 값 — 사용자가 고쳤는지 알아보는 용도)
+--     messenger_log    불러오기 기록
+-- ------------------------------------------------------------
+CREATE TABLE messenger_items (
+  source         TEXT NOT NULL,                   -- 'admission' | 'outing' | 'transfer'
+  ext_id         TEXT NOT NULL,                   -- 메신저 쪽 고유 ID
+  kind           TEXT NOT NULL,                   -- 'admission' | 'discharge' | 'outing' | 'overnight' | 'transfer'
+  date           TEXT NOT NULL,                   -- 'YYYY-MM-DD' (외박은 시작일)
+  end_date       TEXT,                            -- 외박 종료일
+  patient        TEXT NOT NULL DEFAULT '',
+  rm             TEXT NOT NULL DEFAULT '',
+  ward           TEXT NOT NULL DEFAULT '',
+  room           TEXT NOT NULL DEFAULT '',
+  to_ward        TEXT NOT NULL DEFAULT '',        -- 병동이동 도착
+  to_room        TEXT NOT NULL DEFAULT '',
+  time_text      TEXT NOT NULL DEFAULT '',        -- 메신저의 시간 입력 그대로(자유 텍스트)
+  time_text2     TEXT NOT NULL DEFAULT '',        -- 외출 복귀 시간
+  note           TEXT NOT NULL DEFAULT '',
+  reason         TEXT NOT NULL DEFAULT '',
+  revision       INTEGER NOT NULL DEFAULT 1,
+  state          TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'gone'(메신저에서 삭제·취소됨/조건에서 빠짐)
+  first_seen_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  last_seen_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  PRIMARY KEY (source, ext_id)
+);
+CREATE INDEX idx_messenger_items_date ON messenger_items(date);
+
+CREATE TABLE messenger_links (
+  link_key    TEXT PRIMARY KEY,                   -- 'day:admission:2026-10-07' | 'item:outing:<ext_id>'
+  event_id    INTEGER NOT NULL,
+  last_title  TEXT NOT NULL DEFAULT '',
+  last_auto   TEXT NOT NULL DEFAULT '',           -- 메모의 "자동 영역"을 마지막으로 쓴 값
+  last_start  TEXT NOT NULL DEFAULT '',
+  last_end    TEXT NOT NULL DEFAULT '',
+  last_category INTEGER,                          -- 마지막으로 우리가 지정한 카테고리(사용자가 바꿨는지 구분)
+  dismissed   INTEGER NOT NULL DEFAULT 0,         -- 사용자가 지운 일정 — 다시 불러와도 되살리지 않는다
+  synced_at   TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE TABLE messenger_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  trigger       TEXT NOT NULL DEFAULT 'manual',
+  summary_json  TEXT NOT NULL
+);
+
+
+-- ------------------------------------------------------------
 -- 휴지통(v1) 조회 예시 : deleted_at IS NOT NULL 인 항목
 --   SELECT * FROM todos  WHERE deleted_at IS NOT NULL;
 --   SELECT * FROM events WHERE deleted_at IS NOT NULL;

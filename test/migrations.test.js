@@ -12,7 +12,7 @@ function oldDb() {
   db.exec(SCHEMA);
   db.exec('DROP INDEX IF EXISTS idx_todos_status');
   db.exec('DROP INDEX IF EXISTS idx_memos_folder');
-  for (const t of ['item_links', 'memo_folders', 'memo_attachments', 'todo_subtasks', 'google_calendar_events', 'holidays']) {
+  for (const t of ['item_links', 'memo_folders', 'memo_attachments', 'todo_subtasks', 'google_calendar_events', 'holidays', 'messenger_items', 'messenger_links', 'messenger_log']) {
     db.exec(`DROP TABLE IF EXISTS ${t}`);
   }
   db.exec('ALTER TABLE todos DROP COLUMN status');
@@ -35,7 +35,7 @@ const version = (db) => db.pragma('user_version', { simple: true });
 test('구버전 DB → 마이그레이션 → 누락분 전부 복구 + 버전 스탬프', () => {
   const db = oldDb();
   runLightweightMigrations(db);
-  for (const t of ['item_links', 'memo_folders', 'todo_subtasks', 'memo_attachments', 'google_calendar_events', 'holidays']) {
+  for (const t of ['item_links', 'memo_folders', 'todo_subtasks', 'memo_attachments', 'google_calendar_events', 'holidays', 'messenger_items', 'messenger_links', 'messenger_log']) {
     assert.ok(hasTable(db, t), `${t} 테이블 생성됨`);
   }
   assert.ok(hasCol(db, 'todos', 'status'));

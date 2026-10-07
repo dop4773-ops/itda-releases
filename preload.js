@@ -122,6 +122,16 @@ contextBridge.exposeInMainWorld('itda', {
     getAuto: () => ipcRenderer.invoke('holidays:getAuto'),
     setAuto: (on) => ipcRenderer.invoke('holidays:setAuto', on),
   },
+  messenger: {
+    getConfig: () => ipcRenderer.invoke('messenger:getConfig'),
+    setConfig: (patch) => ipcRenderer.invoke('messenger:setConfig', patch),
+    detect: () => ipcRenderer.invoke('messenger:detect'),
+    chooseDb: () => ipcRenderer.invoke('messenger:chooseDb'),
+    test: (filePath) => ipcRenderer.invoke('messenger:test', filePath),
+    syncNow: () => ipcRenderer.invoke('messenger:syncNow'),
+    applyPending: (payload) => ipcRenderer.invoke('messenger:applyPending', payload),
+    status: () => ipcRenderer.invoke('messenger:status'),
+  },
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),
     getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),
