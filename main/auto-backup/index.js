@@ -23,7 +23,10 @@ const path = require('path');
 
 const PERIOD_MS = { daily: 24 * 60 * 60 * 1000, weekly: 7 * 24 * 60 * 60 * 1000, monthly: 30 * 24 * 60 * 60 * 1000 };
 const CHECK_INTERVAL_MS = 10 * 60 * 1000; // ponytail: 10분 단위 정밀도가 상한선. 더 정확한 시각이 필요하면 이 값을 줄이면 됨
-const KEEP = 5; // ponytail: 최근 5개만 보관하는 고정 정책. 세대별 보관(일간 7개+주간 4개 등)이 필요해지면 그때 추가
+// 보관 정책: 최근 RECENT_KEEP개는 전부 + 그보다 오래된 건 주마다 하나씩 최근 WEEKLY_KEEP주치 — 매일 백업이면 약 5주 전까지 돌아갈 수 있다.
+const RECENT_KEEP = 7;
+const WEEKLY_KEEP = 4;
+const PREMIGRATE_KEEP = 3; // DB 구조를 바꾸는 업데이트 직전 백업은 따로 최근 3개만
 
 function defaultBackupsDir() {
   return path.join(app.getPath('userData'), 'backups');
@@ -57,13 +60,42 @@ function isDueNow(period, timeStr, weekday, monthday, now) {
   return true;
 }
 
+// 파일명 itda-auto-2026-10-07T03-00-00-000Z.db → 그 주 월요일 날짜('2026-10-05'). 읽을 수 없으면 null.
+function weekKeyOf(name) {
+  const m = /^itda-auto-(\d{4})-(\d{2})-(\d{2})T/.exec(name);
+  if (!m) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const monday = new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86400000);
+  return monday.toISOString().slice(0, 10);
+}
+
+// 지울 파일 이름들을 돌려준다(순수 함수). 이름을 해석 못 하는 파일은 건드리지 않는다.
+function selectBackupsToDelete(names) {
+  const sorted = [...names].sort();
+  const older = sorted.slice(0, Math.max(0, sorted.length - RECENT_KEEP));
+  const newestOfWeek = new Map();
+  older.forEach((n) => weekKeyOf(n) && newestOfWeek.set(weekKeyOf(n), n)); // 오름차순이라 같은 주에선 뒤(최신)가 이긴다
+  const keepWeekly = new Set([...newestOfWeek.entries()].sort().slice(-WEEKLY_KEEP).map(([, n]) => n));
+  return older.filter((n) => weekKeyOf(n) && !keepWeekly.has(n));
+}
+
 function pruneOldBackups(dir) {
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => f.startsWith('itda-auto-') && f.endsWith('.db'))
-    .sort();
-  while (files.length > KEEP) {
-    fs.unlinkSync(path.join(dir, files.shift()));
+  const names = fs.readdirSync(dir).filter((f) => f.startsWith('itda-auto-') && f.endsWith('.db'));
+  selectBackupsToDelete(names).forEach((n) => fs.unlinkSync(path.join(dir, n)));
+}
+
+// DB 구조(user_version)를 올리는 마이그레이션 직전에 db.js가 부른다. VACUUM INTO는 동기식이고
+// WAL에 남은 최신 데이터까지 일관되게 담는다. 실패해도 앱 시작은 막지 않는다(로그만).
+function backupBeforeMigration(db, fromVersion, dir = defaultBackupsDir()) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    db.prepare('VACUUM INTO ?').run(path.join(dir, `itda-premigrate-v${fromVersion}-${stamp}.db`));
+    const files = fs.readdirSync(dir).filter((f) => f.startsWith('itda-premigrate-') && f.endsWith('.db')).sort();
+    files.slice(0, Math.max(0, files.length - PREMIGRATE_KEEP)).forEach((f) => fs.unlinkSync(path.join(dir, f)));
+    console.log('[itda] 마이그레이션 전 백업 완료 (v' + fromVersion + ')');
+  } catch (err) {
+    console.error('[itda] 마이그레이션 전 백업 실패(계속 진행):', err.message);
   }
 }
 
@@ -100,4 +132,4 @@ function initAutoBackup(db, settings) {
   setInterval(tick, CHECK_INTERVAL_MS);
 }
 
-module.exports = { initAutoBackup, backupsDir };
+module.exports = { initAutoBackup, backupsDir, selectBackupsToDelete, backupBeforeMigration };

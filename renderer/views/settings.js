@@ -654,7 +654,7 @@ export async function mount(root, initialTab) {
             <div class="update-row">
               <div>
                 <div class="settings-row-title">자동 백업</div>
-                <div class="settings-row-desc">앱이 켜져 있는 동안 이 PC에 주기적으로 자동 저장돼요(백업 폴더에 최근 5개만 보관). 다른 위치로 직접 저장하려면 아래 "백업하기"를 쓰세요.</div>
+                <div class="settings-row-desc">앱이 켜져 있는 동안 이 PC에 주기적으로 자동 저장돼요(최근 7개 + 그 이전은 주마다 하나씩 4주치를 보관). 다른 위치로 직접 저장하려면 아래 "백업하기"를 쓰세요.</div>
               </div>
               <label class="switch">
                 <input type="checkbox" id="backup-autoToggle" />

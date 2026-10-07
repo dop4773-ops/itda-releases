@@ -3,6 +3,7 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { app } = require('electron');
 const { chosung } = require('./shared/hangul');
+const { backupBeforeMigration } = require('./auto-backup');
 
 // 경량 마이그레이션 "세대" 번호. schema/itda_schema_v1.sql은 항상 최신 상태로 관리되므로
 // 새로 만든 DB는 곧바로 이 번호로 스탬프하고, 기존 DB는 runLightweightMigrations가
@@ -56,6 +57,8 @@ function initDb() {
     console.log('[itda] 새 데이터베이스 생성:', dbPath);
   } else {
     console.log('[itda] 기존 데이터베이스 연결:', dbPath);
+    const fromVersion = db.pragma('user_version', { simple: true });
+    if (fromVersion < SCHEMA_VERSION) backupBeforeMigration(db, fromVersion); // 구조가 바뀌는 업데이트 직전 안전 사본
     runLightweightMigrations(db);
   }
 
