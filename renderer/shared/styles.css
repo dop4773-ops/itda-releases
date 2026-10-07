@@ -2526,3 +2526,18 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .backup-kind.k-prerestore{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);}
 .backup-size{color:var(--text-faint);text-align:right;font-size:11.5px;}
 .backup-empty{padding:14px;color:var(--text-faint);font-size:12.5px;}
+
+/* 오늘 화면 팝업 */
+.td-popup{padding-top:10vh;}
+.td-popup-card{width:min(520px,94vw);max-height:76vh;display:flex;flex-direction:column;}
+.td-popup-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.td-popup-head h3{margin:0;}
+.td-popup-body{overflow:auto;min-height:60px;padding-right:2px;}
+.td-popup-body .td-row{padding:6px 0;border-top:1px solid var(--divider);}
+.td-popup-body .td-row:first-child{border-top:none;}
+.td-popup-body .td-line .td-row{border-top:none;}
+.td-txt small.note{color:var(--text-soft);}
+.td-todo-main{display:flex;align-items:flex-start;gap:8px;font-size:14px;font-weight:500;cursor:pointer;}
+.td-todo-main .done{color:var(--text-faint);text-decoration:line-through;}
+.td-todo-meta{font-size:12px;color:var(--text-soft);margin:8px 0 0 24px;}
+.td-todo-memo{font-size:12.5px;line-height:1.6;white-space:pre-wrap;margin:10px 0 0 24px;color:var(--text);}

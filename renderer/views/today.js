@@ -6,6 +6,7 @@
 import { escapeHtml, errorToast, toast, goToHash, isUserTyping } from '../shared/ui-utils.js';
 import { setScreenShortcuts } from '../shared/shell.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
+import { registerEscClose } from '../shared/esc-close.js';
 import { buildTimeline, pickOverdue, OVERDUE_DAYS, toKey, addDays } from '../shared/today-logic.js';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
@@ -41,13 +42,35 @@ export async function mount(root) {
   const page = root.querySelector('.td-page');
   const $ = (id) => page.querySelector(`#${id}`);
 
+  // 상단 카드·할 일을 누르면 화면을 옮기지 않고 팝업으로 보여준다. 일정 상세 모달보다 먼저 만들어 DOM에서 앞에 두면
+  // 목록 팝업 위에 일정 상세가 겹쳐 뜬다(닫으면 목록으로 돌아옴).
+  const state = { events: [], todayTodos: [], overdueAll: [], admItems: null };
+  let popup = null; // { kind: 'events'|'todos'|'overdue'|'adm'|'todo', id? }
+  const popupEl = document.createElement('div');
+  popupEl.className = 'modal-overlay td-popup';
+  popupEl.innerHTML = `<div class="modal-card td-popup-card">
+    <div class="td-popup-head"><h3 id="tdp-title"></h3><button class="btn-icon" id="tdp-close" title="닫기">✕</button></div>
+    <div id="tdp-body" class="td-popup-body"></div>
+    <div class="modal-actions" id="tdp-actions"></div>
+  </div>`;
+  root.appendChild(popupEl);
+  const closePopup = () => {
+    popup = null;
+    popupEl.classList.remove('open');
+  };
+  // 일정 상세 같은 다른 모달이 위에 떠 있으면 그쪽 Esc가 먼저 닫히게, 이 팝업은 혼자 열려 있을 때만 닫는다
+  const offEsc = registerEscClose(() => popupEl.classList.contains('open') && document.querySelectorAll('.modal-overlay.open').length === 1, closePopup);
+  popupEl.addEventListener('click', (e) => {
+    if (e.target === popupEl || e.target.closest('#tdp-close')) closePopup();
+  });
+
   const eventDetailModal = mountEventDetailModal(root, { onChange: () => load() });
 
   const todoRow = (t, { showDate = false } = {}) => `
     <div class="td-row ${t.status === 'done' ? 'done' : ''}" data-todo="${t.id}">
       <input type="checkbox" data-check="${t.id}" ${t.status === 'done' ? 'checked' : ''} />
       <span class="td-dot" style="background:${t.color_hex || 'var(--text-faint)'}"></span>
-      <span class="td-txt" data-go="#/todo/${t.id}">${escapeHtml(t.title)}</span>
+      <span class="td-txt" data-todo-open="${t.id}">${escapeHtml(t.title)}</span>
       ${t.is_favorite ? '<span class="td-flag">★</span>' : t.priority === 1 ? '<span class="td-flag hi">중요</span>' : ''}
       ${showDate ? `<span class="td-when">${md(t.due_date)}</span>` : ''}
     </div>`;
@@ -79,8 +102,65 @@ export async function mount(root) {
 
   function renderOverdue({ recent, older }) {
     $('td-over').innerHTML = recent.length || older
-      ? recent.map((t) => todoRow(t, { showDate: true })).join('') + (older ? `<div class="td-more" data-go="#/todo">${OVERDUE_DAYS}일 이전 ${older}건 더 있어요 →</div>` : '')
+      ? recent.map((t) => todoRow(t, { showDate: true })).join('') + (older ? `<div class="td-more" data-pop="overdue">${OVERDUE_DAYS}일 이전 ${older}건 더 있어요 →</div>` : '')
       : '<div class="td-empty">밀린 할 일이 없어요.</div>';
+  }
+
+  const POP_TITLE = { events: '오늘 일정', todos: '오늘 마감 할 일', overdue: '지난 미완료', adm: '오늘 입퇴원' };
+  async function renderPopup() {
+    const body = popupEl.querySelector('#tdp-body');
+    const actions = popupEl.querySelector('#tdp-actions');
+    const title = popupEl.querySelector('#tdp-title');
+    actions.innerHTML = '<button class="btn-secondary" id="tdp-done">닫기</button>';
+    actions.querySelector('#tdp-done').addEventListener('click', closePopup);
+    if (popup.kind === 'events') {
+      title.textContent = `${POP_TITLE.events} ${state.events.length}건`;
+      body.innerHTML = state.events.length
+        ? buildTimeline(state.events, []).map((r) => `<div class="td-line"><span class="td-time">${escapeHtml(r.time)}</span><div class="td-row" data-event="${r.data.id}"><span class="td-dot" style="background:${r.data.color_hex || 'var(--text-faint)'}"></span><span class="td-txt">${escapeHtml(r.data.title)}</span>${r.data.location ? `<span class="td-when">${escapeHtml(r.data.location)}</span>` : ''}</div></div>`).join('')
+        : '<div class="td-empty">오늘 일정이 없어요.</div>';
+    } else if (popup.kind === 'todos' || popup.kind === 'overdue') {
+      const list = popup.kind === 'todos' ? state.todayTodos : state.overdueAll;
+      title.textContent = `${POP_TITLE[popup.kind]} ${list.length}건`;
+      body.innerHTML = list.length ? list.map((t) => todoRow(t, { showDate: popup.kind === 'overdue' })).join('') : '<div class="td-empty">없어요.</div>';
+    } else if (popup.kind === 'adm') {
+      const list = (state.admItems || []).filter((i) => i.date === today && (i.kind === 'admission' || i.kind === 'discharge')).sort((a, b) => a.timeKey - b.timeKey);
+      title.textContent = `${POP_TITLE.adm} ${list.length}건`;
+      body.innerHTML = list.length
+        ? list.map((i) => `<div class="td-row"><span class="td-pill ${i.kind === 'admission' ? 'in' : 'out'}">${i.kind === 'admission' ? '입원' : '퇴원'}</span><span class="td-txt">${escapeHtml(i.time ? `${i.time} ` : '')}${escapeHtml(i.person)}${i.supText ? `<small>${escapeHtml(i.supText)}</small>` : ''}${i.note ? `<small class="note">${escapeHtml(i.note)}</small>` : ''}</span></div>`).join('')
+        : '<div class="td-empty">오늘 불러온 입원·퇴원이 없어요.</div>';
+      actions.insertAdjacentHTML('afterbegin', '<button class="btn-secondary" id="tdp-copy">전달 문구 복사</button>');
+      actions.querySelector('#tdp-copy').addEventListener('click', () => $('td-copy').click());
+    } else if (popup.kind === 'todo') {
+      let t = null;
+      try {
+        t = await window.itda.todos.get(popup.id);
+      } catch (e) {
+        /* 아래에서 처리 */
+      }
+      if (!popup || popup.kind !== 'todo') return;
+      if (!t) {
+        title.textContent = '할 일';
+        body.innerHTML = '<div class="td-empty">삭제됐거나 찾을 수 없는 할 일이에요.</div>';
+        return;
+      }
+      title.textContent = '할 일';
+      const prio = { 1: '높음', 2: '보통', 3: '낮음' }[t.priority] || '';
+      body.innerHTML = `
+        <label class="td-todo-main"><input type="checkbox" data-check="${t.id}" ${t.status === 'done' ? 'checked' : ''} /><span class="${t.status === 'done' ? 'done' : ''}">${escapeHtml(t.title)}</span></label>
+        <div class="td-todo-meta">${[t.due_date ? `마감 ${t.due_date}${t.due_time ? ` ${String(t.due_time).slice(0, 5)}` : ''}` : '마감 없음', prio && `우선순위 ${prio}`, t.is_favorite ? '★ 즐겨찾기' : ''].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+        ${t.memo ? `<div class="td-todo-memo">${escapeHtml(t.memo)}</div>` : ''}`;
+      actions.insertAdjacentHTML('afterbegin', `${popup.back ? '<button class="btn-secondary" id="tdp-back">← 목록</button>' : ''}<button class="btn-secondary" id="tdp-open">Todo 화면에서 열기</button>`);
+      actions.querySelector('#tdp-back')?.addEventListener('click', () => openPopup(popup.back));
+      actions.querySelector('#tdp-open').addEventListener('click', () => {
+        closePopup();
+        goToHash(`#/todo/${t.id}`);
+      });
+    }
+  }
+  function openPopup(next) {
+    popup = next;
+    popupEl.classList.add('open');
+    renderPopup();
   }
 
   async function load() {
@@ -103,16 +183,20 @@ export async function mount(root) {
       const count = (day, kind) => (admItems ? admItems.filter((i) => i.date === day && i.kind === kind).length : 0);
 
       const stats = [
-        { label: '오늘 일정', value: events.length, go: '#/calendar' },
-        { label: '오늘 마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', go: '#/todo' },
-        { label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', go: '#/todo' },
+        { label: '오늘 일정', value: events.length, pop: 'events' },
+        { label: '오늘 마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos' },
+        { label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue' },
       ];
-      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info' });
+      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info', pop: 'adm' });
       $('td-stats').innerHTML = stats
-        .map((s) => `<button class="td-stat ${s.tone || ''}" ${s.go ? `data-go="${s.go}"` : ''}><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
+        .map((s) => `<button class="td-stat ${s.tone || ''}" data-pop="${s.pop}"><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
         .join('');
       $('td-sub').textContent = `오늘 챙길 것 ${events.length + openToday.length}건${admItems ? ` · 입원 ${count(today, 'admission')} · 퇴원 ${count(today, 'discharge')}` : ''}`;
 
+      state.events = events;
+      state.todayTodos = todayTodos;
+      state.overdueAll = [...openTodos.filter((t) => t.due_date && t.due_date < today)].sort((a, b) => a.due_date.localeCompare(b.due_date));
+      state.admItems = admItems;
       renderTimeline(events, todayTodos);
       $('td-admPanel').style.display = admItems ? '' : 'none';
       if (admItems) renderAdmission(admItems);
@@ -124,13 +208,18 @@ export async function mount(root) {
         ...(admItems ? [`입원 ${count(tomorrow, 'admission')}`, `퇴원 ${count(tomorrow, 'discharge')}`] : []),
       ];
       const nextLines = [...tomEvents.slice(0, 3).map((e) => `${e.all_day ? '종일' : (e.start_at || '').slice(11, 16)} ${e.title}`), ...tomTodos.filter((t) => t.status !== 'done').slice(0, 3).map((t) => `마감 ${t.title}`)];
+      if (popup) renderPopup(); // 팝업이 열려 있으면 바뀐 데이터로 다시 그림
       $('td-next').innerHTML = `<div class="td-next-sum">${nextParts.join(' · ')}</div>${nextLines.map((l) => `<div class="td-next-line">${escapeHtml(l)}</div>`).join('')}`;
     } catch (e) {
       if (!unmounted) errorToast(e, '오늘 요약을 불러오지 못했어요');
     }
   }
 
-  page.addEventListener('click', async (e) => {
+  const onClick = async (e) => {
+    const pop = e.target.closest('[data-pop]');
+    if (pop) return openPopup({ kind: pop.dataset.pop });
+    const todoOpen = e.target.closest('[data-todo-open]');
+    if (todoOpen) return openPopup({ kind: 'todo', id: Number(todoOpen.dataset.todoOpen), back: popup && popup.kind !== 'todo' ? popup : null });
     const go = e.target.closest('[data-go]');
     if (go && !e.target.closest('input')) return goToHash(go.dataset.go);
     const ev = e.target.closest('[data-event]');
@@ -139,8 +228,8 @@ export async function mount(root) {
       const found = evts.find((x) => x.id === Number(ev.dataset.event));
       if (found) eventDetailModal.openDetail({ ...found, source: 'local' });
     }
-  });
-  page.addEventListener('change', async (e) => {
+  };
+  const onChange = async (e) => {
     const id = e.target.dataset?.check;
     if (!id) return;
     try {
@@ -150,7 +239,11 @@ export async function mount(root) {
       e.target.checked = !e.target.checked;
       errorToast(err, '상태를 변경하지 못했어요');
     }
-  });
+  };
+  page.addEventListener('click', onClick);
+  popupEl.addEventListener('click', onClick);
+  page.addEventListener('change', onChange);
+  popupEl.addEventListener('change', onChange);
   $('td-refresh').addEventListener('click', load);
   $('td-copy').addEventListener('click', async () => {
     try {
@@ -191,6 +284,7 @@ export async function mount(root) {
     unmounted = true;
     clearTimeout(timer);
     document.removeEventListener('keydown', onKey);
+    offEsc();
     setScreenShortcuts(null, []);
     if (typeof offDataChanged === 'function') offDataChanged();
   };
