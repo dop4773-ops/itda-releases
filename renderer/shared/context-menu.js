@@ -232,6 +232,10 @@ function openMenu(x, y, item, opts) {
     <div class="ctx-menu-divider"></div>`
     : '';
 
+  // 당일 알림(켜기/끄기) — 일정·할 일만. 현재 상태는 메뉴가 뜬 뒤 읽어 글자를 바꾼다.
+  const remindApi = item.type === 'todo' ? window.itda.todos : item.type === 'event' ? window.itda.events : null;
+  const remindItem = remindApi ? `<button class="ctx-menu-item" data-action="remind">🔔 당일 알림</button>${isTodo ? '' : '<div class="ctx-menu-divider"></div>'}` : '';
+
   const convertItems = convertTargets.length
     ? convertTargets.map((c) => `<button class="ctx-menu-item" data-convert="${c.type}">${c.label}</button>`).join('') +
       `<div class="ctx-menu-divider"></div>`
@@ -241,6 +245,7 @@ function openMenu(x, y, item, opts) {
   menu.className = 'ctx-menu';
   menu.innerHTML = `
     ${todoItems}
+    ${remindItem}
     ${memoItems}
     ${convertItems}
     <button class="ctx-menu-item" data-action="link">🔗 연결</button>
@@ -276,6 +281,29 @@ function openMenu(x, y, item, opts) {
     menu.querySelector('[data-action="due-pick"]').addEventListener('click', () => {
       closeMenu();
       opts.onPickDate?.(item); // 실제 날짜 입력 UI는 todo.js의 상세 패널을 그대로 재사용(중복 구현 안 함)
+    });
+  }
+
+  if (remindApi) {
+    const btn = menu.querySelector('[data-action="remind"]');
+    remindApi.get(item.id).then((cur) => {
+      if (cur && btn.isConnected) btn.textContent = cur.remind_day ? '🔔 당일 알림 끄기' : '🔔 당일 알림 켜기';
+    }).catch(() => {});
+    btn.addEventListener('click', async () => {
+      closeMenu();
+      try {
+        const cur = await remindApi.get(item.id);
+        if (!cur) return;
+        if (!cur.remind_day && item.type === 'todo' && !cur.due_date) {
+          toast('마감일을 정한 할 일에만 당일 알림을 켤 수 있어요');
+          return;
+        }
+        const on = cur.remind_day ? 0 : 1;
+        await remindApi.update({ id: item.id, remindDay: on });
+        toast(on ? '당일 알림을 켰어요 · 그날 잇다를 켜면 알려드려요' : '당일 알림을 껐어요');
+      } catch (e) {
+        errorToast(e, '알림을 바꾸지 못했어요');
+      }
     });
   }
 
