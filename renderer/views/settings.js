@@ -291,6 +291,20 @@ export async function mount(root, initialTab) {
           </div>
 
           <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>링크 카드 아이콘</h3></div>
+            <div class="update-row">
+              <div>
+                <div class="settings-row-title">사이트 아이콘 자동 표시</div>
+                <div class="settings-row-desc">켜면 링크 카드가 사이트 아이콘을 구글 서버에서 받아와요. 이때 링크한 사이트의 <b>주소(도메인)가 구글로 전송</b>돼요 — 병원 내부 주소를 링크해 두었다면 꺼 두세요. 꺼져 있으면 첫 글자 아이콘으로 보여요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="dash-linkFavicon" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>대시보드 배치 프리셋</h3></div>
             <p class="settings-panel-desc">미리 만들어둔 카드 배치로 한 번에 정렬해요. 커서를 올리면 예시 구조를 볼 수 있어요. 이후에 직접 옮기거나 크기를 바꾼 카드는 그 위치가 우선돼요. (테마·강조색 조합은 <b>화면 탭</b>의 "디자인 프리셋"에서 관리해요.)</p>
             <div class="form-row" id="dashboard-presetList"></div>
@@ -1876,6 +1890,18 @@ export async function mount(root, initialTab) {
     segRow('dash-headerStyleSeg', ['standard', 'minimal', 'accent', 'label', 'floating', 'hidden'].includes(hsCur) ? hsCur : 'standard',
       [['standard', '기본'], ['minimal', '미니멀'], ['accent', '악센트'], ['label', '라벨'], ['floating', '플로팅'], ['hidden', '숨김']],
       (v) => window.itda.settings.set({ key: 'dashboard_header_style', value: v }));
+
+    // 링크 카드 사이트 아이콘(구글 서버 요청) — 기본 꺼짐, 켜면 link_favicon='1'
+    const favToggle = $('dash-linkFavicon');
+    favToggle.checked = (await window.itda.settings.get('link_favicon')) === '1';
+    favToggle.addEventListener('change', async () => {
+      try {
+        await window.itda.settings.set({ key: 'link_favicon', value: favToggle.checked ? '1' : '0' });
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        favToggle.checked = !favToggle.checked;
+      }
+    });
 
     const listEl = $('dashboard-cardList');
     const defaults = Object.fromEntries(DASHBOARD_CARDS.map((c) => [c.id, c.default]));

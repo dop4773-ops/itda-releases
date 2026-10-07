@@ -225,15 +225,25 @@ function hydrateBlock(el, block) {
         window.itda?.app?.openPath?.(a.getAttribute('data-local-path'));
       });
     });
-    el.querySelectorAll('img[data-fav]').forEach((img) => {
-      const fallback = img.previousElementSibling;
-      img.addEventListener('load', () => {
-        img.style.display = '';
-        if (fallback) fallback.style.display = 'none';
-      });
-      img.addEventListener('error', () => img.remove());
-      img.src = `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(img.dataset.fav)}`;
-    });
+    // 사이트 아이콘은 구글 서버에서 받아오므로(도메인이 구글로 전송됨) 설정에서 켠 경우에만 요청한다 — 기본 꺼짐(이니셜 표시)
+    const favImgs = el.querySelectorAll('img[data-fav]');
+    if (favImgs.length) {
+      window.itda.settings
+        .get('link_favicon')
+        .then((on) => {
+          if (on !== '1') return;
+          favImgs.forEach((img) => {
+            const fallback = img.previousElementSibling;
+            img.addEventListener('load', () => {
+              img.style.display = '';
+              if (fallback) fallback.style.display = 'none';
+            });
+            img.addEventListener('error', () => img.remove());
+            img.src = `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(img.dataset.fav)}`;
+          });
+        })
+        .catch(() => {});
+    }
   }
 
   if (block.type === 'weather') refreshWeather(el, block, false);
