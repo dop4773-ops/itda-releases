@@ -301,6 +301,7 @@ CREATE TABLE holidays (
 --     messenger_items  불러온 항목(환자명은 "이름 표시" 설정대로 가린 값만 저장 — 숨김이면 비어 있음)
 --     messenger_links  잇다 일정과의 연결(+ 마지막으로 우리가 쓴 값 — 사용자가 고쳤는지 알아보는 용도)
 --     messenger_log    불러오기 기록
+--     messenger_supplements  입퇴원 환자별 "보충 입력"(성별·나이·진단·이동수단) — 잇다에만 저장, 일정·구글 캘린더에는 안 나감
 -- ------------------------------------------------------------
 CREATE TABLE messenger_items (
   source         TEXT NOT NULL,                   -- 'admission' | 'outing' | 'transfer'
@@ -343,6 +344,17 @@ CREATE TABLE messenger_log (
   at            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   trigger       TEXT NOT NULL DEFAULT 'manual',
   summary_json  TEXT NOT NULL
+);
+
+CREATE TABLE messenger_supplements (
+  source      TEXT NOT NULL,
+  ext_id      TEXT NOT NULL,
+  gender      TEXT NOT NULL DEFAULT '',          -- '' | '남' | '여'
+  age         INTEGER,                           -- NULL이면 미입력
+  diagnosis   TEXT NOT NULL DEFAULT '',
+  transport   TEXT NOT NULL DEFAULT '',          -- 이동수단(도보·휠체어·침대 등 자유 입력)
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+  PRIMARY KEY (source, ext_id)
 );
 
 

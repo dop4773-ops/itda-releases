@@ -202,6 +202,7 @@ function runSync({ itdaDb, repos, config, read, now = new Date(), trigger = 'man
     unknownAdmissionTypes: data ? data.unknownAdmissionTypes || [] : [],
     skippedRead: skipRead,
   };
+  messenger.purgeSupplements?.(); // 오래된 보충 입력(환자 정보)은 같이 정리
   messenger.addLog(trigger, summary);
   return summary;
 }

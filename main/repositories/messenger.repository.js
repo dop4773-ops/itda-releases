@@ -63,6 +63,39 @@ module.exports = function createMessengerRepository(db) {
       return n;
     },
 
+    // 보충 입력(성별·나이·진단·이동수단) — 'source:ext_id' → {gender, age, diagnosis, transport}
+    supplementsBetween(fromDate, toDate) {
+      const map = {};
+      db.prepare(
+        `SELECT s.* FROM messenger_supplements s JOIN messenger_items i ON i.source = s.source AND i.ext_id = s.ext_id
+         WHERE i.state = 'active' AND i.date <= ? AND COALESCE(i.end_date, i.date) >= ?`
+      )
+        .all(toDate, fromDate)
+        .forEach((r) => (map[`${r.source}:${r.ext_id}`] = { gender: r.gender, age: r.age, diagnosis: r.diagnosis, transport: r.transport }));
+      return map;
+    },
+    // 모두 비우면 행을 지운다. 항목이 없는 id면 저장하지 않는다(false)
+    setSupplement(source, extId, { gender = '', age = null, diagnosis = '', transport = '' }) {
+      if (!getItem.get(source, extId)) return false;
+      if (!gender && age == null && !diagnosis && !transport) {
+        db.prepare('DELETE FROM messenger_supplements WHERE source = ? AND ext_id = ?').run(source, extId);
+        return true;
+      }
+      db.prepare(
+        `INSERT INTO messenger_supplements (source, ext_id, gender, age, diagnosis, transport) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(source, ext_id) DO UPDATE SET gender = excluded.gender, age = excluded.age, diagnosis = excluded.diagnosis, transport = excluded.transport, updated_at = datetime('now','localtime')`
+      ).run(source, extId, gender, age, diagnosis, transport);
+      return true;
+    },
+    // 환자 정보라 오래 쌓아 두지 않는다 — 불러온 항목이 없어졌거나 60일 넘게 지난 날짜의 보충 입력은 지운다
+    purgeSupplements() {
+      return db
+        .prepare(
+          `DELETE FROM messenger_supplements WHERE NOT EXISTS (SELECT 1 FROM messenger_items i WHERE i.source = messenger_supplements.source AND i.ext_id = messenger_supplements.ext_id AND i.date >= date('now', 'localtime', '-60 days'))`
+        )
+        .run().changes;
+    },
+
     getLink: (key) => db.prepare('SELECT * FROM messenger_links WHERE link_key = ?').get(key),
     listLinks: () => db.prepare('SELECT * FROM messenger_links').all(),
     saveLink(l) {

@@ -82,14 +82,24 @@ const personLine = (item, nameMode) => {
   return [item.rm, roomLabel(item.room), name ? `${name}님` : ''].filter(Boolean).join(' ');
 };
 
+// 보충 입력 한 줄: "여/75세 · 진단 요추 골절 · 이동수단 휠체어" — 비어 있으면 ''
+function supplementLine(sup) {
+  if (!sup) return '';
+  const who = [sup.gender, sup.age != null && sup.age !== '' ? `${sup.age}세` : ''].filter(Boolean).join('/');
+  return [who, sup.diagnosis && `진단 ${sup.diagnosis}`, sup.transport && `이동수단 ${sup.transport}`].filter(Boolean).join(' · ');
+}
+
 const sortItems = (a, b) =>
   timeKey(a.time_text) - timeKey(b.time_text) || String(a.ward).localeCompare(String(b.ward)) || String(a.room).localeCompare(String(b.room)) || String(a.ext_id).localeCompare(String(b.ext_id));
 
 // 하루의 입원(또는 퇴원) 전체를 일정 하나로: 제목 "입원 3명", 메모 = 날짜 줄 + 환자별(사람 줄 / 비고 / 시간)
-function buildDaySummary(kind, date, items, { nameMode }) {
+// supplements({'source:ext_id': 보충 입력})를 주면 사람 줄 아래에 한 줄 덧붙인다 — 일정 메모(구글 캘린더로도 나감)에는 주지 않고 전달용 문구에만 쓴다
+function buildDaySummary(kind, date, items, { nameMode, supplements = null }) {
   const out = [dateLabel(date)];
   [...items].sort(sortItems).forEach((it, i, arr) => {
     out.push(personLine(it, nameMode));
+    const sup = supplementLine(supplements && supplements[`${it.source}:${it.ext_id}`]);
+    if (sup) out.push(sup);
     String(it.note || '')
       .split(/\r?\n/)
       .map((l) => l.trim())
@@ -173,7 +183,7 @@ const STRICT = { full: 0, mask: 1, hide: 2 };
 const stricterMode = (a, b) => (STRICT[a] >= STRICT[b] ? a : b);
 
 // 위젯 한 줄에 필요한 값을 미리 계산(이름은 표시 모드대로 가림) — 화면은 계산 없이 그리기만 한다
-function widgetRow(it, mode) {
+function widgetRow(it, mode, sup = null) {
   const name = maskName(it.patient, mode);
   return {
     id: `${it.source}:${it.ext_id}`,
@@ -193,6 +203,8 @@ function widgetRow(it, mode) {
     bucket: timeBucket(it.time_text),
     note: String(it.note || '').trim(),
     reason: String(it.reason || '').trim(),
+    sup: sup ? { gender: sup.gender, age: sup.age, diagnosis: sup.diagnosis, transport: sup.transport } : null,
+    supText: supplementLine(sup),
   };
 }
 
@@ -210,6 +222,7 @@ module.exports = {
   splitMemo,
   buildDaySummary,
   buildItemEvent,
+  supplementLine,
   timeBucket,
   stricterMode,
   widgetRow,

@@ -112,9 +112,10 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db) {
     const config = cfgStore.load(settings);
     if (!config.enabled) return { enabled: false, items: [] };
     const mode = F.stricterMode(['full', 'mask', 'hide'].includes(viewMode) ? viewMode : config.nameMode, config.nameMode);
+    const sups = messenger.supplementsBetween(String(fromDate), String(toDate));
     const items = messenger
       .itemsBetween(String(fromDate), String(toDate))
-      .map((it) => F.widgetRow(it, mode))
+      .map((it) => F.widgetRow(it, mode, sups[`${it.source}:${it.ext_id}`]))
       .sort((a, b) => a.date.localeCompare(b.date) || a.timeKey - b.timeKey || a.ward.localeCompare(b.ward) || a.room.localeCompare(b.room));
     return { enabled: true, storedMode: config.nameMode, mode, kinds: Object.fromEntries(cfgStore.GROUPS.map((g) => [g, config.kinds[g].on])), items };
   });
@@ -126,8 +127,25 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db) {
     const mode = F.stricterMode(['full', 'mask', 'hide'].includes(viewMode) ? viewMode : config.nameMode, config.nameMode);
     const items = messenger.itemsBetween(String(date), String(date)).filter((it) => it.kind === kind);
     if (!items.length) return { text: '' };
-    const s = F.buildDaySummary(kind, String(date), items, { nameMode: mode });
+    const s = F.buildDaySummary(kind, String(date), items, { nameMode: mode, supplements: messenger.supplementsBetween(String(date), String(date)) });
     return { text: `${s.title}\n${s.auto}` };
+  });
+
+  // 입퇴원 환자별 보충 입력 저장 — 입력값은 길이·형식을 정리해서 저장하고, 모두 비우면 지운다
+  ipcMain.handle('messenger:setSupplement', (event, { id, gender, age, diagnosis, transport } = {}) => {
+    const [source, ...rest] = String(id || '').split(':');
+    const extId = rest.join(':');
+    const item = source && extId ? messenger.getItem(source, extId) : null;
+    if (!item || (item.kind !== 'admission' && item.kind !== 'discharge')) throw new Error('입원·퇴원 항목만 보충 입력을 할 수 있어요.');
+    const n = age === '' || age == null ? null : Math.round(Number(age));
+    if (n != null && !(n >= 0 && n <= 120)) throw new Error('나이는 0~120 사이로 입력해주세요.');
+    messenger.setSupplement(source, extId, {
+      gender: gender === '남' || gender === '여' ? gender : '',
+      age: n,
+      diagnosis: String(diagnosis || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+      transport: String(transport || '').replace(/\s+/g, ' ').trim().slice(0, 20),
+    });
+    return { ok: true };
   });
 
   ipcMain.handle('messenger:syncNow', () => syncOnce({ trigger: 'manual' }));

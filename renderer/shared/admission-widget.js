@@ -48,7 +48,9 @@ function rowHtml(it, { showKind = false } = {}) {
   const left = showKind ? kindPill(it.kind) : kindPill(it.kind, it.time || '시간미정');
   const where = it.kind === 'transfer' ? ` · ${escapeHtml(it.ward)} ${escapeHtml(it.room)}→${escapeHtml(it.toWard)} ${escapeHtml(it.toRoom)}` : '';
   const sub = [showKind && it.time ? it.time : '', it.kind === 'outing' || it.kind === 'overnight' ? [it.reason && `사유 ${it.reason}`, it.returnTime && `복귀 ${it.returnTime}`].filter(Boolean).join(' · ') : '', it.note].filter(Boolean).join(' · ');
-  return `<div class="adm-row">${left}<div class="adm-main"><span class="adm-person">${escapeHtml(it.kind === 'transfer' ? [it.name && `${it.name}님`].filter(Boolean).join('') || '병동이동' : it.person)}${where}</span>${sub ? `<span class="adm-note">${escapeHtml(sub)}</span>` : ''}</div></div>`;
+  const editable = it.kind === 'admission' || it.kind === 'discharge'; // 보충 입력(성별·나이·진단·이동수단)은 입원·퇴원만
+  const supBtn = editable ? `<button class="adm-sup-btn" data-act="sup" data-id="${escapeHtml(it.id)}" title="${it.supText ? '보충 정보 고치기' : '보충 정보 입력 (성별·나이·진단·이동수단)'}" aria-label="보충 정보">${it.supText ? '✎' : '＋'}</button>` : '';
+  return `<div class="adm-row" data-id="${escapeHtml(it.id)}">${left}<div class="adm-main"><span class="adm-person">${escapeHtml(it.kind === 'transfer' ? [it.name && `${it.name}님`].filter(Boolean).join('') || '병동이동' : it.person)}${where}</span>${it.supText ? `<span class="adm-sup">${escapeHtml(it.supText)}</span>` : ''}${sub ? `<span class="adm-note">${escapeHtml(sub)}</span>` : ''}</div>${supBtn}</div>`;
 }
 
 function copyToClipboard(text) {
@@ -63,7 +65,7 @@ function copyToClipboard(text) {
 }
 
 export function createAdmissionWidget(container, { openRoute = () => {} } = {}) {
-  const s = { layout: 'summary', date: toKey(new Date()), followToday: true, viewMode: null, data: null, texts: {}, error: '' };
+  const s = { layout: 'summary', date: toKey(new Date()), followToday: true, viewMode: null, data: null, texts: {}, error: '', editing: null };
   try {
     s.viewMode = localStorage.getItem('itda_admission_view') || null;
   } catch (e) {
@@ -147,6 +149,33 @@ export function createAdmissionWidget(container, { openRoute = () => {} } = {}) 
     return blocks.join('');
   }
 
+  // ---------- 보충 입력 편집기: 눌린 행 바로 아래에 펼친다(그리기 후에 끼워 넣음) ----------
+  const TRANSPORTS = ['도보', '휠체어', '침대', '구급차', '자가용'];
+  function mountEditor() {
+    if (!s.editing || !s.data) return;
+    const it = s.data.items.find((i) => i.id === s.editing);
+    const row = it && [...container.querySelectorAll('.adm-row')].find((r) => r.dataset.id === s.editing);
+    if (!row) {
+      s.editing = null;
+      return;
+    }
+    const sup = it.sup || {};
+    const box = document.createElement('div');
+    box.className = 'adm-sup-edit';
+    box.dataset.id = it.id;
+    box.innerHTML = `
+      <div class="adm-sup-grid">
+        <label>성별<select data-f="gender"><option value="">-</option><option value="남" ${sup.gender === '남' ? 'selected' : ''}>남</option><option value="여" ${sup.gender === '여' ? 'selected' : ''}>여</option></select></label>
+        <label>나이<input data-f="age" type="number" min="0" max="120" inputmode="numeric" value="${sup.age ?? ''}" /></label>
+        <label class="wide">진단<input data-f="diagnosis" maxlength="60" value="${escapeHtml(sup.diagnosis || '')}" /></label>
+        <label class="wide">이동수단<input data-f="transport" maxlength="20" list="adm-transports" value="${escapeHtml(sup.transport || '')}" /></label>
+      </div>
+      <datalist id="adm-transports">${TRANSPORTS.map((t) => `<option value="${t}"></option>`).join('')}</datalist>
+      <div class="adm-sup-foot"><small>이 PC의 잇다에만 저장돼요 (캘린더·구글에는 안 나가요)</small><span><button class="adm-copy" data-act="sup-cancel">취소</button> <button class="adm-copy adm-save" data-act="sup-save">저장</button></span></div>`;
+    row.after(box);
+    box.querySelector('[data-f="diagnosis"]').focus();
+  }
+
   // ---------- 그리기 ----------
   function render() {
     const d = s.data;
@@ -177,6 +206,7 @@ export function createAdmissionWidget(container, { openRoute = () => {} } = {}) 
       else body = viewWeek(items);
     }
     container.innerHTML = `${top}<div class="adm-body">${body}</div>`;
+    mountEditor();
   }
 
   async function refresh() {
@@ -228,6 +258,34 @@ export function createAdmissionWidget(container, { openRoute = () => {} } = {}) 
       el.textContent = '복사됨';
       setTimeout(() => el.isConnected && (el.textContent = '복사'), 1500);
     } else if (act === 'settings') openRoute('#/settings/messenger');
+    else if (act === 'sup') {
+      s.editing = s.editing === el.dataset.id ? null : el.dataset.id;
+      render();
+    } else if (act === 'sup-cancel') {
+      s.editing = null;
+      render();
+    } else if (act === 'sup-save') {
+      const box = el.closest('.adm-sup-edit');
+      const v = (f) => box.querySelector(`[data-f="${f}"]`).value;
+      try {
+        await window.itda.messenger.setSupplement({ id: box.dataset.id, gender: v('gender'), age: v('age'), diagnosis: v('diagnosis'), transport: v('transport') });
+        s.editing = null;
+        refresh();
+      } catch (err) {
+        el.textContent = '저장 실패';
+        el.title = String(err.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+      }
+    }
+  });
+  container.addEventListener('keydown', (e) => {
+    const box = e.target.closest?.('.adm-sup-edit');
+    if (!box) return;
+    if (e.key === 'Enter') box.querySelector('[data-act="sup-save"]').click();
+    else if (e.key === 'Escape') {
+      e.stopPropagation();
+      s.editing = null;
+      render();
+    }
   });
   container.addEventListener('change', (e) => {
     if (!e.target.matches('select[data-act="layout"]')) return;
