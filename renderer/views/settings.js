@@ -8,6 +8,7 @@ import { SHORTCUTS, getAllBindings, setBinding, getBinding, acceleratorFromEvent
 import { DASHBOARD_CARDS, DASHBOARD_STYLE_PRESETS, DASH_STYLE_MIGRATE } from './dashboard.js';
 import { LAYOUT_PRESETS, getPreset, scaleForPreview, WIDGET_CARD_IDS } from '../shared/dashboard-layouts.js';
 import { promptText } from '../shared/text-prompt.js';
+import { SETTINGS_TAB_KEYWORDS } from '../shared/settings-index.js';
 
 const SETTINGS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>`;
 const DISPLAY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
@@ -24,20 +25,24 @@ const SLIDERS_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none
 const DASHBOARD_TAB_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg>`;
 const TRASH_MINI_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
 
+// 메뉴는 목적별 묶음(group)으로 나눠 보여준다. 탭 id는 주소(#/settings/<id>)와 빠른 찾기에서도 쓰이니 함부로 바꾸지 않는다.
 export const TABS = [
-  { id: 'display', label: '화면', icon: DISPLAY_ICON, tone: 'blue' },
-  { id: 'dashboard', label: '대시보드', icon: DASHBOARD_TAB_ICON, tone: 'purple' },
-  { id: 'tags', label: '태그', icon: TAG_ICON, tone: 'yellow' },
-  { id: 'widgets', label: '위젯', icon: WIDGET_ICON, tone: 'pink' },
-  { id: 'shortcuts', label: '단축키', icon: KEY_ICON, tone: 'green' },
-  { id: 'security', label: '보안', icon: LOCK_ICON, tone: 'danger' },
-  { id: 'convenience', label: '편의 기능', icon: SLIDERS_ICON, tone: 'blue' },
-  { id: 'gcal', label: 'Google Calendar', icon: CAL_ICON, tone: 'green' },
-  { id: 'holiday', label: '공휴일', icon: HOLIDAY_ICON, tone: 'danger' },
-  { id: 'messenger', label: '메신저 연동', icon: MESSENGER_ICON, tone: 'blue' },
-  { id: 'data', label: '데이터 & 백업', icon: BACKUP_ICON, tone: 'purple' },
-  { id: 'update', label: '업데이트', icon: UPDATE_ICON, tone: 'pink' },
+  { id: 'display', group: '화면', label: '화면', desc: '테마·글꼴·사이드바 등 잇다의 겉모습을 정해요.', icon: DISPLAY_ICON, tone: 'blue' },
+  { id: 'dashboard', group: '홈 화면', label: '대시보드', desc: '대시보드에 보일 카드와 배치를 정해요.', icon: DASHBOARD_TAB_ICON, tone: 'purple' },
+  { id: 'widgets', group: '홈 화면', label: '위젯', desc: '바탕화면에 띄우는 위젯의 투명도와 동작을 정해요.', icon: WIDGET_ICON, tone: 'pink' },
+  { id: 'gcal', group: '연동', label: 'Google Calendar', desc: 'Google 캘린더 일정을 잇다에서 함께 봐요.', icon: CAL_ICON, tone: 'green' },
+  { id: 'holiday', group: '연동', label: '공휴일', desc: '달력에 빨간 날로 표시할 공휴일을 관리해요.', icon: HOLIDAY_ICON, tone: 'danger' },
+  { id: 'messenger', group: '연동', label: '메신저 연동', desc: '메신저의 입퇴원·외출외박을 일정으로 불러와요.', icon: MESSENGER_ICON, tone: 'blue' },
+  { id: 'convenience', group: '동작 · 데이터', label: '편의 기능', desc: '자동 실행, 관련 항목 추천, 알림 등 쓰기 편하게 정해요.', icon: SLIDERS_ICON, tone: 'blue' },
+  { id: 'tags', group: '동작 · 데이터', label: '태그', desc: '카테고리(태그)와 색을 관리해요.', icon: TAG_ICON, tone: 'yellow' },
+  { id: 'shortcuts', group: '동작 · 데이터', label: '단축키', desc: '키보드 단축키를 확인하고 바꿔요.', icon: KEY_ICON, tone: 'green' },
+  { id: 'security', group: '동작 · 데이터', label: '보안', desc: '비밀번호 잠금과 잠긴 메모 표시 방법을 정해요.', icon: LOCK_ICON, tone: 'danger' },
+  { id: 'data', group: '동작 · 데이터', label: '데이터 & 백업', desc: '백업·복원·내보내기와 데이터 정리를 해요.', icon: BACKUP_ICON, tone: 'purple' },
+  { id: 'update', group: '동작 · 데이터', label: '업데이트', desc: '버전을 확인하고 업데이트해요.', icon: UPDATE_ICON, tone: 'pink' },
 ];
+
+// 옛 탭 id(다른 화면·북마크에서 들어오는 주소) → 지금 탭. 탭을 합치거나 나눌 때 여기 한 줄.
+const TAB_ALIAS = {};
 
 export async function mount(root, initialTab) {
   root.innerHTML = `
@@ -50,9 +55,12 @@ export async function mount(root, initialTab) {
 
     <div class="settings-layout">
       <div class="settings-tabs">
-        ${TABS.map(
-          (t, i) => `<button class="settings-tab tone-${t.tone} ${i === 0 ? 'active' : ''}" data-tab="${t.id}"><span class="settings-tab-icon">${t.icon}</span><span>${t.label}</span></button>`
-        ).join('')}
+        <div class="settings-search"><input type="search" id="settings-search" class="input" placeholder="설정 검색 (예: 알림, 백업, 글꼴)" autocomplete="off" /></div>
+        ${TABS.map((t, i) => {
+          const head = i === 0 || TABS[i - 1].group !== t.group ? `<div class="settings-tab-group" data-group="${escapeHtml(t.group)}">${escapeHtml(t.group)}</div>` : '';
+          return `${head}<button class="settings-tab tone-${t.tone} ${i === 0 ? 'active' : ''}" data-tab="${t.id}"><span class="settings-tab-icon">${t.icon}</span><span>${t.label}</span></button>`;
+        }).join('')}
+        <div class="settings-search-empty" id="settings-searchEmpty" style="display:none;">맞는 설정이 없어요</div>
       </div>
       <div class="settings-content">
         <div class="settings-panel active" data-panel="display">
@@ -762,9 +770,62 @@ export async function mount(root, initialTab) {
     });
   });
   // 빠른찾기/커맨드팔레트에서 '#/settings/<탭>' 으로 들어오면 그 탭을 바로 연다
-  if (initialTab && TABS.some((t) => t.id === initialTab)) {
-    root.querySelector(`.settings-tab[data-tab="${initialTab}"]`)?.click();
+  const wantTab = TAB_ALIAS[initialTab] || initialTab;
+  if (wantTab && TABS.some((t) => t.id === wantTab)) {
+    root.querySelector(`.settings-tab[data-tab="${wantTab}"]`)?.click();
   }
+
+  // 탭마다 맨 위에 제목 + 한 줄 설명을, 구역이 3개 이상인 긴 탭엔 구역 바로가기 칩을 붙인다.
+  root.querySelectorAll('.settings-panel').forEach((panel) => {
+    const t = TABS.find((x) => x.id === panel.dataset.panel);
+    if (!t) return;
+    const heads = [...panel.querySelectorAll(':scope > .panel')].map((el) => ({ el, title: el.querySelector('.panel-head h3')?.textContent.trim() })).filter((h) => h.title);
+    const chips =
+      heads.length >= 3
+        ? `<div class="settings-chips">${heads.map((h, i) => `<button type="button" class="settings-chip" data-i="${i}">${escapeHtml(h.title)}</button>`).join('')}</div>`
+        : '';
+    panel.insertAdjacentHTML('afterbegin', `<div class="settings-tab-head"><h2>${escapeHtml(t.label)}</h2><p>${escapeHtml(t.desc || '')}</p>${chips}</div>`);
+    panel.querySelectorAll('.settings-chip').forEach((c) =>
+      c.addEventListener('click', () => heads[Number(c.dataset.i)].el.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    );
+  });
+
+  // 메뉴 위 검색 — 탭 이름과 그 안의 세부 설정 이름(settings-index.js)으로 메뉴를 좁힌다. Enter는 첫 결과 탭으로.
+  const searchEl = $('settings-search');
+  const searchEmpty = $('settings-searchEmpty');
+  function filterTabs() {
+    const q = searchEl.value.trim().toLowerCase().replace(/\s+/g, '');
+    let shown = 0;
+    root.querySelectorAll('.settings-tab').forEach((btn) => {
+      const t = TABS.find((x) => x.id === btn.dataset.tab);
+      const hay = `${t.label} ${t.group} ${SETTINGS_TAB_KEYWORDS[t.id] || ''}`.toLowerCase().replace(/\s+/g, '');
+      const hit = !q || hay.includes(q);
+      btn.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    // 소제목은 그 아래 탭이 하나라도 보일 때만
+    root.querySelectorAll('.settings-tab-group').forEach((g) => {
+      let el = g.nextElementSibling;
+      let any = false;
+      while (el && el.classList.contains('settings-tab')) {
+        if (el.style.display !== 'none') any = true;
+        el = el.nextElementSibling;
+      }
+      g.style.display = any ? '' : 'none';
+    });
+    searchEmpty.style.display = shown ? 'none' : '';
+  }
+  searchEl.addEventListener('input', filterTabs);
+  searchEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const first = [...root.querySelectorAll('.settings-tab')].find((b) => b.style.display !== 'none');
+      if (first) first.click();
+    } else if (e.key === 'Escape' && searchEl.value) {
+      searchEl.value = '';
+      filterTabs();
+      e.stopPropagation();
+    }
+  });
 
   // ================= 사용자 정보 =================
   async function initUserPanel() {
