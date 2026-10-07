@@ -295,13 +295,15 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   }
 
   // ---------- CCRT 엑셀 ----------
+  // 엑셀(COSAS) 일정은 "평가" 카테고리로 — 위 카테고리 선택(사진·글 행용)과 따로 정한다. 없으면 선택된 카테고리를 쓴다.
+  const evalCat = categories.find((c) => c.name.trim() === '평가') || categories.find((c) => /평가/.test(c.name));
   function applyCcrt() {
     const { year, month } = ym();
     const { rows: found, skipped } = ccrtRowsForMonth(ccrt, year, month, $('#bulk-name').value);
     rows = rows.filter((r) => !r.xl);
     found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, include: true, xl: true }));
     $('#bulk-status').textContent = found.length
-      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
+      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요 · ${evalCat ? `"${evalCat.name}" 카테고리로 등록돼요` : '"평가" 카테고리가 없어 위에서 고른 카테고리로 등록돼요'}${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
       : `CCRT명단에 ${year}년 ${month}월 평가일이 없어요.${skipped.length ? ` (${skipped.join(', ')})` : ''}`;
     renderRows();
   }
@@ -319,9 +321,6 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
       return;
     }
     $('#bulk-name-wrap').style.display = '';
-    // 엑셀 행만 있다면 라운딩 카테고리 기본값을 그대로 쓰면 어색하므로 CCRT/인지 카테고리가 있으면 바꿔 준다
-    const c = categories.find((x) => /CCRT|인지/i.test(x.name));
-    if (c && !rows.some((r) => r.cell)) $('#bulk-cat').value = String(c.id);
     $('#bulk-desc').style.display = 'none';
     $('#bulk-drop').classList.add('compact');
     applyCcrt();
@@ -399,10 +398,13 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     $('#bulk-submit').disabled = true;
     try {
       const catId = $('#bulk-cat').value;
-      const { added } = await window.itda.events.addMany({
-        items: picked.map((r) => ({ title: r.title.trim(), date: r.date })),
-        categoryId: catId ? Number(catId) : null,
-      });
+      const toItems = (list) => list.map((r) => ({ title: r.title.trim(), date: r.date }));
+      const groups = [
+        [picked.filter((r) => !r.xl || !evalCat), catId ? Number(catId) : null],
+        [picked.filter((r) => r.xl && evalCat), evalCat ? evalCat.id : null],
+      ].filter(([list]) => list.length);
+      let added = 0;
+      for (const [list, categoryId] of groups) added += (await window.itda.events.addMany({ items: toItems(list), categoryId })).added;
       toast(`일정 ${added}건을 등록했어요`);
       learnFrom(picked);
       close();
