@@ -650,17 +650,17 @@ export async function mount(root, initialTab) {
           </div>
           <div class="panel" style="margin-bottom:16px;">
             <div class="panel-head"><h3>전달용 문구 형식</h3></div>
-            <p class="settings-panel-desc">입퇴원 위젯의 "전달용 문구"와 오늘 화면의 "전달 문구 복사"에 쓰는 형식이에요. 중괄호 <code>{ }</code> 안의 항목은 실제 값으로 바뀌고, 값이 없는 줄은 저절로 빠져요. 아래 항목을 눌러 넣거나 직접 써도 돼요.</p>
-            <div class="cf-grid">
-              <label>머리글<textarea id="cf-header" class="input" rows="2" maxlength="300"></textarea></label>
-              <label>환자 한 명<textarea id="cf-person" class="input" rows="4" maxlength="300"></textarea></label>
+            <p class="settings-panel-desc">입퇴원 위젯의 "전달용 문구"와 오늘 화면의 "전달 문구 복사"에 쓰는 모양이에요. 모양을 고르고, 넣고 싶은 항목만 체크하세요. 값이 없는 항목은 저절로 빠져요.</p>
+            <div class="cf-row"><span class="cf-label">모양</span><span id="cf-presets"></span></div>
+            <div class="cf-row"><span class="cf-label">머리글</span>
+              <label class="cf-check"><input type="checkbox" id="cf-title" /> 제목 (입원 3명)</label>
+              <label class="cf-check"><input type="checkbox" id="cf-date" /> 날짜 (10/7일(수))</label>
             </div>
-            <div class="cf-chips"><span class="cf-chips-label">머리글에 넣기</span><span id="cf-chips-header"></span></div>
-            <div class="cf-chips"><span class="cf-chips-label">환자 줄에 넣기</span><span id="cf-chips-person"></span></div>
-            <div class="form-row" style="margin-top:10px;">
-              <span style="font-size:12.5px;color:var(--text-soft);">환자 사이</span>
-              <select id="cf-gap" class="select" style="width:130px;"><option value="blank">빈 줄 하나</option><option value="line">줄바꿈만</option></select>
-              <button class="btn-secondary" id="cf-reset" style="margin-left:auto;">기본 형식으로</button>
+            <div class="cf-row"><span class="cf-label">환자 정보</span><span id="cf-fields"></span></div>
+            <div class="cf-row"><span class="cf-label">배치</span>
+              <select id="cf-layout" class="select" style="width:150px;"><option value="multi">항목마다 줄 나눠서</option><option value="single">한 줄로 이어서</option></select>
+              <span class="cf-label" style="margin-left:14px;min-width:0;">환자 사이</span>
+              <select id="cf-gap" class="select" style="width:120px;"><option value="blank">빈 줄 하나</option><option value="line">바로 아랫줄</option></select>
             </div>
             <div class="settings-row-title" style="margin-top:12px;">미리보기 <span style="font-weight:400;color:var(--text-faint);">(예시 환자 — 이름은 위의 "이름 표시" 설정대로)</span></div>
             <pre id="cf-preview" class="cf-preview"></pre>
@@ -2594,49 +2594,62 @@ export async function mount(root, initialTab) {
     fill();
     await refreshStatus();
 
-    // ---- 전달용 문구 형식: 템플릿 두 칸 + 간격, 바꾸면 미리보기와 저장이 따라온다 ----
+    // ---- 전달용 문구 형식: 모양 고르기 + 체크박스 → 템플릿으로 바꿔 저장(템플릿 문법은 사용자가 볼 필요 없음) ----
     {
-      const cf = await window.itda.messenger.getCopyFormat();
-      const hEl = $('cf-header');
-      const pEl = $('cf-person');
-      const gEl = $('cf-gap');
-      const fill = (f) => {
-        hEl.value = f.header;
-        pEl.value = f.person;
-        gEl.value = f.gap;
+      const { FIELD_LABELS, PRESETS, DEFAULT_STATE, normalizeState, stateToFormat, matchPreset } = await import('../shared/copy-format-ui.js');
+      let st = DEFAULT_STATE;
+      try {
+        const raw = await window.itda.settings.get('messenger_copy_ui');
+        if (raw) st = normalizeState(JSON.parse(raw));
+        else window.itda.messenger.setCopyFormat(stateToFormat(st)).catch(() => {}); // 처음 열 때 화면에 보이는 모양과 실제 형식을 맞춘다
+      } catch (e) {
+        /* 기본 모양으로 */
+      }
+      $('cf-fields').innerHTML = FIELD_LABELS.map(([k, label]) => `<label class="cf-check"><input type="checkbox" data-field="${k}" /> ${escapeHtml(label)}</label>`).join('');
+      $('cf-presets').innerHTML = Object.entries(PRESETS).map(([k, p]) => `<button type="button" class="cf-chip cf-preset" data-preset="${k}">${escapeHtml(p.label)}</button>`).join('');
+      const paint = () => {
+        $('cf-title').checked = st.title;
+        $('cf-date').checked = st.date;
+        $('cf-layout').value = st.layout;
+        $('cf-gap').value = st.gap;
+        document.querySelectorAll('#cf-fields [data-field]').forEach((c) => (c.checked = !!st.fields[c.dataset.field]));
+        const cur = matchPreset(st);
+        document.querySelectorAll('.cf-preset').forEach((b) => b.classList.toggle('on', b.dataset.preset === cur));
       };
-      const read = () => ({ header: hEl.value, person: pEl.value, gap: gEl.value });
-      fill(cf.format);
-      const chip = (target) => ([tok, hint]) => `<button type="button" class="cf-chip" data-target="${target}" data-token="${escapeHtml(tok)}" title="${escapeHtml(hint)}">${escapeHtml(tok)}</button>`;
-      $('cf-chips-header').innerHTML = cf.tokens.header.map(chip('cf-header')).join('');
-      $('cf-chips-person').innerHTML = cf.tokens.person.map(chip('cf-person')).join('');
       const refreshPreview = async () => {
         try {
-          $('cf-preview').textContent = (await window.itda.messenger.previewCopy({ format: read(), kind: 'admission' })).text || '(비어 있어요)';
+          $('cf-preview').textContent = (await window.itda.messenger.previewCopy({ format: stateToFormat(st), kind: 'admission' })).text || '(비어 있어요 — 넣을 항목을 체크해주세요)';
         } catch (e) {
           $('cf-preview').textContent = '미리보기를 만들지 못했어요';
         }
       };
-      let saveTimer = null;
-      const changed = () => {
-        refreshPreview();
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => window.itda.messenger.setCopyFormat(read()).catch((e) => errorToast(e, '저장하지 못했어요')), 500);
+      const save = async () => {
+        try {
+          await window.itda.messenger.setCopyFormat(stateToFormat(st));
+          await window.itda.settings.set({ key: 'messenger_copy_ui', value: JSON.stringify(st) });
+        } catch (e) {
+          errorToast(e, '저장하지 못했어요');
+        }
       };
-      [hEl, pEl].forEach((el) => el.addEventListener('input', changed));
-      gEl.addEventListener('change', changed);
-      document.querySelector('[data-panel="messenger"]').addEventListener('click', (e) => {
-        const c = e.target.closest('.cf-chip');
-        if (!c) return;
-        const t = $(c.dataset.target);
-        t.focus();
-        t.setRangeText(c.dataset.token, t.selectionStart, t.selectionEnd, 'end');
-        changed();
+      const update = (next) => {
+        st = normalizeState(next);
+        paint();
+        refreshPreview();
+        save();
+      };
+      $('cf-presets').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-preset]');
+        if (b) update(PRESETS[b.dataset.preset].state);
       });
-      $('cf-reset').addEventListener('click', () => {
-        fill(cf.defaults);
-        changed();
+      $('cf-title').addEventListener('change', () => update({ ...st, title: $('cf-title').checked }));
+      $('cf-date').addEventListener('change', () => update({ ...st, date: $('cf-date').checked }));
+      $('cf-layout').addEventListener('change', () => update({ ...st, layout: $('cf-layout').value }));
+      $('cf-gap').addEventListener('change', () => update({ ...st, gap: $('cf-gap').value }));
+      $('cf-fields').addEventListener('change', (e) => {
+        const c = e.target.closest('[data-field]');
+        if (c) update({ ...st, fields: { ...st.fields, [c.dataset.field]: c.checked } });
       });
+      paint();
       refreshPreview();
     }
   }

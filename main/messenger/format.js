@@ -235,7 +235,7 @@ function renderTemplate(tpl, vars) {
     .replace(/\{name\}님/g, vars.name ? `${vars.name}님` : '')
     .split('\n')
     // 값이 비어 구분자만 남은 경우("여/75세"에서 둘 다 없으면 "/", "()")를 걷어낸다. '-'는 목록 머리표일 수 있어 건드리지 않는다
-    .map((line) => fill(line).replace(/\(\s*[/·,|]*\s*\)/g, '').replace(/[ \t]+/g, ' ').replace(/^[\s/·,|]+|[\s/·,|]+$/g, '').trim())
+    .map((line) => fill(line).replace(/\(\s*[/·,|]*\s*\)/g, '').replace(/[ \t]+/g, ' ').replace(/([/·,|])( \1)+/g, '$1').replace(/^[\s/·,|]+|[\s/·,|]+$/g, '').trim())
     .filter(Boolean)
     .join('\n');
 }

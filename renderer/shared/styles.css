@@ -2543,12 +2543,10 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .td-todo-memo{font-size:12.5px;line-height:1.6;white-space:pre-wrap;margin:10px 0 0 24px;color:var(--text);}
 
 /* 설정 > 메신저 연동 > 전달용 문구 형식 */
-.cf-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.cf-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-soft);}
-.cf-grid textarea{font-family:inherit;font-size:12.5px;line-height:1.5;resize:vertical;}
-.cf-chips{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.cf-chips-label{font-size:11.5px;color:var(--text-faint);min-width:84px;}
-.cf-chip{border:1px solid var(--border);background:var(--surface);color:var(--brand);border-radius:var(--radius-pill);padding:1px 9px;font-size:11.5px;font-family:inherit;cursor:pointer;margin-right:4px;}
+.cf-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;margin-top:10px;}
+.cf-label{font-size:12px;color:var(--text-soft);min-width:60px;}
+.cf-check{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;margin-right:6px;}
+.cf-chip{border:1px solid var(--border);background:var(--surface);color:var(--text-soft);border-radius:var(--radius-pill);padding:3px 12px;font-size:12px;font-family:inherit;cursor:pointer;margin-right:6px;}
 .cf-chip:hover{background:var(--bg);}
+.cf-chip.on{border-color:var(--brand);color:var(--brand);background:color-mix(in srgb,var(--brand) 9%,transparent);}
 .cf-preview{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.7;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;margin:6px 0 0;min-height:48px;}
-@media (max-width:760px){.cf-grid{grid-template-columns:1fr;}}
