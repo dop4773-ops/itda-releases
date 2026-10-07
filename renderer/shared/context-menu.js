@@ -347,7 +347,13 @@ function openMenu(x, y, item, opts) {
           const anchor = { getBoundingClientRect: () => ({ left: pos.left, top: pos.top, bottom: pos.top, right: pos.left, width: 0, height: 0 }) };
           const pw = await promptText(anchor, { title: '🔒 잠긴 메모예요', placeholder: '비밀번호', password: true });
           if (!pw) return;
-          const ok = await window.itda.auth.verify(pw);
+          let ok = false;
+          try {
+            ok = await window.itda.auth.verify(pw);
+          } catch (e) {
+            toast((/비밀번호를 여러 번 틀려서[^]*$/.exec(e.message || '') || [])[0] || '확인하지 못했어요');
+            return;
+          }
           if (!ok) {
             toast('비밀번호가 일치하지 않아요');
             return;

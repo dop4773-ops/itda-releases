@@ -1,5 +1,6 @@
 const { hashPassword, verifyPassword } = require('../shared/password');
 const lockState = require('../shared/lock-state');
+const { createThrottle } = require('../shared/auth-throttle');
 
 // 앱 실행 시 비밀번호 잠금 설정. 새 테이블 없이 기존 app_settings를 재사용한다
 // (google-calendar 토큰, theme 등과 같은 패턴).
@@ -8,6 +9,16 @@ const SETTINGS_KEY = 'security_password_hash';
 module.exports = function registerAuthIpc(ipcMain, repos) {
   const { settings } = repos;
   lockState.init(settings);
+  const throttle = createThrottle(settings);
+  // 비밀번호를 확인하는 모든 경로가 거치는 곳 — 연속 실패로 막혀 있으면 맞는 번호여도 확인하지 않고 막는다
+  function check(password, stored) {
+    const wait = throttle.remainingSec();
+    if (wait > 0) throw new Error(`비밀번호를 여러 번 틀려서 잠시 막혔어요. ${wait >= 60 ? `${Math.ceil(wait / 60)}분` : `${wait}초`} 뒤에 다시 시도해주세요.`);
+    const ok = verifyPassword(password, stored);
+    if (ok) throttle.recordSuccess();
+    else throttle.recordFail();
+    return ok;
+  }
 
   ipcMain.handle('auth:getStatus', () => {
     return { enabled: !!settings.get(SETTINGS_KEY) };
@@ -18,7 +29,7 @@ module.exports = function registerAuthIpc(ipcMain, repos) {
   ipcMain.handle('auth:verify', (event, password) => {
     const stored = settings.get(SETTINGS_KEY);
     if (!stored) return true;
-    const ok = verifyPassword(password, stored);
+    const ok = check(password, stored);
     if (ok) lockState.unlock();
     return ok;
   });
@@ -35,7 +46,7 @@ module.exports = function registerAuthIpc(ipcMain, repos) {
       throw new Error('비밀번호는 4자 이상이어야 해요.');
     }
     const stored = settings.get(SETTINGS_KEY);
-    if (stored && !verifyPassword(currentPassword, stored)) {
+    if (stored && !check(currentPassword, stored)) {
       throw new Error('현재 비밀번호가 일치하지 않아요.');
     }
     settings.set(SETTINGS_KEY, hashPassword(newPassword));
@@ -45,7 +56,7 @@ module.exports = function registerAuthIpc(ipcMain, repos) {
   ipcMain.handle('auth:disable', (event, { currentPassword } = {}) => {
     const stored = settings.get(SETTINGS_KEY);
     if (!stored) return { enabled: false };
-    if (!verifyPassword(currentPassword, stored)) {
+    if (!check(currentPassword, stored)) {
       throw new Error('현재 비밀번호가 일치하지 않아요.');
     }
     settings.set(SETTINGS_KEY, '');

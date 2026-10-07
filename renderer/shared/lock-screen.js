@@ -146,7 +146,9 @@ function showLockOverlay() {
           showError('비밀번호가 일치하지 않아요.');
         }
       } catch (e) {
-        showError('확인하는 중 오류가 발생했어요.');
+        // 연속으로 틀려서 막힌 경우 main이 남은 시간을 담은 메시지를 보낸다
+        const m = /비밀번호를 여러 번 틀려서[^]*$/.exec(e.message || '');
+        showError(m ? m[0] : '확인하는 중 오류가 발생했어요.');
       } finally {
         submitBtn.disabled = false;
       }
