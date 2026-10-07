@@ -411,7 +411,7 @@ export async function mount(root, deepLinkId) {
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         ${widgetLaunchButtonHtml('c-scheduleWidgetBtn', '오늘 일정 위젯 열기')}
-        <button class="btn-secondary" id="c-openBulk" title="근무표 사진이나 글로 여러 일정을 한 번에 등록">일괄 등록</button>
+        <button class="btn-secondary" id="c-openBulk" title="근무표 사진·CCRT 평가일 엑셀·글로 여러 일정을 한 번에 등록">일괄 등록</button>
         <button class="btn" id="c-openAdd">+ 새 일정</button>
       </div>
     </div>

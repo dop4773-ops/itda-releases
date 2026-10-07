@@ -1,5 +1,5 @@
 /**
- * 일정 일괄 등록 창 — 월간 근무표 캡처(주) 또는 글 붙여넣기(보조)로 종일 일정을 한 번에 등록한다.
+ * 일정 일괄 등록 창 — 월간 근무표 캡처(주), CCRT 평가일 엑셀, 글 붙여넣기(보조)로 종일 일정을 한 번에 등록한다.
  * 사진에선 글자를 읽지 않고(schedule-image.js) 하늘색 칸의 위치로 날짜를 채운 뒤, 잘라낸 칸 이미지를
  * 보면서 RM 번호/층만 고르면 제목이 만들어진다. 목록은 등록 전에 얼마든지 고칠 수 있다.
  */
@@ -21,6 +21,7 @@ import {
   addLearned,
 } from './schedule-image.js';
 import { SEED_TEMPLATES } from './schedule-seeds.js';
+import { readCcrtSheet, ccrtRowsForMonth } from './ccrt-xlsx.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const attr = (v) => escapeHtml(v).replace(/"/g, '&quot;');
@@ -29,7 +30,8 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   const now = new Date();
   // 근무표는 보통 월말에 다음 달 것이 나오므로, 20일 이후엔 다음 달을 기본값으로
   const base = now.getDate() >= 20 ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : now;
-  let rows = []; // { id, date, title, include, cell?, thumb? } — cell/thumb이 있으면 사진에서 온 행
+  let rows = []; // { id, date, title, include, cell?, thumb?, xl? } — cell/thumb이 있으면 사진, xl이면 CCRT 엑셀에서 온 행
+  let ccrt = null; // 읽어 둔 CCRT명단 시트(달/이름 표시를 바꿀 때 다시 쓴다)
   let nextId = 1;
   let srcCanvas = null;
   let learned = []; // 사용자가 확인해서 등록했던 칸 모양 [{label, v(base64)}] — 설정(schedule_templates)에 저장
@@ -54,13 +56,20 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
             ${categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
           </select>
         </label>
+        <label id="bulk-name-wrap" style="display:none">CCRT 이름
+          <select id="bulk-name" class="select">
+            <option value="full">전체</option>
+            <option value="mask">가림 (김○수)</option>
+            <option value="hide">숨김 (COSAS 2명)</option>
+          </select>
+        </label>
         <span class="bulk-note">하루종일 일정으로 등록돼요</span>
       </div>
-      <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
+      <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. "CCRT명단" 시트가 있는 엑셀 파일을 넣으면 그 달 평가일을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
       <div class="bulk-drop" id="bulk-drop" tabindex="0">
-        <span id="bulk-drop-text">표 캡처를 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요</span>
-        <button class="btn-secondary" id="bulk-pick">사진 파일 선택…</button>
-        <input type="file" id="bulk-file" accept="image/*" hidden />
+        <span id="bulk-drop-text">표 캡처를 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요 · CCRT 엑셀은 파일로</span>
+        <button class="btn-secondary" id="bulk-pick">사진·엑셀 파일 선택…</button>
+        <input type="file" id="bulk-file" accept="image/*,.xlsx" hidden />
       </div>
       <div class="bulk-status" id="bulk-status"></div>
       <details class="bulk-text">
@@ -114,6 +123,15 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
 
   // ---------- 목록 ----------
   function rowHtml(r) {
+    if (r.xl) {
+      return `
+      <div class="bulk-row xl" data-id="${r.id}">
+        <input type="checkbox" class="bulk-inc" ${r.include ? 'checked' : ''} />
+        <input type="date" class="input bulk-date" value="${attr(r.date)}" />
+        <input type="text" class="input bulk-title" value="${attr(r.title)}" />
+        <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
+      </div>`;
+    }
     const p = parseLabel(r.title);
     const floors = [...new Set([...FLOOR_OPTIONS, p && p.floors].filter(Boolean))];
     return `
@@ -150,7 +168,8 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     const rowEl = e.target.closest('.bulk-row');
     if (e.target.classList.contains('bulk-title')) {
       r.title = e.target.value;
-      clearGuess(r, rowEl);
+      if (!r.xl) clearGuess(r, rowEl);
+      if (r.xl) return;
       const p = parseLabel(r.title);
       rowEl.querySelector('.bulk-rm').value = p ? String(p.rm) : '';
       rowEl.querySelector('.bulk-floor').value = p ? p.floors : '';
@@ -275,15 +294,54 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     analyze();
   }
 
+  // ---------- CCRT 엑셀 ----------
+  function applyCcrt() {
+    const { year, month } = ym();
+    const { rows: found, skipped } = ccrtRowsForMonth(ccrt, year, month, $('#bulk-name').value);
+    rows = rows.filter((r) => !r.xl);
+    found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, include: true, xl: true }));
+    $('#bulk-status').textContent = found.length
+      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
+      : `CCRT명단에 ${year}년 ${month}월 평가일이 없어요.${skipped.length ? ` (${skipped.join(', ')})` : ''}`;
+    renderRows();
+  }
+
+  async function loadXlsx(file) {
+    try {
+      const r = await readCcrtSheet(await file.arrayBuffer());
+      if (!r.ok) {
+        $('#bulk-status').textContent = r.reason;
+        return;
+      }
+      ccrt = r;
+    } catch (e) {
+      errorToast(e, '엑셀 파일을 읽을 수 없어요');
+      return;
+    }
+    $('#bulk-name-wrap').style.display = '';
+    // 엑셀 행만 있다면 라운딩 카테고리 기본값을 그대로 쓰면 어색하므로 CCRT/인지 카테고리가 있으면 바꿔 준다
+    const c = categories.find((x) => /CCRT|인지/i.test(x.name));
+    if (c && !rows.some((r) => r.cell)) $('#bulk-cat').value = String(c.id);
+    $('#bulk-desc').style.display = 'none';
+    $('#bulk-drop').classList.add('compact');
+    applyCcrt();
+  }
+  $('#bulk-name').addEventListener('change', () => ccrt && applyCcrt());
+  const loadFile = (f) => (/\.xlsx$/i.test(f.name) ? loadXlsx(f) : loadImage(f));
+
   $('#bulk-month').addEventListener('change', () => {
     const { year, month } = ym();
     // 달만 바꾸면 사진을 다시 분석하지 않고, 사진에서 온 행의 날짜만 새 달 기준으로 다시 계산(고친 제목은 유지)
     rows.filter((r) => r.cell).forEach((r) => (r.date = cellDate(year, month, r.cell.week, r.cell.col)));
-    renderRows();
+    if (ccrt) applyCcrt(); // 엑셀은 달마다 평가일이 다르므로 그 달 것으로 다시 만든다
+    else renderRows();
   });
 
   $('#bulk-pick').addEventListener('click', () => $('#bulk-file').click());
-  $('#bulk-file').addEventListener('change', (e) => e.target.files[0] && loadImage(e.target.files[0]));
+  $('#bulk-file').addEventListener('change', (e) => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+    e.target.value = ''; // 같은 파일을 다시 골라도 반응하게
+  });
   const drop = $('#bulk-drop');
   drop.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -293,8 +351,8 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   drop.addEventListener('drop', (e) => {
     e.preventDefault();
     drop.classList.remove('drag');
-    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
-    if (f) loadImage(f);
+    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/') || /\.xlsx$/i.test(x.name));
+    if (f) loadFile(f);
   });
   function onPaste(e) {
     if (e.target && e.target.id === 'bulk-text') return; // 글 붙여넣기 칸에선 평소대로

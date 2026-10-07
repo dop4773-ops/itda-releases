@@ -2356,6 +2356,7 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .bulk-row .input,.bulk-row .select{width:100%;min-width:0;font-size:12.5px;padding:5px 8px;}
 .bulk-row .select{padding:5px 4px;font-size:12px;}
 .bulk-thumb{width:176px;height:34px;object-fit:contain;border:1px solid var(--divider);border-radius:6px;background:#fff;display:block;}
+.bulk-row.xl{grid-template-columns:18px 128px minmax(120px,1fr) 22px;}
 .bulk-row.is-bad .bulk-title{border-color:var(--danger);}
 .bulk-flag-slot{display:flex;justify-content:center;}
 .bulk-flag{font-size:10.5px;padding:2px 7px;border-radius:999px;background:var(--brand-soft);color:var(--brand);white-space:nowrap;}
