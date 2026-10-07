@@ -9,6 +9,7 @@ const { initDayAlert } = require('./day-alert');
 const { initTray } = require('./tray');
 const { initAutoBackup } = require('./auto-backup');
 const { attachExternalLinkHandler } = require('./shared/external-links');
+const lockState = require('./shared/lock-state');
 const { forceShowAndFocus } = require('./shared/window-focus');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
@@ -121,7 +122,9 @@ if (!gotLock) {
     mainWindow.webContents.once('did-finish-load', () => perf('whenReady→renderer 로드완료', tReady));
     t = now();
     initUpdater(app, ipcMain, mainWindow, createSettingsRepository(db)); // 다른 기능과 결합하지 않는 독립 모듈 — main/updater/index.js 참고
-    const { openSpotlight } = initSpotlight(); // Spotlight식 작은 창(빠른입력/빠른찾기) — main/spotlight
+    const { openSpotlight: openSpotlightRaw } = initSpotlight(); // Spotlight식 작은 창(빠른입력/빠른찾기) — main/spotlight
+    // 잠금 중에 빠른 찾기를 열면 내용이 그대로 검색·노출되므로, 대신 잠금 화면이 있는 본 창을 앞으로 띄운다(빠른 입력은 쓰기 전용이라 그대로 허용)
+    const openSpotlight = (mode) => (mode === 'find' && lockState.isLocked() ? showMainWindow() : openSpotlightRaw(mode));
     initGlobalShortcut(app, () => mainWindow, createSettingsRepository(db), { openSpotlight }); // 마찬가지로 독립 모듈 — main/global-shortcut/index.js 참고
     initDayAlert(db, ipcMain); // 당일 알림 작은 팝업창 — main/day-alert 참고
     initTray(app, () => mainWindow, showMainWindow); // 마찬가지로 독립 모듈 — main/tray/index.js 참고

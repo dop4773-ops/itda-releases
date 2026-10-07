@@ -69,6 +69,7 @@ export async function lockNow() {
 
 function showLockOverlay() {
   overlayOpen = true;
+  window.itda.auth.lock().catch(() => {}); // 빠른 찾기·당일 알림 같은 별도 창도 잠금 중엔 내용을 가린다
   if (!readLockAt()) writeLockAt(); // 최초 실행 시 잠금이면 값이 없으므로 지금 시각으로
   return new Promise((resolve) => {
     const overlay = document.createElement('div');

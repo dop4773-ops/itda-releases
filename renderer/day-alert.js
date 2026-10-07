@@ -26,7 +26,7 @@ const dateLabel = (date) => {
 async function render() {
   const data = await window.itda.dayAlert.get();
   if (!data) return;
-  const n = data.events.length + data.todos.length;
+  const n = data.locked ? data.count : data.events.length + data.todos.length;
   const evRow = (e) =>
     `<div class="da-it"><span class="da-dot" style="${e.color ? `background:${escapeHtml(e.color)}` : ''}"></span><span class="da-t" data-go="#/calendar">${escapeHtml(e.title)}</span><span class="da-s">${e.allDay ? '종일' : escapeHtml(e.time)}</span></div>`;
   const tdRow = (t) =>
@@ -37,6 +37,21 @@ async function render() {
         <div><h3>오늘 챙길 것 ${n}건</h3><small>${dateLabel(data.date)}${data.preview ? ' · 미리보기' : ''}</small></div>
         <button class="da-x" id="da-x" title="나중에 (다음에 켤 때 다시 알려줘요)">✕</button>
       </div>`;
+  if (data.locked) {
+    // 앱이 잠겨 있으면 건수만 알려주고, 내용은 잠금을 푼 뒤에 보여준다
+    root.innerHTML = `
+    <div class="da-card">${head}
+      <div class="da-list"><div class="da-note">🔒 앱이 잠겨 있어요. 잠금을 풀면 내용을 볼 수 있어요.</div></div>
+      <div class="da-foot">
+        <button class="btn-secondary" id="da-later">나중에</button>
+        <button class="btn" id="da-open">잇다 열기</button>
+      </div>
+    </div>`;
+    document.getElementById('da-later').onclick = () => window.itda.dayAlert.close();
+    document.getElementById('da-open').onclick = () => window.itda.widgets.openMainApp('#/');
+    document.getElementById('da-x').onclick = () => window.itda.dayAlert.close();
+    return;
+  }
   if (kind === 'b') {
     // 구석 카드: 앞의 3건만 간단히, 나머지는 "외 N건"과 "모두 보기"
     const rows = [...data.events.map(evRow), ...data.todos.map(tdRow)];

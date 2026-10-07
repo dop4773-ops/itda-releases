@@ -38,6 +38,7 @@ function collect(db, date) {
 }
 
 function initDayAlert(db, ipcMain) {
+  const lockState = require('../shared/lock-state');
   const settings = createSettingsRepository(db);
   const wins = { a: null, b: null };
   let current = null; // 지금 창에 보여 주는 내용 { date, events, todos, pos, preview }
@@ -71,7 +72,7 @@ function initDayAlert(db, ipcMain) {
   }
 
   function showOne(kind) {
-    const bounds = boundsFor(kind, current.count);
+    const bounds = boundsFor(kind, lockState.isLocked() ? 0 : current.count); // 잠금 중엔 건수만 보여주므로 작게
     let w = wins[kind];
     if (w && !w.isDestroyed()) {
       w.setBounds(bounds);
@@ -132,7 +133,9 @@ function initDayAlert(db, ipcMain) {
   setTimeout(tick, 6000).unref?.();
   setInterval(tick, 60 * 1000).unref?.();
 
-  ipcMain.handle('dayAlert:get', () => current);
+  // 잠금 중엔 제목을 내보내지 않고 건수만 — 잠금이 풀리면 열려 있는 팝업을 다시 그린다
+  ipcMain.handle('dayAlert:get', () => (current && lockState.isLocked() ? { ...current, locked: true, events: [], todos: [] } : current));
+  lockState.onUnlock(() => current && ['a', 'b'].forEach((k) => wins[k] && !wins[k].isDestroyed() && showOne(k)));
   ipcMain.handle('dayAlert:close', (e) => {
     // 구석 카드(b)를 닫으면 그 창만, 가운데 팝업(a)을 닫으면 둘 다 — "나중에"는 다음에 켤 때 다시 알려준다
     const w = BrowserWindow.fromWebContents(e.sender);
@@ -141,7 +144,7 @@ function initDayAlert(db, ipcMain) {
   });
   // 보여 준 항목을 오늘은 다시 안 띄운다(미리보기는 기록하지 않음)
   ipcMain.handle('dayAlert:ack', () => {
-    if (current && !current.preview) {
+    if (current && !current.preview && !lockState.isLocked()) {
       const st = readState();
       const keys = new Set(st.seen);
       [...current.events, ...current.todos].forEach((x) => keys.add(x.key));

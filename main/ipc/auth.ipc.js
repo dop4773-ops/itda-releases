@@ -1,4 +1,5 @@
 const { hashPassword, verifyPassword } = require('../shared/password');
+const lockState = require('../shared/lock-state');
 
 // 앱 실행 시 비밀번호 잠금 설정. 새 테이블 없이 기존 app_settings를 재사용한다
 // (google-calendar 토큰, theme 등과 같은 패턴).
@@ -6,6 +7,7 @@ const SETTINGS_KEY = 'security_password_hash';
 
 module.exports = function registerAuthIpc(ipcMain, repos) {
   const { settings } = repos;
+  lockState.init(settings);
 
   ipcMain.handle('auth:getStatus', () => {
     return { enabled: !!settings.get(SETTINGS_KEY) };
@@ -16,7 +18,15 @@ module.exports = function registerAuthIpc(ipcMain, repos) {
   ipcMain.handle('auth:verify', (event, password) => {
     const stored = settings.get(SETTINGS_KEY);
     if (!stored) return true;
-    return verifyPassword(password, stored);
+    const ok = verifyPassword(password, stored);
+    if (ok) lockState.unlock();
+    return ok;
+  });
+
+  // 렌더러의 잠금 화면이 뜰 때(앱 시작·"지금 잠그기"·새로고침) 알려준다 — 비밀번호가 없으면 무시
+  ipcMain.handle('auth:lock', () => {
+    if (settings.get(SETTINGS_KEY)) lockState.lock();
+    return { locked: lockState.isLocked() };
   });
 
   // newPassword: 새로 설정할 비밀번호, currentPassword: 이미 잠금이 켜져 있을 때만 필요(변경 시 본인 확인)
@@ -39,6 +49,7 @@ module.exports = function registerAuthIpc(ipcMain, repos) {
       throw new Error('현재 비밀번호가 일치하지 않아요.');
     }
     settings.set(SETTINGS_KEY, '');
+    lockState.unlock();
     return { enabled: false };
   });
 };

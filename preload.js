@@ -252,6 +252,7 @@ contextBridge.exposeInMainWorld('itda', {
   auth: {
     getStatus: () => ipcRenderer.invoke('auth:getStatus'),
     verify: (password) => ipcRenderer.invoke('auth:verify', password),
+    lock: () => ipcRenderer.invoke('auth:lock'), // 잠금 화면이 떴음을 메인에 알림(별도 창들이 내용을 가리도록)
     setPassword: (payload) => ipcRenderer.invoke('auth:setPassword', payload),
     disable: (payload) => ipcRenderer.invoke('auth:disable', payload),
   },

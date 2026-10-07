@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell } = require('electron');
 const { fileURLToPath } = require('url');
 const { isPerfEnabled } = require('../perf');
+const { openLocalPath } = require('../shared/safe-open');
 
 // 아이템을 바탕화면으로 드래그해서 위젯으로 열 때, "메인 윈도우 밖으로 나갔는지"를
 // renderer가 판단할 수 있도록 메인 윈도우의 현재 화면 좌표/크기를 제공한다.
@@ -39,9 +40,9 @@ module.exports = function registerAppIpc(ipcMain, getMainWindow) {
         /* 변환 실패하면 원문 그대로 시도 */
       }
     }
-    const err = await shell.openPath(target);
-    if (err) console.error('[itda] 경로를 열지 못했어요:', target, err);
-    return { ok: !err, err: err || null };
+    const result = await openLocalPath(shell, target); // 실행 파일·스크립트는 열지 않고 위치만 보여줌(safe-open.js)
+    if (result.err) console.error('[itda] 경로를 열지 못했어요:', target, result.err);
+    return result;
   });
 
   // 위젯 창(포스트잇/일정·할일·메모 낱개 위젯) 전용 — 내용이 다 렌더링된 직후 렌더러가

@@ -1,4 +1,5 @@
 const { shell } = require('electron');
+const { openLocalPath } = require('./safe-open');
 
 // 윈도우 파일 경로(드라이브 문자 C:\... 또는 네트워크 공유 \\서버\공유\...) 판별.
 // rich-text.js의 URL_PATTERN 중 파일 경로 부분과 같은 모양을 그대로 검사한다.
@@ -10,7 +11,7 @@ function openLink(url) {
   } else if (WINDOWS_PATH_PATTERN.test(url)) {
     // 존재하지 않거나 열 수 없는 경로면 openPath가 에러 메시지를 반환하는데,
     // 여기선 별도 UI 알림 채널이 없어 콘솔에만 남긴다(치명적이지 않음 — 클릭 무반응으로 보일 뿐).
-    shell.openPath(url).then((err) => {
+    openLocalPath(shell, url).then(({ err }) => {
       if (err) console.error('[itda] 파일 경로를 열지 못했어요:', url, err);
     });
   }
