@@ -27,6 +27,7 @@ const CHECK_INTERVAL_MS = 10 * 60 * 1000; // ponytail: 10분 단위 정밀도가
 const RECENT_KEEP = 7;
 const WEEKLY_KEEP = 4;
 const PREMIGRATE_KEEP = 3; // DB 구조를 바꾸는 업데이트 직전 백업은 따로 최근 3개만
+const PRERESTORE_KEEP = 3; // 복원으로 덮어쓰기 직전의 현재 상태 사본도 최근 3개만
 
 function defaultBackupsDir() {
   return path.join(app.getPath('userData'), 'backups');
@@ -132,4 +133,37 @@ function initAutoBackup(db, settings) {
   setInterval(tick, CHECK_INTERVAL_MS);
 }
 
-module.exports = { initAutoBackup, backupsDir, selectBackupsToDelete, backupBeforeMigration };
+// 복원으로 현재 DB를 덮어쓰기 직전에 지금 상태를 사본으로 남긴다 — 복원이 마음에 안 들면 이 사본으로 다시 되돌릴 수 있다.
+// 실패하면 던진다(사본 없이 덮어쓰는 것보다 복원을 멈추는 게 안전).
+function backupBeforeRestore(db, dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const file = path.join(dir, `itda-prerestore-${stamp}.db`);
+  db.prepare('VACUUM INTO ?').run(file);
+  const files = fs.readdirSync(dir).filter((f) => f.startsWith('itda-prerestore-') && f.endsWith('.db')).sort();
+  files.slice(0, Math.max(0, files.length - PRERESTORE_KEEP)).forEach((f) => fs.unlinkSync(path.join(dir, f)));
+  return file;
+}
+
+// 설정의 "백업에서 복원" 목록 — 백업 폴더 안의 잇다 백업 파일을 최신순으로
+const KIND_BY_PREFIX = { 'itda-auto-': 'auto', 'itda-premigrate-': 'premigrate', 'itda-prerestore-': 'prerestore' };
+function listBackups(dir) {
+  let names = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch (e) {
+    return [];
+  }
+  return names
+    .map((name) => {
+      const prefix = Object.keys(KIND_BY_PREFIX).find((p) => name.startsWith(p));
+      if (!prefix || !name.endsWith('.db')) return null;
+      const st = fs.statSync(path.join(dir, name));
+      return { name, kind: KIND_BY_PREFIX[prefix], at: st.mtime.toISOString(), size: st.size };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.at.localeCompare(a.at));
+}
+const isBackupName = (name) => /^itda-(auto|premigrate|prerestore)-[A-Za-z0-9._-]+\.db$/.test(String(name));
+
+module.exports = { initAutoBackup, backupsDir, selectBackupsToDelete, backupBeforeMigration, backupBeforeRestore, listBackups, isBackupName };

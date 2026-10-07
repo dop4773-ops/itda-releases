@@ -2,7 +2,8 @@ const { app, dialog, shell, BrowserWindow } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
-const { backupsDir } = require('../auto-backup');
+const { backupsDir, backupBeforeRestore, listBackups, isBackupName } = require('../auto-backup');
+const { SCHEMA_VERSION } = require('../db');
 const { openLogsFolder } = require('../logger');
 
 const DATA_TABLES = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links', 'holidays'];
@@ -21,6 +22,29 @@ function readAllTablesFromDbFile(filePath) {
     return data;
   } finally {
     backupDb.close();
+  }
+}
+
+// 복원할 파일이 정말 쓸 수 있는 잇다 백업인지 미리 본다 — 아무 파일이나 덮어써서 앱이 안 열리는 일을 막는다.
+// 돌려주는 값: { ok:true, counts } 또는 { ok:false, error }
+function inspectBackupFile(filePath) {
+  let bk;
+  try {
+    bk = new Database(filePath, { readonly: true, fileMustExist: true });
+  } catch (e) {
+    return { ok: false, error: '백업 파일을 열 수 없어요. 잇다의 백업(.db) 파일이 맞는지 확인해주세요.' };
+  }
+  try {
+    if (bk.pragma('quick_check', { simple: true }) !== 'ok') return { ok: false, error: '백업 파일이 손상된 것 같아요.' };
+    const has = (t) => !!bk.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
+    if (!['todos', 'events', 'memos', 'categories'].every(has)) return { ok: false, error: '잇다의 백업 파일이 아니에요.' };
+    if (bk.pragma('user_version', { simple: true }) > SCHEMA_VERSION) return { ok: false, error: '더 새로운 버전의 잇다에서 만든 백업이에요. 잇다를 먼저 업데이트해주세요.' };
+    const n = (t) => bk.prepare(`SELECT COUNT(*) n FROM ${t} WHERE deleted_at IS NULL`).get().n;
+    return { ok: true, counts: { todos: n('todos'), events: n('events'), memos: n('memos') } };
+  } catch (e) {
+    return { ok: false, error: '백업 파일을 읽지 못했어요.' };
+  } finally {
+    bk.close();
   }
 }
 
@@ -262,26 +286,28 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
   // 데이터 복원: 선택한 백업 파일로 현재 DB를 완전히 덮어쓴다.
   // 실행 중인 커넥션을 안전하게 바꿔치기하기 어려우므로(다른 모듈들이 이미 이 db 인스턴스로
   // prepared statement를 만들어둔 상태), 파일 교체 후 앱을 재시작해서 깨끗하게 다시 연다.
-  ipcMain.handle('data:restore', async () => {
+  // 순서: 파일 검사 → 확인 → 지금 상태를 사본으로 남김(itda-prerestore-*) → 덮어쓰기 → 재시작.
+  async function restoreFrom(filePath, label) {
     const win = getWin();
-    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
-      title: '복원할 백업 파일 선택',
-      properties: ['openFile'],
-      filters: [{ name: 'SQLite 백업 파일', extensions: ['db'] }],
-    });
-    if (canceled || !filePaths || !filePaths[0]) return { cancelled: true };
-
+    const info = inspectBackupFile(filePath);
+    if (!info.ok) throw new Error(info.error);
+    const c = info.counts;
     const confirm = await dialog.showMessageBox(win, {
       type: 'warning',
       buttons: ['취소', '복원하고 재시작'],
       defaultId: 0,
       cancelId: 0,
       title: '데이터 복원',
-      message: '현재 잇다의 모든 데이터를 백업 파일 내용으로 덮어씁니다.',
-      detail: '이 작업은 되돌릴 수 없습니다. 복원이 끝나면 앱이 자동으로 재시작됩니다.',
+      message: `현재 잇다의 모든 데이터를 이 백업(${label})으로 덮어씁니다.`,
+      detail: `백업 안: 할 일 ${c.todos}건 · 일정 ${c.events}건 · 메모 ${c.memos}건\n\n복원 직전의 현재 상태는 백업 폴더에 "복원 직전" 사본으로 남겨 두니, 마음에 안 들면 그 사본으로 다시 되돌릴 수 있어요. 복원이 끝나면 앱이 자동으로 재시작됩니다.`,
     });
     if (confirm.response !== 1) return { cancelled: true };
 
+    try {
+      backupBeforeRestore(db, backupsDir(repos.settings));
+    } catch (e) {
+      throw new Error('복원 전에 현재 상태를 저장하지 못해서 복원을 멈췄어요: ' + e.message);
+    }
     db.close();
     // WAL 모드 보조 파일이 남아있으면 복원한 DB와 내용이 안 맞을 수 있어 같이 정리한다
     [dbPath + '-wal', dbPath + '-shm'].forEach((p) => {
@@ -291,11 +317,30 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
         /* 없으면 무시 */
       }
     });
-    fs.copyFileSync(filePaths[0], dbPath);
+    fs.copyFileSync(filePath, dbPath);
 
     app.relaunch();
     app.exit(0);
     return { cancelled: false };
+  }
+
+  ipcMain.handle('data:restore', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(getWin(), {
+      title: '복원할 백업 파일 선택',
+      properties: ['openFile'],
+      filters: [{ name: 'SQLite 백업 파일', extensions: ['db'] }],
+    });
+    if (canceled || !filePaths || !filePaths[0]) return { cancelled: true };
+    return restoreFrom(filePaths[0], path.basename(filePaths[0]));
+  });
+
+  // 설정의 "백업 목록"에서 고른 항목으로 복원 — 이름만 받아서 백업 폴더 안의 파일로 한정한다(경로 조작 방지)
+  ipcMain.handle('data:listBackups', () => listBackups(backupsDir(repos.settings)));
+  ipcMain.handle('data:restoreFromBackup', async (event, name) => {
+    if (!isBackupName(name)) throw new Error('백업 파일 이름이 올바르지 않아요.');
+    const file = path.join(backupsDir(repos.settings), name);
+    if (!fs.existsSync(file)) throw new Error('백업 파일을 찾을 수 없어요. 목록을 새로고침해주세요.');
+    return restoreFrom(file, name);
   });
 
   // 데이터 병합: 복원(덮어쓰기)과 달리 현재 데이터는 그대로 두고, 백업 .db 파일 내용을
@@ -418,3 +463,4 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
   });
 };
 module.exports.importAllTables = importAllTables; // 테스트용
+module.exports.inspectBackupFile = inspectBackupFile; // 테스트용

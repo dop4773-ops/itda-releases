@@ -720,6 +720,14 @@ export async function mount(root, initialTab) {
                 <button class="btn-secondary" id="backup-openDirBtn">폴더 열기</button>
               </div>
             </div>
+            <div class="update-row" style="margin-top:14px;">
+              <div>
+                <div class="settings-row-title">백업에서 복원</div>
+                <div class="settings-row-desc">저장된 백업 중 하나를 골라 그 시점으로 되돌려요. 복원하면 현재 데이터는 백업 내용으로 바뀌고 앱이 다시 시작돼요. 복원 직전 상태는 "복원 직전" 사본으로 남아서 다시 되돌릴 수 있어요.</div>
+              </div>
+              <button class="btn-secondary" id="backup-listRefresh">새로고침</button>
+            </div>
+            <div id="backup-list" class="backup-list"></div>
           </div>
           <div class="panel">
             <div class="panel-head"><h3>데이터 & 백업</h3></div>
@@ -2164,6 +2172,46 @@ export async function mount(root, initialTab) {
       }
     };
     await showDir();
+    // 백업 목록 — 고르면 복원(확인 창 → 현재 상태 사본 → 덮어쓰기 → 재시작은 main이 처리)
+    const KIND_LABEL = { auto: '자동', premigrate: '업데이트 직전', prerestore: '복원 직전' };
+    const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+    const fmtWhen = (iso) => {
+      const d = new Date(iso);
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} (${DOW[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(b / 1024))}KB`);
+    const listEl = $('backup-list');
+    async function loadBackupList() {
+      try {
+        const list = await window.itda.data.listBackups();
+        listEl.innerHTML = list.length
+          ? list
+              .map(
+                (b) => `<div class="backup-row"><span class="backup-kind k-${b.kind}">${KIND_LABEL[b.kind]}</span><span class="backup-when">${fmtWhen(b.at)}</span><span class="backup-size">${fmtSize(b.size)}</span><button class="btn-secondary" data-restore="${escapeHtml(b.name)}">복원</button></div>`
+              )
+              .join('')
+          : '<div class="backup-empty">아직 저장된 백업이 없어요. 자동 백업은 설정한 시각에 처음 만들어져요.</div>';
+      } catch (e) {
+        listEl.innerHTML = '<div class="backup-empty">백업 목록을 불러오지 못했어요.</div>';
+      }
+    }
+    listEl.addEventListener('click', async (e) => {
+      const btn = e.target.closest('[data-restore]');
+      if (!btn) return;
+      btn.disabled = true;
+      try {
+        await window.itda.data.restoreFromBackup(btn.dataset.restore);
+        // 취소하지 않았으면 앱이 곧 재시작된다
+      } catch (err) {
+        errorToast(err, '복원하지 못했어요');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    $('backup-listRefresh').addEventListener('click', loadBackupList);
+    await loadBackupList();
+
     $('backup-openDirBtn').addEventListener('click', async () => {
       try {
         await window.itda.data.openBackupsFolder();

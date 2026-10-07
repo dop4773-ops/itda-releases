@@ -139,6 +139,8 @@ contextBridge.exposeInMainWorld('itda', {
   data: {
     backup: () => ipcRenderer.invoke('data:backup'),
     getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),
+    listBackups: () => ipcRenderer.invoke('data:listBackups'),
+    restoreFromBackup: (name) => ipcRenderer.invoke('data:restoreFromBackup', name),
     openBackupsFolder: () => ipcRenderer.invoke('data:openBackupsFolder'),
     openLogsFolder: () => ipcRenderer.invoke('data:openLogsFolder'),
     chooseBackupsDir: () => ipcRenderer.invoke('data:chooseBackupsDir'),
