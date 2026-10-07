@@ -18,6 +18,8 @@ const MESSENGER_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="no
 const BACKUP_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0018 0V5"/><path d="M3 12a9 3 0 0018 0"/></svg>`;
 const UPDATE_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 22v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L21 8M3 16l2.64 2.36A9 9 0 0020.49 15"/></svg>`;
 
+const TEXT_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></svg>`;
+const LAYOUT_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>`;
 const WIDGET_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>`;
 const KEY_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>`;
 const LOCK_ICON = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
@@ -27,7 +29,9 @@ const TRASH_MINI_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="n
 
 // 메뉴는 목적별 묶음(group)으로 나눠 보여준다. 탭 id는 주소(#/settings/<id>)와 빠른 찾기에서도 쓰이니 함부로 바꾸지 않는다.
 export const TABS = [
-  { id: 'display', group: '화면', label: '화면', desc: '테마·글꼴·사이드바 등 잇다의 겉모습을 정해요.', icon: DISPLAY_ICON, tone: 'blue' },
+  { id: 'theme', group: '화면', label: '테마 · 색상', desc: '잇다의 분위기·강조색·다크 모드와 세부 디자인을 정해요.', icon: DISPLAY_ICON, tone: 'blue' },
+  { id: 'text', group: '화면', label: '글자 · 배율', desc: '글꼴, 화면 크기, 글자 색을 정해요.', icon: TEXT_ICON, tone: 'blue' },
+  { id: 'layout', group: '화면', label: '레이아웃', desc: '내 이름, 사이드바, 화면에서 숨길 요소를 정해요.', icon: LAYOUT_ICON, tone: 'blue' },
   { id: 'dashboard', group: '홈 화면', label: '대시보드', desc: '대시보드에 보일 카드와 배치를 정해요.', icon: DASHBOARD_TAB_ICON, tone: 'purple' },
   { id: 'widgets', group: '홈 화면', label: '위젯', desc: '바탕화면에 띄우는 위젯의 투명도와 동작을 정해요.', icon: WIDGET_ICON, tone: 'pink' },
   { id: 'gcal', group: '연동', label: 'Google Calendar', desc: 'Google 캘린더 일정을 잇다에서 함께 봐요.', icon: CAL_ICON, tone: 'green' },
@@ -42,7 +46,7 @@ export const TABS = [
 ];
 
 // 옛 탭 id(다른 화면·북마크에서 들어오는 주소) → 지금 탭. 탭을 합치거나 나눌 때 여기 한 줄.
-const TAB_ALIAS = {};
+const TAB_ALIAS = { display: 'theme' };
 
 export async function mount(root, initialTab) {
   root.innerHTML = `
@@ -63,19 +67,7 @@ export async function mount(root, initialTab) {
         <div class="settings-search-empty" id="settings-searchEmpty" style="display:none;">맞는 설정이 없어요</div>
       </div>
       <div class="settings-content">
-        <div class="settings-panel active" data-panel="display">
-          <div class="panel" style="margin-bottom:16px;">
-            <div class="panel-head"><h3>사용자 정보</h3></div>
-            <div class="form-row">
-              <label style="font-size:12px;color:var(--text-faint);display:flex;flex-direction:column;gap:4px;flex:1;max-width:220px;">
-                이름
-                <input type="text" id="user-nameInput" class="input" placeholder="이름을 입력하세요" />
-              </label>
-            </div>
-            <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">사이드바와 대시보드 인사말에 반영돼요.</p>
-          </div>
-
-          <div class="settings-group-label">디자인</div>
+        <div class="settings-panel active" data-panel="theme">
           <div class="panel" style="margin-bottom:16px;">
             <div class="panel-head"><h3>현재 스타일</h3></div>
             <p class="settings-panel-desc">지금 적용된 테마·강조색·세부 디자인이 실제로 어떻게 보이는지예요.</p>
@@ -98,6 +90,7 @@ export async function mount(root, initialTab) {
             </div>
             <div class="tlp-label" id="theme-liveLabel"></div>
           </div>
+
 
           <div class="panel">
             <div class="panel-head"><h3>전체 테마</h3></div>
@@ -122,6 +115,7 @@ export async function mount(root, initialTab) {
             </div>
           </div>
 
+
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>세부 디자인</h3></div>
             <p class="settings-panel-desc">고른 테마 위에서 형태만 조금씩 조정해요.</p>
@@ -143,6 +137,7 @@ export async function mount(root, initialTab) {
             </div>
           </div>
 
+
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>디자인 프리셋</h3></div>
             <p class="settings-panel-desc">테마·강조색·세부 디자인을 한 번에 적용해요. 아래 "현재 설정 저장"으로 나만의 조합도 만들 수 있어요. (대시보드 카드 배치는 <b>대시보드 탭</b>의 "대시보드 배치 프리셋"에서 따로 관리해요.)</p>
@@ -152,29 +147,9 @@ export async function mount(root, initialTab) {
             </div>
           </div>
 
-          <div class="panel" style="margin-top:16px;">
-            <div class="panel-head"><h3>사이드바</h3></div>
-            <p class="settings-panel-desc">프로그램 통일성을 유지하는 범위에서 사이드바를 개인화해요. 메뉴 순서 변경·즐겨찾기 고정은 준비 중이에요.</p>
-            <div class="update-row">
-              <div><div class="settings-row-title">스타일</div></div>
-              <div class="seg" id="sb-styleSeg"></div>
-            </div>
-            <div class="update-row" style="margin-top:10px;">
-              <div><div class="settings-row-title">메뉴 표시</div></div>
-              <div class="seg" id="sb-labelSeg"></div>
-            </div>
-            <div class="update-row" style="margin-top:10px;">
-              <div><div class="settings-row-title">너비</div><div class="settings-row-desc">접힌 상태에서는 적용되지 않아요.</div></div>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <button class="btn-secondary" id="sb-widthMinus" title="4px 좁게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
-                <input type="range" id="sb-widthRange" style="width:120px;" />
-                <button class="btn-secondary" id="sb-widthPlus" title="4px 넓게" style="padding:3px 9px;font-size:14px;line-height:1;">+</button>
-                <input type="number" id="sb-widthValue" step="1" class="input" style="width:56px;text-align:center;" />
-                <span style="font-size:12px;color:var(--text-faint);">px</span>
-              </div>
-            </div>
-          </div>
+        </div>
 
+        <div class="settings-panel" data-panel="text">
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>글자 &amp; 배율</h3></div>
             <div class="update-row">
@@ -233,6 +208,45 @@ export async function mount(root, initialTab) {
             </div>
           </div>
 
+        </div>
+
+        <div class="settings-panel" data-panel="layout">
+          <div class="panel" style="margin-bottom:16px;">
+            <div class="panel-head"><h3>사용자 정보</h3></div>
+            <div class="form-row">
+              <label style="font-size:12px;color:var(--text-faint);display:flex;flex-direction:column;gap:4px;flex:1;max-width:220px;">
+                이름
+                <input type="text" id="user-nameInput" class="input" placeholder="이름을 입력하세요" />
+              </label>
+            </div>
+            <p style="font-size:11px;color:var(--text-faint);margin:8px 0 0;">사이드바와 대시보드 인사말에 반영돼요.</p>
+          </div>
+
+
+          <div class="panel" style="margin-top:16px;">
+            <div class="panel-head"><h3>사이드바</h3></div>
+            <p class="settings-panel-desc">프로그램 통일성을 유지하는 범위에서 사이드바를 개인화해요. 메뉴 순서 변경·즐겨찾기 고정은 준비 중이에요.</p>
+            <div class="update-row">
+              <div><div class="settings-row-title">스타일</div></div>
+              <div class="seg" id="sb-styleSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div><div class="settings-row-title">메뉴 표시</div></div>
+              <div class="seg" id="sb-labelSeg"></div>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
+              <div><div class="settings-row-title">너비</div><div class="settings-row-desc">접힌 상태에서는 적용되지 않아요.</div></div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <button class="btn-secondary" id="sb-widthMinus" title="4px 좁게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
+                <input type="range" id="sb-widthRange" style="width:120px;" />
+                <button class="btn-secondary" id="sb-widthPlus" title="4px 넓게" style="padding:3px 9px;font-size:14px;line-height:1;">+</button>
+                <input type="number" id="sb-widthValue" step="1" class="input" style="width:56px;text-align:center;" />
+                <span style="font-size:12px;color:var(--text-faint);">px</span>
+              </div>
+            </div>
+          </div>
+
+
           <div class="panel" style="margin-top:16px;">
             <div class="panel-head"><h3>화면 요소</h3></div>
             <div class="update-row">
@@ -256,6 +270,7 @@ export async function mount(root, initialTab) {
               </label>
             </div>
           </div>
+        
         </div>
 
         <div class="settings-panel" data-panel="dashboard">

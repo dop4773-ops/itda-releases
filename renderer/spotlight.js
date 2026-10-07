@@ -42,7 +42,9 @@ const SCREEN_COMMANDS = [
   { icon: '🔍', label: '전체 검색', kw: 'search 검색', route: '#/search' },
   { icon: '⚙️', label: '설정', kw: 'settings 설정 환경설정', route: '#/settings' },
   // 설정 세부 탭 (settings.js TABS와 같은 id — 탭 추가 시 여기도 한 줄)
-  { icon: '🎨', label: '설정 · 화면', kw: '설정 화면 배율 다크모드 테마 글꼴 폰트 글자색', route: '#/settings/display' },
+  { icon: '🎨', label: '설정 · 테마·색상', kw: '', route: '#/settings/theme' },
+  { icon: '🔤', label: '설정 · 글자·배율', kw: '', route: '#/settings/text' },
+  { icon: '🧱', label: '설정 · 레이아웃', kw: '', route: '#/settings/layout' },
   { icon: '📊', label: '설정 · 대시보드', kw: '설정 대시보드 위젯배치 레이아웃', route: '#/settings/dashboard' },
   { icon: '🏷️', label: '설정 · 태그', kw: '설정 태그 카테고리', route: '#/settings/tags' },
   { icon: '🧩', label: '설정 · 위젯', kw: '설정 위젯', route: '#/settings/widgets' },
