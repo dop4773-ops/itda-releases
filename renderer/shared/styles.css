@@ -1089,7 +1089,14 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .sticky-card-flash{animation:stickyFlash 1.6s ease;}
 @keyframes stickyFlash{0%,100%{box-shadow:0 2px 6px rgba(16,24,40,.08);}20%,60%{box-shadow:0 0 0 3px var(--brand), 0 8px 20px rgba(16,24,40,.2);}}
 /* 드래그핸들/서식툴바/핀을 한 줄로 합쳐서 본문 입력칸(card-content)이 세로 공간을 더 쓰게 함 */
-.sticky-card .card-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px;}
+.sticky-card .card-top{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:6px;}
+/* 1줄: 체크·드래그(왼쪽) ↔ 서식툴바(오른쪽) / 2줄: 수정 시각(왼쪽) ↔ 별(오른쪽) / 3줄: 연결 배지(있을 때만) — 모든 카드가 같은 자리 */
+.sticky-card .card-top .notes-list-item-check{grid-column:1;grid-row:1;}
+.sticky-card .card-top .drag-handle{grid-column:2;grid-row:1;}
+.sticky-card .card-top .rich-toolbar{grid-column:3 / 5;grid-row:1;justify-self:end;}
+.sticky-card .card-top .card-meta{grid-column:1 / 4;grid-row:2;}
+.sticky-card .card-top .pin-btn{grid-column:4;grid-row:2;}
+.sticky-card .card-top .postit-convert-badges{grid-column:1 / 5;grid-row:3;}
 /* 포스트잇 배경(STICKY_COLORS)은 항상 밝은 파스텔 고정색이라 다크모드 여부와 무관함 —
    그런데 글자색을 var(--text)로 쓰면 다크모드에서 거의 흰색이 돼서 안 보이는 문제가 있었음.
    위젯창(widget.css)은 원래부터 고정 색을 썼는데 목록 화면(.sticky-card)만 테마 변수를 썼던
@@ -1115,7 +1122,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* "3일 전"부터 일주일 넘으면 "2026-08-11" 같은 날짜까지 나와서 길이가 카드마다 들쭉날쭉한데,
    너비를 고정하고 넘치면 말줄임표로 자르면 이 텍스트 때문에 상단 줄이 카드마다 다르게
    줄바꿈되는 일이 없어진다(카드 본문 칸이 차지하는 비율이 카드마다 달라 보이던 원인). */
-.sticky-card .card-meta{font-size:10px;color:rgba(0,0,0,.5);opacity:.75;white-space:nowrap;flex-shrink:0;width:50px;overflow:hidden;text-overflow:ellipsis;text-align:right;}
+.sticky-card .card-meta{font-size:10px;color:rgba(0,0,0,.5);opacity:.75;white-space:nowrap;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left;}
+.sticky-card .postit-convert-badges:empty{display:none;}
 /* 하단 컨트롤 줄(색상/링크/위젯/삭제) — 한 줄에 다 못 들어가면 카드를 벗어나지 않고
    자연스럽게 다음 줄로 넘어가게 한다(overflow 대신 flex-wrap). */
 .sticky-card .card-bottom-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;row-gap:6px;min-width:0;}

@@ -1,5 +1,5 @@
 import { toast, errorToast, formatRelative, emptyStateBlock, isUserTyping, debounce, goToHash } from '../shared/ui-utils.js';
-import { STICKY_COLORS, stickyRotation } from '../shared/theme.js';
+import { STICKY_COLORS } from '../shared/theme.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
 import { bindMentionAutocomplete } from '../shared/mention.js';
 import { bindHashtagAutoTag } from '../shared/hashtag.js';
@@ -105,7 +105,7 @@ export async function mount(root, deepLinkId) {
       sorted
         .map(
           (item) => `
-        <div class="sticky-card" style="background:${item.color_hex};transform:rotate(${stickyRotation(item.id)}deg);" data-id="${item.id}">
+        <div class="sticky-card" style="background:${item.color_hex};" data-id="${item.id}">
           <div class="card-top">
             <input type="checkbox" class="notes-list-item-check sticky-select-check" data-action="select" data-id="${item.id}" title="선택" />
             <span class="drag-handle" data-drag-id="${item.id}" title="드래그해서 바탕화면에 놓으면 작은 위젯으로 열려요">${DRAG_HANDLE_ICON}</span>
