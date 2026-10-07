@@ -1,4 +1,4 @@
-const { app, dialog, BrowserWindow } = require('electron');
+const { app, dialog, BrowserWindow, Notification } = require('electron');
 const path = require('node:path');
 const { broadcastDataChanged } = require('../broadcast');
 const cfgStore = require('../messenger/config');
@@ -7,13 +7,39 @@ const { runSync, windowOf } = require('../messenger/sync');
 const { findMessengerDbs } = require('../messenger/detect');
 const { startMessengerScheduler } = require('../messenger/scheduler');
 const F = require('../messenger/format');
+const { pendingNotice } = require('../messenger/notify');
+const { forceShowAndFocus } = require('../shared/window-focus');
 
 const STRICT = { full: 0, mask: 1, hide: 2 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-module.exports = function registerMessengerIpc(ipcMain, repos, db) {
+module.exports = function registerMessengerIpc(ipcMain, repos, db, getMainWindow = () => null) {
   const { settings, messenger } = repos;
   let running = false;
+
+  // 자동 실행이 확인 필요로 멈췄을 때 OS 알림 — 같은 대상이면 한 번만, 클릭하면 설정의 메신저 연동으로 간다.
+  // 창이 닫혀 트레이에 있어도 뜬다. 직접 실행(수동/설정 변경)은 화면에서 바로 보이므로 알리지 않는다.
+  function notifyPending(summary, trigger) {
+    try {
+      const notice = pendingNotice(summary.pending);
+      if (!notice) {
+        if (settings.get('messenger_pending_notified')) settings.set('messenger_pending_notified', '');
+        return;
+      }
+      if (trigger !== 'auto' || settings.get('messenger_pending_notified') === notice.key || !Notification.isSupported()) return;
+      settings.set('messenger_pending_notified', notice.key);
+      const n = new Notification({ title: notice.title, body: notice.body });
+      n.on('click', () => {
+        const win = getMainWindow();
+        if (!win || win.isDestroyed()) return;
+        forceShowAndFocus(win);
+        win.webContents.send('itda:navigate', '#/settings/messenger');
+      });
+      n.show();
+    } catch (e) {
+      console.error('[itda] 메신저 확인 필요 알림 실패:', e.message);
+    }
+  }
 
   // 메신저를 읽어 잇다 일정에 반영. 읽기 실패는 던지지 않고 {ok:false}로 — 자동 실행이 조용히 넘어갈 수 있게.
   function syncOnce({ trigger = 'manual', confirm = {}, skipRead = false } = {}) {
@@ -33,6 +59,7 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db) {
       };
       const summary = runSync({ itdaDb: db, repos, config, read, trigger, confirm, skipRead });
       broadcastDataChanged('event');
+      notifyPending(summary, trigger);
       return { ok: true, summary };
     } catch (e) {
       const error = e instanceof MessengerError ? e.message : `불러오지 못했어요: ${e.message}`;

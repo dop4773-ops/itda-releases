@@ -63,7 +63,7 @@ function registerIpcHandlers(ipcMain, db, getMainWindow) {
   registerSettingsIpc(ipcMain, repos);
   registerGoogleCalendarIpc(ipcMain, repos);
   const { autoFetchHolidays } = registerHolidaysIpc(ipcMain, repos);
-  const { startMessengerScheduler } = registerMessengerIpc(ipcMain, repos, db);
+  const { startMessengerScheduler } = registerMessengerIpc(ipcMain, repos, db, getMainWindow);
   registerDataIpc(ipcMain, repos, db); // 백업/복원은 repos가 아니라 db 원본이 필요해서 따로 넘김
   const { openWidgetByType } = registerWidgetsIpc(ipcMain, repos, getMainWindow);
   const { purgeOne } = registerTrashIpc(ipcMain, repos, { deleteLinksFor, closeWidgetIfOpen, closeItemWidgetIfOpen });
