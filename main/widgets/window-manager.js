@@ -2,6 +2,7 @@ const { BrowserWindow } = require('electron');
 const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
 const { forceShowAndFocus } = require('../shared/window-focus');
+const { fitToScreens } = require('../shared/window-bounds');
 
 // widgetType(문자열) -> BrowserWindow. postit-widget/window-manager.js와 달리
 // "항목 하나당 창 하나"가 아니라 "위젯 종류당 창 하나"라 map 키가 id가 아니라 type이다.
@@ -16,11 +17,13 @@ function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTo
     return existing;
   }
 
+  // 저장된 위치가 지금 화면 밖이면(모니터 변경·해상도 변경) 보이는 곳으로 옮긴다
+  const fit = fitToScreens({ x: bounds.x, y: bounds.y, width: bounds.width || DEFAULT_BOUNDS.width, height: bounds.height || DEFAULT_BOUNDS.height });
   const win = new BrowserWindow({
-    width: bounds.width || DEFAULT_BOUNDS.width,
-    height: bounds.height || DEFAULT_BOUNDS.height,
-    x: bounds.x ?? undefined,
-    y: bounds.y ?? undefined,
+    width: fit.width,
+    height: fit.height,
+    x: fit.x ?? undefined,
+    y: fit.y ?? undefined,
     minWidth: 220,
     minHeight: 160,
     frame: false,

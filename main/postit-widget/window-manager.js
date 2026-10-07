@@ -2,6 +2,7 @@ const { BrowserWindow } = require('electron');
 const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
 const { forceShowAndFocus } = require('../shared/window-focus');
+const { fitToScreens } = require('../shared/window-bounds');
 
 // postitId -> BrowserWindow. 같은 포스트잇을 중복으로 열지 않고 이미 열려있으면 포커스만 준다.
 const windows = new Map();
@@ -23,11 +24,17 @@ function openWidget(postit, { onBoundsChange, dropPos, opacity = 1 } = {}) {
     return existing;
   }
 
+  const fit = fitToScreens({
+    x: dropPos?.x != null ? Math.round(dropPos.x) : (postit.pos_x ?? undefined),
+    y: dropPos?.y != null ? Math.round(dropPos.y) : (postit.pos_y ?? undefined),
+    width: WIN_SIZE,
+    height: WIN_SIZE,
+  });
   const win = new BrowserWindow({
     width: WIN_SIZE,
     height: WIN_SIZE,
-    x: dropPos?.x != null ? Math.round(dropPos.x) : (postit.pos_x ?? undefined),
-    y: dropPos?.y != null ? Math.round(dropPos.y) : (postit.pos_y ?? undefined),
+    x: fit.x,
+    y: fit.y,
     resizable: false, // 실제 포스트잇 크기로 고정
     maximizable: false,
     fullscreenable: false,

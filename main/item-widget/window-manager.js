@@ -1,6 +1,7 @@
 const { BrowserWindow } = require('electron');
 const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
+const { fitToScreens } = require('../shared/window-bounds');
 
 /**
  * postit-widget/window-manager.js와 같은 컨셉("항목 하나당 창 하나")이지만,
@@ -14,6 +15,26 @@ const UNPINNED_KEY = 'item_widget_unpinned';
 let settingsRepo = null;
 function initPinStore(settings) {
   settingsRepo = settings;
+}
+
+// 위젯마다 마지막 위치·크기 — item_widget_bounds = { "memo:3": {x,y,width,height}, ... }. 최근 100개만 둔다.
+const BOUNDS_KEY = 'item_widget_bounds';
+const BOUNDS_CAP = 100;
+function readAllBounds() {
+  try {
+    const o = JSON.parse(settingsRepo?.get(BOUNDS_KEY) || '{}');
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  } catch (e) {
+    return {};
+  }
+}
+function saveBounds(key, b) {
+  const all = readAllBounds();
+  delete all[key]; // 다시 넣어 "가장 최근"으로
+  all[key] = b;
+  const keys = Object.keys(all);
+  keys.slice(0, Math.max(0, keys.length - BOUNDS_CAP)).forEach((k) => delete all[k]);
+  settingsRepo?.set(BOUNDS_KEY, JSON.stringify(all));
 }
 function readUnpinned() {
   try {
@@ -48,11 +69,19 @@ function openWidget(item, { onClosed } = {}) {
 
   const size = SIZE_BY_TYPE[item.type] || SIZE_BY_TYPE.todo;
   const pinned = !readUnpinned().includes(key);
+  // 드래그해서 연 위치가 있으면 그 자리, 없으면(빠른 찾기·업데이트 후 복원 등) 마지막으로 두었던 위치·크기
+  const saved = readAllBounds()[key] || {};
+  const fit = fitToScreens({
+    x: item.x != null ? Math.round(item.x) : saved.x,
+    y: item.y != null ? Math.round(item.y) : saved.y,
+    width: Math.max(MIN_SIZE.width, saved.width || size.width),
+    height: Math.max(MIN_SIZE.height, saved.height || size.height),
+  });
   const win = new BrowserWindow({
-    width: size.width,
-    height: size.height,
-    x: item.x != null ? Math.round(item.x) : undefined,
-    y: item.y != null ? Math.round(item.y) : undefined,
+    width: fit.width,
+    height: fit.height,
+    x: fit.x,
+    y: fit.y,
     minWidth: MIN_SIZE.width,
     minHeight: MIN_SIZE.height,
     resizable: true, // 내용이 많은 일정/메모는 기본 크기로 다 안 보일 수 있어 직접 키울 수 있게(내부 스크롤도 됨)
@@ -85,7 +114,20 @@ function openWidget(item, { onClosed } = {}) {
   });
   windows.set(key, win);
 
+  let boundsTimer = null;
+  const scheduleBoundsSave = () => {
+    clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      if (win.isDestroyed() || win.isMinimized()) return;
+      const b = win.getBounds();
+      saveBounds(key, { x: b.x, y: b.y, width: b.width, height: b.height });
+    }, 400);
+  };
+  win.on('moved', scheduleBoundsSave);
+  win.on('resized', scheduleBoundsSave);
+
   win.on('closed', () => {
+    clearTimeout(boundsTimer);
     clearInterval(reassertTimer);
     windows.delete(key);
     onClosed?.(item.type, item.id);
