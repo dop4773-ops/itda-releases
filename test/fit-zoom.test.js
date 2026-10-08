@@ -6,8 +6,9 @@ const path = require('node:path');
 const load = () => import('data:text/javascript;base64,' + Buffer.from(fs.readFileSync(path.join(__dirname, '..', 'renderer', 'shared', 'fit-zoom.js'), 'utf8')).toString('base64'));
 const win = (outerW, outerH, frameW = 16, frameH = 39) => ({ outerW, outerH, innerW: outerW - frameW, innerH: outerH - frameH });
 
-test('예전 최소 크기(1024x700) 이상이면 축소하지 않는다', async () => {
+test('기준(872x600, 사이드바를 접은 상태) 이상이면 축소하지 않는다', async () => {
   const { fitFactor } = await load();
+  assert.strictEqual(fitFactor(win(872, 600)), 1);
   assert.strictEqual(fitFactor(win(1024, 700)), 1);
   assert.strictEqual(fitFactor(win(1440, 900)), 1);
   assert.strictEqual(fitFactor(win(1920, 1040)), 1);
@@ -17,8 +18,8 @@ test('창을 줄이면 폭(또는 높이) 비율만큼 균일하게 줄고, 효�
   const { fitFactor, REF } = await load();
   const w = win(512, 350);
   const f = fitFactor(w);
-  assert.ok(f >= 0.45 && f <= 0.5, String(f));
-  const half = win(768, 525);
+  assert.ok(f >= 0.5 && f <= 0.6, String(f));
+  const half = win(640, 440);
   const f2 = fitFactor(half);
   // 줄어든 뒤 "화면에 들어가는 CSS 크기"(안쪽 / f)는 어느 쪽도 예전 최소 크기의 안쪽(1024-창틀 x 700-창틀)보다 작아지지 않고, 더 빡빡한 쪽은 정확히 같다
   const effW = half.innerW / f2;
@@ -29,12 +30,12 @@ test('창을 줄이면 폭(또는 높이) 비율만큼 균일하게 줄고, 효�
 
 test('가로로만 좁거나 세로로만 낮아도 더 심한 쪽에 맞춘다', async () => {
   const { fitFactor } = await load();
-  assert.ok(fitFactor(win(600, 900)) < 0.6);
-  assert.ok(fitFactor(win(1440, 400)) < 0.6);
+  assert.ok(fitFactor(win(600, 900)) < 0.75);
+  assert.ok(fitFactor(win(1440, 400)) < 0.75);
 });
 
-test('하한(0.45) 아래로는 안 줄고, 이상한 값은 1', async () => {
+test('하한(0.5) 아래로는 안 줄고, 이상한 값은 1', async () => {
   const { fitFactor } = await load();
-  assert.strictEqual(fitFactor(win(200, 150)), 0.45);
+  assert.strictEqual(fitFactor(win(200, 150)), 0.5);
   assert.strictEqual(fitFactor({ innerW: 0, innerH: 0, outerW: 0, outerH: 0 }), 1);
 });

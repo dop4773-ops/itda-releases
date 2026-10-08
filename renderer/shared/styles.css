@@ -313,10 +313,11 @@ body.topbar-hidden .global-topbar{display:none;}
 
 /* ================= Sidebar ================= */
 .sidebar{width:var(--sidebar-w,220px);flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:20px 14px;transition:width .2s ease,padding .2s ease;}
-.sidebar.collapsed,.sidebar.icon-only{width:68px;padding:20px 10px;}
+.sidebar.collapsed,.sidebar.icon-only,.sidebar.auto-collapsed{width:68px;padding:20px 10px;}
 .sidebar.collapsed .label,.sidebar.collapsed .logo-text,.sidebar.collapsed .profile-info,
-.sidebar.icon-only .label,.sidebar.icon-only .logo-text,.sidebar.icon-only .profile-info{display:none;}
-.sidebar.collapsed .nav-item,.sidebar.icon-only .nav-item{justify-content:center;}
+.sidebar.icon-only .label,.sidebar.icon-only .logo-text,.sidebar.icon-only .profile-info,
+.sidebar.auto-collapsed .label,.sidebar.auto-collapsed .logo-text,.sidebar.auto-collapsed .profile-info{display:none;}
+.sidebar.collapsed .nav-item,.sidebar.icon-only .nav-item,.sidebar.auto-collapsed .nav-item{justify-content:center;}
 
 /* 사이드바 스타일 프리셋 (설정 > 화면 > 사이드바) — 통일성 유지 범위 안에서 분위기만 바꾼다 */
 .sidebar.sb-compact{padding:12px 8px;}
@@ -336,6 +337,8 @@ body.topbar-hidden .global-topbar{display:none;}
 .collapse-btn{width:26px;height:26px;border-radius:var(--radius-xs);border:1px solid var(--border);background:var(--surface);color:var(--text-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .collapse-btn:hover{background:var(--bg);}
 .sidebar.collapsed .collapse-btn svg{transform:rotate(180deg);}
+/* 접힌(아이콘) 사이드바 폭 68px 안에 로고·미니·펼치기 버튼이 가로로 못 들어가 대시보드 쪽으로 삐져나오던 것 — 세로로 쌓는다 */
+.sidebar.collapsed .logo-row,.sidebar.icon-only .logo-row,.sidebar.auto-collapsed .logo-row{flex-direction:column;align-items:center;gap:8px;padding:0 0 16px;}
 
 .nav{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;}
 .nav-item{display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--text-soft);cursor:pointer;font-size:13.5px;white-space:nowrap;}
@@ -2562,28 +2565,61 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 
 /* ================= 미니 모드 (작은 창) — body.mini-mode 일 때만. 대시보드 등 다른 화면의 스타일은 건드리지 않는다 ================= */
 .mini-bar{display:none;}
-body.mini-mode .mini-bar{display:flex;align-items:center;gap:4px;height:34px;flex-shrink:0;padding:0 8px 0 14px;background:var(--surface);border-bottom:1px solid var(--border);-webkit-app-region:drag;font-size:13px;}
+body.mini-mode{font-size:12.5px;}
+body.mini-mode button,body.mini-mode input,body.mini-mode select,body.mini-mode textarea{font-family:inherit;}
+body.mini-mode .mini-bar{display:flex;align-items:center;gap:4px;height:36px;flex-shrink:0;padding:0 8px 0 14px;background:color-mix(in srgb,var(--brand) 9%,var(--surface));border-bottom:1px solid color-mix(in srgb,var(--brand) 18%,var(--border));-webkit-app-region:drag;}
+.mini-bar b{font-size:13px;font-weight:600;color:var(--brand);letter-spacing:.2px;}
 .mini-bar-spacer{flex:1;}
 .mini-bar-btn{-webkit-app-region:no-drag;width:26px;height:26px;border:none;border-radius:var(--radius-xs);background:none;color:var(--text-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.mini-bar-btn:hover{background:var(--bg);}
-.mini-bar-btn.on{color:var(--brand);background:color-mix(in srgb,var(--brand) 12%,transparent);}
+.mini-bar-btn:hover{background:color-mix(in srgb,var(--brand) 12%,transparent);}
+.mini-bar-btn.on{color:var(--brand);background:color-mix(in srgb,var(--brand) 16%,transparent);}
 body.mini-mode .sidebar,body.mini-mode .global-topbar,body.mini-mode .fab,body.mini-mode .fab-hint{display:none !important;}
-body.mini-mode .main{padding:10px 12px;}
-body.mini-mode .page-head{margin-bottom:10px;}
+body.mini-mode .main{padding:10px 12px 14px;}
+
+/* 머리: 날짜 + 이동 버튼 */
+body.mini-mode .page-head{margin-bottom:8px;align-items:flex-start;}
 body.mini-mode .page-head-icon{display:none;}
-body.mini-mode .page-head h1{font-size:15px;}
-body.mini-mode .page-head p{font-size:11.5px;}
+body.mini-mode .page-head h1{font-size:15px;font-weight:600;line-height:1.3;}
+body.mini-mode .page-head p{font-size:11px;margin:1px 0 0;}
 body.mini-mode .td-head-tools{gap:4px;}
-body.mini-mode .td-head-tools .btn-secondary{padding:4px 8px;font-size:12px;}
-body.mini-mode #td-refresh{font-size:0;padding:4px 7px;}
-body.mini-mode #td-refresh svg{font-size:14px;}
-body.mini-mode .td-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px;}
-body.mini-mode .td-stat{padding:6px 9px;}
-body.mini-mode .td-stat b{font-size:18px;}
-body.mini-mode .td-grid{grid-template-columns:minmax(0,1fr);gap:10px;}
-body.mini-mode .td-side{gap:10px;}
-body.mini-mode .panel{padding:10px 12px;min-height:0;}
-body.mini-mode .td-popup-card{width:min(340px,94vw);}
-/* 사이드바 로고줄의 미니 버튼 — 접힌/아이콘 사이드바에서는 숨겨서(상단바 버튼·명령 팔레트로 켬) 기존 접힌 모양을 그대로 둔다 */
+body.mini-mode .td-head-tools .btn-secondary{width:26px;height:26px;padding:0;justify-content:center;border-radius:50%;font-size:14px;}
+body.mini-mode #td-goToday{width:auto;padding:0 10px;border-radius:var(--radius-pill);font-size:11.5px;}
+body.mini-mode #td-refresh{font-size:0;}
+body.mini-mode #td-refresh svg{width:13px;height:13px;}
+body.mini-mode .td-add{margin-bottom:8px;}
+body.mini-mode .td-add input{font-size:12.5px;padding:7px 11px;border-radius:var(--radius-sm);}
+body.mini-mode .td-undo{padding:6px 10px;font-size:11.5px;margin-bottom:8px;}
+
+/* 숫자 요약: 한 줄에 4칸, 색으로 구분 */
+body.mini-mode .td-stats{display:grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;margin-bottom:10px;}
+body.mini-mode .td-stat{border:none;border-radius:var(--radius-sm);padding:7px 8px 6px;gap:0;background:var(--bg);}
+body.mini-mode .td-stat span{font-size:10.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+body.mini-mode .td-stat b{font-size:17px;font-weight:600;line-height:1.25;white-space:nowrap;}
+body.mini-mode .td-stat small{display:none;}
+body.mini-mode .td-stat[data-hue=green]{background:var(--tone-green-bg);color:var(--tone-green-fg);}
+body.mini-mode .td-stat[data-hue=purple]{background:var(--tone-purple-bg);color:var(--tone-purple-fg);}
+body.mini-mode .td-stat[data-hue=yellow]{background:var(--tone-yellow-bg);color:var(--tone-yellow-fg);}
+body.mini-mode .td-stat[data-hue=blue]{background:var(--tone-blue-bg);color:var(--tone-blue-fg);}
+body.mini-mode .td-stat span,body.mini-mode .td-stat b{color:inherit;}
+
+/* 본문 카드: 가볍게(그림자 없음), 글자 크기 통일 */
+body.mini-mode .td-grid{grid-template-columns:minmax(0,1fr);gap:8px;}
+body.mini-mode .td-side{gap:8px;}
+body.mini-mode .panel{padding:9px 12px;min-height:0;box-shadow:none;border-radius:var(--radius-md);}
+body.mini-mode .panel-head{margin-bottom:6px;}
+body.mini-mode .panel-head h3{font-size:12.5px;font-weight:600;margin:0;}
+body.mini-mode .td-line{grid-template-columns:42px 1fr;padding:3px 0;}
+body.mini-mode .td-time{font-size:11px;}
+body.mini-mode .td-row{font-size:12.5px;padding:3px 0;}
+body.mini-mode .td-txt small{font-size:11px;}
+body.mini-mode .td-when,body.mini-mode .td-date{font-size:11px;}
+body.mini-mode .td-empty{font-size:12px;padding:6px 2px;}
+body.mini-mode .td-next-sum{font-size:12.5px;margin-bottom:4px;}
+body.mini-mode .td-next-line{font-size:11.5px;}
+body.mini-mode .td-more{font-size:11.5px;}
+body.mini-mode #td-copy,body.mini-mode #td-reschedAll{font-size:11px;padding:3px 9px;}
+body.mini-mode .td-popup-card{width:min(340px,94vw);font-size:12.5px;}
+
+/* 사이드바 로고줄의 미니 버튼 — 펼친 상태에선 접기 버튼 옆, 접힌 상태에선 세로로 쌓인다 */
 #miniBtn{margin-left:auto;margin-right:6px;}
-.sidebar.collapsed #miniBtn,.sidebar.icon-only #miniBtn{display:none;}
+.sidebar.collapsed #miniBtn,.sidebar.icon-only #miniBtn,.sidebar.auto-collapsed #miniBtn{margin:0;}

@@ -199,13 +199,13 @@ export async function mount(root) {
       const count = (day, kind) => (admItems ? admItems.filter((i) => i.date === day && i.kind === kind).length : 0);
 
       const stats = [
-        { label: isToday() ? '오늘 일정' : '일정', value: events.length, pop: 'events' },
-        { label: isToday() ? '오늘 마감' : '마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos' },
-        ...(isToday() ? [{ label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue' }] : []),
+        { label: isToday() ? '오늘 일정' : '일정', value: events.length, pop: 'events', hue: 'green' },
+        { label: isToday() ? '오늘 마감' : '마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos', hue: 'purple' },
+        ...(isToday() ? [{ label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue', hue: 'yellow' }] : []),
       ];
-      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info', pop: 'adm' });
+      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info', pop: 'adm', hue: 'blue' });
       $('td-stats').innerHTML = stats
-        .map((s) => `<button class="td-stat ${s.tone || ''}" data-pop="${s.pop}"><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
+        .map((s) => `<button class="td-stat ${s.tone || ''}" data-pop="${s.pop}" data-hue="${s.hue || ''}"><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
         .join('');
       $('td-h1').textContent = dayLabel(today);
       $('td-goToday').style.display = isToday() ? 'none' : '';

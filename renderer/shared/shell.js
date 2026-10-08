@@ -1,4 +1,4 @@
-import { fitFactor } from './fit-zoom.js';
+import { fitFactor, COMPACT_BELOW } from './fit-zoom.js';
 import './error-report.js'; // window.onerror/unhandledrejection → main 로그 파일 (side-effect only)
 import { toast, errorToast, emptyStateBlock, escapeHtml, goToHash } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
@@ -512,12 +512,17 @@ let miniActive = false; // 미니 모드는 자기 전용 레이아웃이라 축
 export function setMiniActiveForZoom(active) {
   miniActive = !!active;
   applyZoom();
+  // 창 크기가 바뀐 직후엔 window.outerWidth가 아직 옛 값일 수 있어 한 번 더 맞춘다(미니 모드를 끄고 큰 창으로 돌아올 때 사이드바가 접힌 채 남지 않게)
+  setTimeout(applyZoom, 300);
 }
 function applyZoom() {
   // 메인 창(본체)에만 — 위젯 창 등은 자기 크기 그대로
   const isMain = !!document.getElementById('view-root');
-  const f = isMain && !miniActive ? fitFactor({ innerW: window.innerWidth, innerH: window.innerHeight, outerW: window.outerWidth, outerH: window.outerHeight }) : 1;
+  const shrink = isMain && !miniActive;
+  const f = shrink ? fitFactor({ innerW: window.innerWidth, innerH: window.innerHeight, outerW: window.outerWidth, outerH: window.outerHeight }) : 1;
   document.documentElement.style.zoom = String(baseScale * f);
+  // 좁은 창에선 사이드바를 아이콘 폭으로 일시적으로 접는다(클래스만 — 저장된 접힘 설정은 그대로)
+  document.getElementById('sidebar')?.classList.toggle('auto-collapsed', shrink && window.outerWidth < COMPACT_BELOW);
 }
 let fitRaf = 0;
 window.addEventListener('resize', () => {
