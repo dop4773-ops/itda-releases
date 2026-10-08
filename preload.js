@@ -143,6 +143,8 @@ contextBridge.exposeInMainWorld('itda', {
     backup: () => ipcRenderer.invoke('data:backup'),
     getBackupsDir: () => ipcRenderer.invoke('data:getBackupsDir'),
     listBackups: () => ipcRenderer.invoke('data:listBackups'),
+    cleanupPreview: (months) => ipcRenderer.invoke('data:cleanupPreview', { months }),
+    cleanupRun: (months) => ipcRenderer.invoke('data:cleanupRun', { months }),
     restoreFromBackup: (name) => ipcRenderer.invoke('data:restoreFromBackup', name),
     openBackupsFolder: () => ipcRenderer.invoke('data:openBackupsFolder'),
     openLogsFolder: () => ipcRenderer.invoke('data:openLogsFolder'),

@@ -769,7 +769,14 @@ export async function mount(root, initialTab) {
               <button class="btn-secondary" id="data-importBtn">가져오기</button>
             </div>
             <div class="data-action-row">
-              <div><b>오류 로그 폴더 열기</b><span>문제가 생겼을 때 원인 파악용 로그(error.log)가 저장되는 폴더를 엽니다.</span></div>
+              <div><b>오래된 데이터 정리</b><span id="clean-desc">끝난 지 오래된 완료 할 일과 지난 일정을 휴지통으로 보내 목록을 가볍게 해요. 반복 일정은 그대로 둬요. 30일 안에는 휴지통에서 복원할 수 있어요.</span></div>
+              <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                <select id="clean-months" class="select" style="width:110px;"><option value="3">3개월 지난</option><option value="6" selected>6개월 지난</option><option value="12">1년 지난</option><option value="24">2년 지난</option></select>
+                <button class="btn-secondary" id="clean-runBtn">정리하기</button>
+              </div>
+            </div>
+            <div class="data-action-row">
+              <div><b>오류 로그 폴더 열기</b><span>문제가 생겼을 때 원인 파악용 로그(error.log)와 창 진단 로그(windows.log)가 저장되는 폴더를 엽니다.</span></div>
               <button class="btn-secondary" id="data-openLogsBtn">폴더 열기</button>
             </div>
             <div class="data-action-row danger-row">
@@ -2733,6 +2740,34 @@ export async function mount(root, initialTab) {
         errorToast(e, '가져오지 못했어요');
       } finally {
         $('data-importBtn').disabled = false;
+      }
+    });
+
+    // 오래된 데이터 정리 — 기간을 고르면 대상 건수를 미리 보여주고, 누르면 확인 창을 거쳐 휴지통으로 보낸다
+    const monthsSel = $('clean-months');
+    const cleanDesc = $('clean-desc');
+    const baseDesc = cleanDesc.textContent;
+    const showCleanCount = async () => {
+      try {
+        const c = await window.itda.data.cleanupPreview(Number(monthsSel.value));
+        cleanDesc.textContent = `${baseDesc} — 지금 대상: 완료 할 일 ${c.todos}건 · 지난 일정 ${c.events}건`;
+      } catch (e) {
+        cleanDesc.textContent = baseDesc;
+      }
+    };
+    monthsSel.addEventListener('change', showCleanCount);
+    showCleanCount();
+    $('clean-runBtn').addEventListener('click', async () => {
+      $('clean-runBtn').disabled = true;
+      try {
+        const r = await window.itda.data.cleanupRun(Number(monthsSel.value));
+        if (r.empty) toast('정리할 오래된 데이터가 없어요');
+        else if (!r.cancelled) toast(`휴지통으로 보냈어요 (할 일 ${r.todos} · 일정 ${r.events})`);
+        showCleanCount();
+      } catch (e) {
+        errorToast(e, '정리하지 못했어요');
+      } finally {
+        $('clean-runBtn').disabled = false;
       }
     });
 

@@ -4,6 +4,7 @@ const path = require('path');
 const Database = require('better-sqlite3');
 const { backupsDir, backupBeforeRestore, listBackups, isBackupName } = require('../auto-backup');
 const { SCHEMA_VERSION } = require('../db');
+const { broadcastDataChanged } = require('../broadcast');
 const { openLogsFolder } = require('../logger');
 
 const DATA_TABLES = ['categories', 'todos', 'todo_subtasks', 'todo_tags', 'events', 'memos', 'postits', 'inbox_items', 'item_links', 'holidays'];
@@ -23,6 +24,29 @@ function readAllTablesFromDbFile(filePath) {
   } finally {
     backupDb.close();
   }
+}
+
+// 오래된 데이터 정리 — 기준: N개월 전보다 오래된 "끝난" 것만. 반복 일정은 시리즈라 건드리지 않고, 휴지통으로 보내서 30일 동안 복구할 수 있다.
+//   할 일: 완료한 지 N개월이 지난 것 / 일정: 끝난 지 N개월이 지난 반복 없는 것
+const CLEANUP_MONTHS = [3, 6, 12, 24];
+function cleanupTargets(db, months, now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth() - months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+  const p = (n) => String(n).padStart(2, '0');
+  const cutoff = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return {
+    todos: db.prepare("SELECT id FROM todos WHERE deleted_at IS NULL AND status = 'done' AND COALESCE(completed_at, updated_at) < ?").all(cutoff).map((r) => r.id),
+    events: db.prepare("SELECT id FROM events WHERE deleted_at IS NULL AND recurrence_rule IS NULL AND end_at < ?").all(cutoff).map((r) => r.id),
+  };
+}
+function runCleanup(db, months) {
+  const t = cleanupTargets(db, months);
+  db.transaction(() => {
+    const todo = db.prepare("UPDATE todos SET deleted_at = datetime('now','localtime') WHERE id = ?");
+    const event = db.prepare("UPDATE events SET deleted_at = datetime('now','localtime') WHERE id = ?");
+    t.todos.forEach((id) => todo.run(id));
+    t.events.forEach((id) => event.run(id));
+  })();
+  return { todos: t.todos.length, events: t.events.length };
 }
 
 // 복원할 파일이 정말 쓸 수 있는 잇다 백업인지 미리 본다 — 아무 파일이나 덮어써서 앱이 안 열리는 일을 막는다.
@@ -439,6 +463,31 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
   // 전체 삭제: Todo/일정/메모/포스트잇/Inbox/연결/휴지통 내용과 사용자가 추가한 카테고리를 지운다.
   // 앱 설정(테마, Google Calendar 연결 등)은 "데이터"라기보다 "앱 환경설정"이라 건드리지 않는다 —
   // 확인 대화상자에 정확히 뭐가 지워지는지 명시해서 오해를 막는다.
+  ipcMain.handle('data:cleanupPreview', (event, { months } = {}) => {
+    if (!CLEANUP_MONTHS.includes(months)) throw new Error('정리 기간이 올바르지 않아요.');
+    const t = cleanupTargets(db, months);
+    return { todos: t.todos.length, events: t.events.length };
+  });
+  ipcMain.handle('data:cleanupRun', async (event, { months } = {}) => {
+    if (!CLEANUP_MONTHS.includes(months)) throw new Error('정리 기간이 올바르지 않아요.');
+    const t = cleanupTargets(db, months);
+    if (!t.todos.length && !t.events.length) return { cancelled: true, empty: true };
+    const confirm = await dialog.showMessageBox(getWin(), {
+      type: 'question',
+      buttons: ['취소', '휴지통으로 보내기'],
+      defaultId: 0,
+      cancelId: 0,
+      title: '오래된 데이터 정리',
+      message: `${months}개월 지난 완료 할 일 ${t.todos.length}건, 지난 일정 ${t.events.length}건을 휴지통으로 보냅니다.`,
+      detail: '삭제되는 게 아니라 휴지통으로 옮겨요. 30일 안에는 휴지통에서 복원할 수 있고, 그 뒤에 자동으로 완전히 지워져요.',
+    });
+    if (confirm.response !== 1) return { cancelled: true };
+    const done = runCleanup(db, months);
+    if (done.todos) broadcastDataChanged('todo');
+    if (done.events) broadcastDataChanged('event');
+    return { cancelled: false, ...done };
+  });
+
   ipcMain.handle('data:deleteAll', async () => {
     const win = getWin();
     const confirm = await dialog.showMessageBox(win, {
@@ -464,3 +513,5 @@ module.exports = function registerDataIpc(ipcMain, repos, db) {
 };
 module.exports.importAllTables = importAllTables; // 테스트용
 module.exports.inspectBackupFile = inspectBackupFile; // 테스트용
+module.exports.cleanupTargets = cleanupTargets; // 테스트용
+module.exports.runCleanup = runCleanup;
