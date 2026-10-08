@@ -9,6 +9,7 @@
  *   - app_settings.dashboard_blocks = [{ id, type, config }]
  *   - app_settings.dashboard_layout.widgets[id] = { x, y, w, h }   (업무 카드와 공용)
  */
+import { trackBlockFit } from './block-fit.js';
 import { escapeHtml } from './ui-utils.js';
 import { LOCAL_PATH_PATTERN } from './rich-text.js';
 
@@ -199,6 +200,7 @@ export function paintBlock(el, block) {
   if (block.type === 'weather') el._wxNext = 0; // 도시가 바뀌었을 수 있으니 다시 렌더될 땐 무조건 재조회
   hydrateBlock(el, block);
   tickBlock(el, block);
+  trackBlockFit(el, block); // 칸보다 커지는 시계 등은 그 칸에 맞게 줄임(넘칠 때만)
 }
 
 // 렌더 후 비동기로 채워야 하는 것들: 저장된 사진 파일 로드, 링크 favicon, 미니 도구 배선.

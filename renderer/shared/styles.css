@@ -2623,3 +2623,5 @@ body.mini-mode .td-popup-card{width:min(340px,94vw);font-size:12.5px;}
 /* 사이드바 로고줄의 미니 버튼 — 펼친 상태에선 접기 버튼 옆, 접힌 상태에선 세로로 쌓인다 */
 #miniBtn{margin-left:auto;margin-right:6px;}
 .sidebar.collapsed #miniBtn,.sidebar.icon-only #miniBtn,.sidebar.auto-collapsed #miniBtn{margin:0;}
+
+.sidebar.no-mini-btn #miniBtn{display:none;}

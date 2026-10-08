@@ -236,6 +236,16 @@ export async function mount(root, initialTab) {
               <div class="seg" id="sb-labelSeg"></div>
             </div>
             <div class="update-row" style="margin-top:10px;">
+              <div>
+                <div class="settings-row-title">미니 모드 버튼</div>
+                <div class="settings-row-desc">사이드바 맨 위의 작은 창(미니 모드) 버튼을 보이거나 숨겨요. 숨겨도 상단바 버튼이나 명령 팔레트(Ctrl/⌘+Shift+P)의 "미니 모드"로 쓸 수 있어요.</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="sb-miniToggle" />
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
+            </div>
+            <div class="update-row" style="margin-top:10px;">
               <div><div class="settings-row-title">너비</div><div class="settings-row-desc">접힌 상태에서는 적용되지 않아요.</div></div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <button class="btn-secondary" id="sb-widthMinus" title="4px 좁게" style="padding:3px 9px;font-size:14px;line-height:1;">−</button>
@@ -1284,6 +1294,17 @@ export async function mount(root, initialTab) {
     const labels = (await window.itda.settings.get('sidebar_labels')) === 'icon' ? 'icon' : 'both';
     segRow('sb-labelSeg', labels,
       [['both', '아이콘 + 텍스트'], ['icon', '아이콘만']], (v) => setSidebarSetting('sidebar_labels', v));
+
+    const miniToggle = $('sb-miniToggle');
+    miniToggle.checked = (await window.itda.settings.get('mini_button_in_sidebar')) !== '0'; // 기본 보임
+    miniToggle.addEventListener('change', async () => {
+      try {
+        await setSidebarSetting('mini_button_in_sidebar', miniToggle.checked ? '1' : '0');
+      } catch (e) {
+        errorToast(e, '저장하지 못했어요');
+        miniToggle.checked = !miniToggle.checked;
+      }
+    });
 
     const wr = $('sb-widthRange');
     const wv = $('sb-widthValue'); // <input type="number">

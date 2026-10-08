@@ -427,6 +427,7 @@ export async function applySidebarPersonalization() {
   const style = await getSidebarStyle();
   SIDEBAR_STYLES.forEach((s) => sb.classList.toggle('sb-' + s, s === style));
   sb.classList.toggle('icon-only', (await window.itda.settings.get('sidebar_labels')) === 'icon');
+  sb.classList.toggle('no-mini-btn', (await window.itda.settings.get('mini_button_in_sidebar')) === '0'); // 미니 모드 버튼 숨김(설정 > 레이아웃 > 사이드바)
 }
 
 export async function setSidebarSetting(key, value) {
