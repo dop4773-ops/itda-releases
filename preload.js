@@ -162,6 +162,18 @@ contextBridge.exposeInMainWorld('itda', {
     isOpen: (id) => ipcRenderer.invoke('postitWidget:isOpen', id),
     toggleAlwaysOnTop: (id) => ipcRenderer.invoke('postitWidget:toggleAlwaysOnTop', id),
   },
+  // 미니 모드(작은 창) — 창 크기만 바꾸고 대시보드 같은 화면의 저장값은 건드리지 않는다
+  mini: {
+    get: () => ipcRenderer.invoke('mini:get'),
+    enter: () => ipcRenderer.invoke('mini:enter'),
+    exit: () => ipcRenderer.invoke('mini:exit'),
+    setPin: (value) => ipcRenderer.invoke('mini:setPin', value),
+    onChanged: (callback) => {
+      const listener = (event, payload) => callback(payload);
+      ipcRenderer.on('mini:changed', listener);
+      return () => ipcRenderer.removeListener('mini:changed', listener);
+    },
+  },
   widgetControls: {
     minimize: () => ipcRenderer.invoke('widgetControls:minimize'),
     close: () => ipcRenderer.invoke('widgetControls:close'),

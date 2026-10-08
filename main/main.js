@@ -13,6 +13,7 @@ const lockState = require('./shared/lock-state');
 const { forceShowAndFocus } = require('./shared/window-focus');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
+const { initMiniMode, NORMAL_MIN } = require('./mini-mode');
 const { initErrorLogging, logError, logDir } = require('./logger');
 const { initWindowDiagnostics } = require('./shared/window-diagnostics');
 const { initPerf, perf, now } = require('./perf');
@@ -23,6 +24,7 @@ initErrorLogging();
 
 let mainWindow;
 let db;
+let miniHook = () => {}; // initMiniMode 이후 채워짐 — 메인 창이 (다시) 만들어질 때마다 이동/크기 변경 감시를 건다
 app.isQuittingItda = false; // 트레이 메뉴의 "완전히 종료"를 눌렀을 때만 true — 그 전까진 창을 닫아도 트레이에 남음
 
 // 병원 PC에서 아이콘을 실수로 여러 번 클릭해도 같은 assistant.db를 여러 창이 동시에 열지 않도록
@@ -33,8 +35,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
-    minWidth: 1024,
-    minHeight: 700,
+    minWidth: NORMAL_MIN.width, // 예전 최소 1024x700 — 이보다 작게 줄이면 화면 전체가 비율대로 축소된다(renderer/shared/fit-zoom.js)
+    minHeight: NORMAL_MIN.height,
     backgroundColor: '#F5F6F8',
     icon: path.join(__dirname, '..', 'build', 'icons', 'app-icon.png'), // dev·Linux용(패키지 Windows는 exe에 박힌 .ico 사용)
     webPreferences: {
@@ -50,6 +52,7 @@ function createWindow() {
   // Alt 키를 renderer의 "단축키 목록 보기" 제스처(shell.js initAltShortcutOverlay)로 쓰려면
   // 네이티브 메뉴가 Alt를 먼저 가로채 메뉴 포커스로 써버리지 않게 꺼둬야 한다.
   mainWindow.setMenu(null);
+  miniHook(mainWindow);
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   attachExternalLinkHandler(mainWindow); // 메모/포스트잇 자동 하이퍼링크 클릭 시 OS 기본 브라우저로 열기
@@ -116,6 +119,7 @@ if (!gotLock) {
     perf('initDb', t);
     t = now();
     const { openWidgetByType, openPostitById, autoFetchHolidays, startMessengerScheduler } = registerIpcHandlers(ipcMain, db, () => mainWindow);
+    miniHook = initMiniMode(ipcMain, () => mainWindow, createSettingsRepository(db)).hook; // 미니 모드(작은 창) — main/mini-mode
     perf('registerIpcHandlers', t);
     t = now();
     createWindow();

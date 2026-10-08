@@ -10,6 +10,7 @@ import * as trashView from '../views/trash.js';
 import * as settingsView from '../views/settings.js';
 import { initShell, applyTheme, applyUiAdjusts, applyFontFamily, applyDisplayScale } from './shell.js';
 import { ensureUnlocked, lockNow } from './lock-screen.js';
+import { initMiniMode, isMiniActive, exitMini } from './mini-mode.js';
 import { initPerf, perf, now } from './perf.js';
 
 // 라우트 테이블: 새 화면 추가 시 여기 한 줄만 추가하면 사이드바/URL 해시로 바로 연결됨
@@ -42,6 +43,8 @@ async function navigate() {
   const secondSlash = requested.indexOf('/', 2);
   const base = secondSlash > 0 ? requested.slice(0, secondSlash) : requested;
   const sub = secondSlash > 0 ? requested.slice(secondSlash + 1) : null;
+  // 미니 모드는 오늘 요약 전용 — 다른 화면으로 가려는 요청(위젯의 "전체 보기" 등)이 오면 원래 크기로 돌아와서 그 화면을 연다
+  if (isMiniActive() && base !== '#/today') await exitMini({ restoreHash: false });
   const hash = routes[base] ? base : '#/dashboard';
   if (!routes[base]) {
     location.hash = hash; // 잘못된 해시면 대시보드로 정정 (hashchange가 다시 navigate 호출)
@@ -89,6 +92,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   perf('ensureUnlocked', t);
   t = now();
   initShell();
+  initMiniMode(); // 상단 버튼으로 켜는 작은 창 모드(창 크기만 바꿈 — 화면 저장값 불변)
   perf('initShell', t);
   // 주소(해시)가 비어 있는 "처음 켠 상태"에서만 설정의 시작 화면을 따른다 — 새로고침이나 딥링크는 그대로 둔다
   if (!location.hash) {

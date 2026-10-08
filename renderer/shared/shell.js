@@ -1,3 +1,4 @@
+import { fitFactor } from './fit-zoom.js';
 import './error-report.js'; // window.onerror/unhandledrejection → main 로그 파일 (side-effect only)
 import { toast, errorToast, emptyStateBlock, escapeHtml, goToHash } from './ui-utils.js';
 import { computeNotifications, NOTIF_ICON } from './notifications.js';
@@ -504,9 +505,29 @@ export async function getDisplayScale() {
   return n >= DISPLAY_SCALE_MIN && n <= DISPLAY_SCALE_MAX ? n : DEFAULT_DISPLAY_SCALE;
 }
 
+// 화면 배율(설정) × 축소 보기(창이 작을 때만 일시적으로 곱함). 축소 보기는 저장값을 쓰지 않고 배율 변경 때의
+// 대시보드 좌표 재계산(rescaleDashboardLayout)도 거치지 않는다 — 그저 지금 창 크기에 맞춘 화면 확대/축소다.
+let baseScale = 1;
+let miniActive = false; // 미니 모드는 자기 전용 레이아웃이라 축소 보기를 적용하지 않는다
+export function setMiniActiveForZoom(active) {
+  miniActive = !!active;
+  applyZoom();
+}
+function applyZoom() {
+  // 메인 창(본체)에만 — 위젯 창 등은 자기 크기 그대로
+  const isMain = !!document.getElementById('view-root');
+  const f = isMain && !miniActive ? fitFactor({ innerW: window.innerWidth, innerH: window.innerHeight, outerW: window.outerWidth, outerH: window.outerHeight }) : 1;
+  document.documentElement.style.zoom = String(baseScale * f);
+}
+let fitRaf = 0;
+window.addEventListener('resize', () => {
+  cancelAnimationFrame(fitRaf);
+  fitRaf = requestAnimationFrame(applyZoom);
+});
 export async function applyDisplayScale() {
   const scale = await getDisplayScale();
-  document.documentElement.style.zoom = String(scale / 100);
+  baseScale = scale / 100;
+  applyZoom();
 }
 
 export async function setDisplayScale(scale) {

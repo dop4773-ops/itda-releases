@@ -2559,3 +2559,31 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .td-undo{display:flex;align-items:center;justify-content:space-between;gap:10px;background:color-mix(in srgb,var(--brand) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--brand) 25%,var(--border));border-radius:var(--radius-md);padding:8px 14px;margin-bottom:12px;font-size:12.5px;}
 .td-mini{border:1px solid var(--border);background:var(--surface);color:var(--brand);border-radius:var(--radius-pill);padding:0 9px;font-size:11px;font-family:inherit;cursor:pointer;flex-shrink:0;line-height:20px;}
 .td-mini:hover{background:var(--bg);}
+
+/* ================= 미니 모드 (작은 창) — body.mini-mode 일 때만. 대시보드 등 다른 화면의 스타일은 건드리지 않는다 ================= */
+.mini-bar{display:none;}
+body.mini-mode .mini-bar{display:flex;align-items:center;gap:4px;height:34px;flex-shrink:0;padding:0 8px 0 14px;background:var(--surface);border-bottom:1px solid var(--border);-webkit-app-region:drag;font-size:13px;}
+.mini-bar-spacer{flex:1;}
+.mini-bar-btn{-webkit-app-region:no-drag;width:26px;height:26px;border:none;border-radius:var(--radius-xs);background:none;color:var(--text-soft);cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.mini-bar-btn:hover{background:var(--bg);}
+.mini-bar-btn.on{color:var(--brand);background:color-mix(in srgb,var(--brand) 12%,transparent);}
+body.mini-mode .sidebar,body.mini-mode .global-topbar,body.mini-mode .fab,body.mini-mode .fab-hint{display:none !important;}
+body.mini-mode .main{padding:10px 12px;}
+body.mini-mode .page-head{margin-bottom:10px;}
+body.mini-mode .page-head-icon{display:none;}
+body.mini-mode .page-head h1{font-size:15px;}
+body.mini-mode .page-head p{font-size:11.5px;}
+body.mini-mode .td-head-tools{gap:4px;}
+body.mini-mode .td-head-tools .btn-secondary{padding:4px 8px;font-size:12px;}
+body.mini-mode #td-refresh{font-size:0;padding:4px 7px;}
+body.mini-mode #td-refresh svg{font-size:14px;}
+body.mini-mode .td-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px;}
+body.mini-mode .td-stat{padding:6px 9px;}
+body.mini-mode .td-stat b{font-size:18px;}
+body.mini-mode .td-grid{grid-template-columns:minmax(0,1fr);gap:10px;}
+body.mini-mode .td-side{gap:10px;}
+body.mini-mode .panel{padding:10px 12px;min-height:0;}
+body.mini-mode .td-popup-card{width:min(340px,94vw);}
+/* 사이드바 로고줄의 미니 버튼 — 접힌/아이콘 사이드바에서는 숨겨서(상단바 버튼·명령 팔레트로 켬) 기존 접힌 모양을 그대로 둔다 */
+#miniBtn{margin-left:auto;margin-right:6px;}
+.sidebar.collapsed #miniBtn,.sidebar.icon-only #miniBtn{display:none;}
