@@ -15,11 +15,10 @@ const SUN_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" st
 const REFRESH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>`;
 
 export async function mount(root) {
-  const now = new Date();
-  const realToday = toKey(now);
+  let realToday = toKey(new Date());
   // 화면이 보여주는 날 — 처음엔 오늘이고 ‹ › 로 옮긴다. today/tomorrow는 "보는 날"과 그다음 날을 뜻한다
   let today = realToday;
-  let tomorrow = toKey(addDays(now, 1));
+  let tomorrow = toKey(addDays(new Date(), 1));
   const isToday = () => today === realToday;
   const dayLabel = (key) => {
     const d = new Date(`${key}T00:00:00`);
@@ -269,7 +268,8 @@ export async function mount(root) {
     });
   }
   function shiftDay(delta) {
-    const d = delta === 0 ? now : addDays(new Date(`${today}T00:00:00`), delta);
+    const d = delta === 0 ? new Date() : addDays(new Date(`${today}T00:00:00`), delta);
+    realToday = toKey(new Date()); // 오늘로 돌아올 땐 "지금" 기준
     today = toKey(d);
     tomorrow = toKey(addDays(d, 1));
     closePopup();
@@ -367,6 +367,24 @@ export async function mount(root) {
     { label: '입퇴원 전달 문구 복사', keys: 'C' },
   ]);
 
+  // 자정을 넘기면 자동으로 새 날짜로 — 오늘을 보고 있었으면 새 오늘로 넘어가고(다른 날을 보고 있었으면 그 날은 유지), 지난 미완료 등도 다시 계산한다.
+  // 앱을 켜 둔 채 절전에서 깨어나거나 창으로 돌아올 때도 확인한다(그동안은 타이머가 멈춰 있을 수 있어서).
+  const checkNewDay = () => {
+    const k = toKey(new Date());
+    if (k === realToday || unmounted) return;
+    const wasToday = today === realToday;
+    realToday = k;
+    if (wasToday) {
+      today = k;
+      tomorrow = toKey(addDays(new Date(), 1));
+      closePopup();
+    }
+    load();
+  };
+  const dayTimer = setInterval(checkNewDay, 60 * 1000);
+  window.addEventListener('focus', checkNewDay);
+  document.addEventListener('visibilitychange', checkNewDay);
+
   let timer = null;
   const offDataChanged = window.itda.onDataChanged(() => {
     clearTimeout(timer);
@@ -378,6 +396,9 @@ export async function mount(root) {
     unmounted = true;
     clearTimeout(timer);
     clearTimeout(undoTimer);
+    clearInterval(dayTimer);
+    window.removeEventListener('focus', checkNewDay);
+    document.removeEventListener('visibilitychange', checkNewDay);
     document.removeEventListener('keydown', onKey);
     offEsc();
     setScreenShortcuts(null, []);
