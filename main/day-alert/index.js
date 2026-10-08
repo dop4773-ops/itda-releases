@@ -39,6 +39,7 @@ function collect(db, date) {
 
 function initDayAlert(db, ipcMain) {
   const lockState = require('../shared/lock-state');
+  const { noteClose } = require('../shared/window-diagnostics');
   const settings = createSettingsRepository(db);
   const wins = { a: null, b: null };
   let current = null; // 지금 창에 보여 주는 내용 { date, events, todos, pos, preview }
@@ -102,7 +103,7 @@ function initDayAlert(db, ipcMain) {
     });
   }
 
-  const closeAll = () => ['a', 'b'].forEach((k) => wins[k] && !wins[k].isDestroyed() && wins[k].close());
+  const closeAll = () => ['a', 'b'].forEach((k) => wins[k] && !wins[k].isDestroyed() && (noteClose(wins[k], 'main:dayAlert'), wins[k].close()));
 
   function show(payload, kinds = styles()) {
     current = { ...payload, count: payload.events.length + payload.todos.length };

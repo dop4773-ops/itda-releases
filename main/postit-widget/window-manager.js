@@ -3,6 +3,7 @@ const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
 const { forceShowAndFocus } = require('../shared/window-focus');
 const { fitToScreens } = require('../shared/window-bounds');
+const { noteClose } = require('../shared/window-diagnostics');
 
 // postitId -> BrowserWindow. 같은 포스트잇을 중복으로 열지 않고 이미 열려있으면 포커스만 준다.
 const windows = new Map();
@@ -115,7 +116,10 @@ function setAlwaysOnTop(postitId, value) {
 // 포스트잇이 완전삭제(휴지통 비우기)될 때 열려있는 위젯 창도 같이 정리하기 위함
 function closeIfOpen(postitId) {
   const win = windows.get(postitId);
-  if (win && !win.isDestroyed()) win.close();
+  if (win && !win.isDestroyed()) {
+    noteClose(win, 'main:postit-deleted');
+    win.close();
+  }
 }
 
 // 설정 > 위젯에서 투명도를 바꿨을 때 이미 열려있는 포스트잇 창들에도 바로 반영하기 위함

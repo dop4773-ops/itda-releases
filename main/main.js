@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen, powerMonitor } = require('electron');
 const path = require('path');
 const { initDb, closeDb } = require('./db');
 const registerIpcHandlers = require('./ipc');
@@ -13,7 +13,8 @@ const lockState = require('./shared/lock-state');
 const { forceShowAndFocus } = require('./shared/window-focus');
 const createSettingsRepository = require('./repositories/settings.repository');
 const { restoreOpenWidgets } = require('./widget-restore');
-const { initErrorLogging } = require('./logger');
+const { initErrorLogging, logError, logDir } = require('./logger');
+const { initWindowDiagnostics } = require('./shared/window-diagnostics');
 const { initPerf, perf, now } = require('./perf');
 
 // 예상 못한 예외/거부를 콘솔 + userData/logs/error.log 에 남긴다(크래시보다 로그+복구 우선).
@@ -94,6 +95,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     initPerf(app);
+    initWindowDiagnostics({ app, screen, powerMonitor, logDir, logError }); // 위젯이 사라지는 등 창 이상 현상의 원인 추적(logs/windows.log)
     const tReady = now();
     let t = now();
     try {

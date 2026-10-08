@@ -3,6 +3,7 @@ const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
 const { forceShowAndFocus } = require('../shared/window-focus');
 const { fitToScreens } = require('../shared/window-bounds');
+const { noteClose } = require('../shared/window-diagnostics');
 
 // widgetType(문자열) -> BrowserWindow. postit-widget/window-manager.js와 달리
 // "항목 하나당 창 하나"가 아니라 "위젯 종류당 창 하나"라 map 키가 id가 아니라 type이다.
@@ -83,7 +84,10 @@ function openWidget(type, bounds = {}, { onBoundsChange, opacity = 1, alwaysOnTo
 
 function closeWidget(type) {
   const win = windows.get(type);
-  if (win && !win.isDestroyed()) win.close();
+  if (win && !win.isDestroyed()) {
+    noteClose(win, 'main:closeWidget');
+    win.close();
+  }
 }
 
 function isOpen(type) {

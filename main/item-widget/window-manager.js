@@ -2,6 +2,7 @@ const { BrowserWindow } = require('electron');
 const path = require('path');
 const { attachExternalLinkHandler } = require('../shared/external-links');
 const { fitToScreens } = require('../shared/window-bounds');
+const { noteClose } = require('../shared/window-diagnostics');
 
 /**
  * postit-widget/window-manager.js와 같은 컨셉("항목 하나당 창 하나")이지만,
@@ -163,7 +164,10 @@ function isOpen(type, id) {
 // 항목이 완전삭제(휴지통 비우기)되거나 소프트삭제될 때 열려있는 위젯 창도 같이 정리하기 위함
 function closeIfOpen(type, id) {
   const win = windows.get(keyOf(type, id));
-  if (win && !win.isDestroyed()) win.close();
+  if (win && !win.isDestroyed()) {
+    noteClose(win, 'main:item-deleted');
+    win.close();
+  }
 }
 
 // 자동 업데이트 재시작 직전에 "지금 뭐가 열려있었는지" 스냅샷 뜨기 위함(main/widget-restore 참고)
