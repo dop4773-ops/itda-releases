@@ -2550,3 +2550,12 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .cf-chip:hover{background:var(--bg);}
 .cf-chip.on{border-color:var(--brand);color:var(--brand);background:color-mix(in srgb,var(--brand) 9%,transparent);}
 .cf-preview{white-space:pre-wrap;font-family:inherit;font-size:12.5px;line-height:1.7;background:var(--bg);border-radius:var(--radius-sm);padding:10px 14px;margin:6px 0 0;min-height:48px;}
+
+/* 오늘 화면: 날짜 이동·바로 추가·되돌리기 */
+.td-head-tools{display:flex;align-items:center;gap:6px;}
+.td-navbtn{padding:6px 11px;font-size:15px;line-height:1;}
+.td-add{margin-bottom:12px;}
+.td-add input{width:100%;box-sizing:border-box;}
+.td-undo{display:flex;align-items:center;justify-content:space-between;gap:10px;background:color-mix(in srgb,var(--brand) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--brand) 25%,var(--border));border-radius:var(--radius-md);padding:8px 14px;margin-bottom:12px;font-size:12.5px;}
+.td-mini{border:1px solid var(--border);background:var(--surface);color:var(--brand);border-radius:var(--radius-pill);padding:0 9px;font-size:11px;font-family:inherit;cursor:pointer;flex-shrink:0;line-height:20px;}
+.td-mini:hover{background:var(--bg);}

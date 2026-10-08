@@ -112,6 +112,18 @@ module.exports = function registerTodosIpc(ipcMain, repos) {
     return { id, is_favorite: next };
   });
 
+  // 마감일 일괄 변경 — items: [{ id, dueDate: 'YYYY-MM-DD' }]
+  ipcMain.handle('todos:reschedule', (event, { items } = {}) => {
+    if (!Array.isArray(items) || !items.length || items.length > 500) throw new Error('옮길 할 일이 올바르지 않아요.');
+    const clean = items.map((it) => {
+      if (!Number.isInteger(it.id) || !/^\d{4}-\d{2}-\d{2}$/.test(String(it.dueDate))) throw new Error('마감일 형식이 올바르지 않아요.');
+      return { id: it.id, dueDate: it.dueDate };
+    });
+    const changed = todos.reschedule(clean);
+    broadcastDataChanged('todo');
+    return { changed };
+  });
+
   ipcMain.handle('todos:delete', (event, id) => {
     todos.softDelete(id);
     broadcastDataChanged('todo', id);

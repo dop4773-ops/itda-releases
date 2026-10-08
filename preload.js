@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('itda', {
     add: (payload) => ipcRenderer.invoke('todos:add', payload),
     update: (payload) => ipcRenderer.invoke('todos:update', payload),
     toggle: (id) => ipcRenderer.invoke('todos:toggle', id),
+    reschedule: (payload) => ipcRenderer.invoke('todos:reschedule', payload), // { items: [{ id, dueDate }] }
     setStatus: (payload) => ipcRenderer.invoke('todos:setStatus', payload),
     toggleFavorite: (id) => ipcRenderer.invoke('todos:toggleFavorite', id),
     delete: (id) => ipcRenderer.invoke('todos:delete', id),

@@ -16,8 +16,15 @@ const REFRESH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none
 
 export async function mount(root) {
   const now = new Date();
-  const today = toKey(now);
-  const tomorrow = toKey(addDays(now, 1));
+  const realToday = toKey(now);
+  // 화면이 보여주는 날 — 처음엔 오늘이고 ‹ › 로 옮긴다. today/tomorrow는 "보는 날"과 그다음 날을 뜻한다
+  let today = realToday;
+  let tomorrow = toKey(addDays(now, 1));
+  const isToday = () => today === realToday;
+  const dayLabel = (key) => {
+    const d = new Date(`${key}T00:00:00`);
+    return `${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEK[d.getDay()]}요일`;
+  };
   let unmounted = false;
   let seq = 0;
 
@@ -25,17 +32,24 @@ export async function mount(root) {
     <div class="page-head">
       <div class="page-head-title">
         <div class="page-head-icon tone-green">${SUN_ICON}</div>
-        <div><h1>${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEK[now.getDay()]}요일</h1><p id="td-sub">불러오는 중…</p></div>
+        <div><h1 id="td-h1">${dayLabel(today)}</h1><p id="td-sub">불러오는 중…</p></div>
       </div>
-      <button class="btn-secondary" id="td-refresh">${REFRESH_ICON} 새로고침</button>
+      <div class="td-head-tools">
+        <button class="btn-secondary td-navbtn" id="td-prevDay" title="전날 (←)">‹</button>
+        <button class="btn-secondary" id="td-goToday" title="오늘로 (T)" style="display:none;">오늘</button>
+        <button class="btn-secondary td-navbtn" id="td-nextDay" title="다음 날 (→)">›</button>
+        <button class="btn-secondary" id="td-refresh">${REFRESH_ICON} 새로고침</button>
+      </div>
     </div>
+    <div class="td-add"><input type="text" id="td-addInput" class="input" maxlength="200" placeholder="할 일 추가 — 입력하고 Enter (마감은 지금 보는 날)" /></div>
+    <div class="td-undo" id="td-undo" style="display:none;"></div>
     <div class="td-stats" id="td-stats"></div>
     <div class="td-grid">
-      <div class="panel td-timeline"><div class="panel-head"><h3>오늘 하루</h3></div><div id="td-timeline"></div></div>
+      <div class="panel td-timeline"><div class="panel-head"><h3 id="td-tlTitle">오늘 하루</h3></div><div id="td-timeline"></div></div>
       <div class="td-side">
         <div class="panel" id="td-admPanel" style="display:none;"><div class="panel-head"><h3>입퇴원</h3><button class="btn-secondary" id="td-copy">전달 문구 복사</button></div><div id="td-adm"></div></div>
-        <div class="panel"><div class="panel-head"><h3>지난 미완료</h3></div><div id="td-over"></div></div>
-        <div class="panel"><div class="panel-head"><h3>내일 미리보기</h3><span class="td-date">${md(tomorrow)} (${WEEK[addDays(now, 1).getDay()]})</span></div><div id="td-next"></div></div>
+        <div class="panel" id="td-overPanel"><div class="panel-head"><h3>지난 미완료</h3><button class="btn-secondary" id="td-reschedAll" style="display:none;"></button></div><div id="td-over"></div></div>
+        <div class="panel"><div class="panel-head"><h3 id="td-nextTitle">내일 미리보기</h3><span class="td-date" id="td-nextDate"></span></div><div id="td-next"></div></div>
       </div>
     </div></div>`;
   // 이벤트는 root가 아니라 이 화면 안쪽 요소에 건다 — root는 화면을 옮겨도 그대로라 리스너가 쌓여 중복 실행된다
@@ -73,12 +87,13 @@ export async function mount(root) {
       <span class="td-txt" data-todo-open="${t.id}">${escapeHtml(t.title)}</span>
       ${t.is_favorite ? '<span class="td-flag">★</span>' : t.priority === 1 ? '<span class="td-flag hi">중요</span>' : ''}
       ${showDate ? `<span class="td-when">${md(t.due_date)}</span>` : ''}
+      ${showDate && isToday() ? `<button class="td-mini" data-resched="${t.id}" title="오늘로 옮기기">오늘로</button>` : ''}
     </div>`;
 
   function renderTimeline(events, todos) {
     const rows = buildTimeline(events, todos);
     if (!rows.length) {
-      $('td-timeline').innerHTML = '<div class="td-empty">오늘은 일정도 마감도 없어요. 여유로운 하루네요.</div>';
+      $('td-timeline').innerHTML = `<div class="td-empty">${isToday() ? '오늘은' : '이 날은'} 일정도 마감도 없어요. 여유로운 하루네요.</div>`;
       return;
     }
     $('td-timeline').innerHTML = rows
@@ -97,7 +112,7 @@ export async function mount(root) {
           .sort((a, b) => a.timeKey - b.timeKey)
           .map((i) => `<div class="td-row"><span class="td-pill ${i.kind === 'admission' ? 'in' : 'out'}">${i.kind === 'admission' ? '입원' : '퇴원'}</span><span class="td-txt">${escapeHtml(i.time ? `${i.time} ` : '')}${escapeHtml(i.person)}${i.supText ? `<small>${escapeHtml(i.supText)}</small>` : ''}</span></div>`)
           .join('')
-      : '<div class="td-empty">오늘 불러온 입원·퇴원이 없어요.</div>';
+      : `<div class="td-empty">${isToday() ? '오늘' : '이 날'} 불러온 입원·퇴원이 없어요.</div>`;
   }
 
   function renderOverdue({ recent, older }) {
@@ -106,7 +121,7 @@ export async function mount(root) {
       : '<div class="td-empty">밀린 할 일이 없어요.</div>';
   }
 
-  const POP_TITLE = { events: '오늘 일정', todos: '오늘 마감 할 일', overdue: '지난 미완료', adm: '오늘 입퇴원' };
+  const popTitle = (k) => ({ events: '일정', todos: '마감 할 일', overdue: '지난 미완료', adm: '입퇴원' }[k] ? `${k === 'overdue' || !isToday() ? '' : '오늘 '}${{ events: '일정', todos: '마감 할 일', overdue: '지난 미완료', adm: '입퇴원' }[k]}` : '');
   async function renderPopup() {
     const body = popupEl.querySelector('#tdp-body');
     const actions = popupEl.querySelector('#tdp-actions');
@@ -114,20 +129,21 @@ export async function mount(root) {
     actions.innerHTML = '<button class="btn-secondary" id="tdp-done">닫기</button>';
     actions.querySelector('#tdp-done').addEventListener('click', closePopup);
     if (popup.kind === 'events') {
-      title.textContent = `${POP_TITLE.events} ${state.events.length}건`;
+      title.textContent = `${popTitle('events')} ${state.events.length}건`;
       body.innerHTML = state.events.length
         ? buildTimeline(state.events, []).map((r) => `<div class="td-line"><span class="td-time">${escapeHtml(r.time)}</span><div class="td-row" data-event="${r.data.id}"><span class="td-dot" style="background:${r.data.color_hex || 'var(--text-faint)'}"></span><span class="td-txt">${escapeHtml(r.data.title)}</span>${r.data.location ? `<span class="td-when">${escapeHtml(r.data.location)}</span>` : ''}</div></div>`).join('')
-        : '<div class="td-empty">오늘 일정이 없어요.</div>';
+        : `<div class="td-empty">${isToday() ? '오늘 ' : ''}일정이 없어요.</div>`;
     } else if (popup.kind === 'todos' || popup.kind === 'overdue') {
       const list = popup.kind === 'todos' ? state.todayTodos : state.overdueAll;
-      title.textContent = `${POP_TITLE[popup.kind]} ${list.length}건`;
+      title.textContent = `${popTitle(popup.kind)} ${list.length}건`;
+      if (popup.kind === 'overdue' && list.length && isToday()) actions.insertAdjacentHTML('afterbegin', `<button class="btn-secondary" data-resched-all="1">전부 오늘로 옮기기 (${list.length}건)</button>`);
       body.innerHTML = list.length ? list.map((t) => todoRow(t, { showDate: popup.kind === 'overdue' })).join('') : '<div class="td-empty">없어요.</div>';
     } else if (popup.kind === 'adm') {
       const list = (state.admItems || []).filter((i) => i.date === today && (i.kind === 'admission' || i.kind === 'discharge')).sort((a, b) => a.timeKey - b.timeKey);
-      title.textContent = `${POP_TITLE.adm} ${list.length}건`;
+      title.textContent = `${popTitle('adm')} ${list.length}건`;
       body.innerHTML = list.length
         ? list.map((i) => `<div class="td-row"><span class="td-pill ${i.kind === 'admission' ? 'in' : 'out'}">${i.kind === 'admission' ? '입원' : '퇴원'}</span><span class="td-txt">${escapeHtml(i.time ? `${i.time} ` : '')}${escapeHtml(i.person)}${i.supText ? `<small>${escapeHtml(i.supText)}</small>` : ''}${i.note ? `<small class="note">${escapeHtml(i.note)}</small>` : ''}</span></div>`).join('')
-        : '<div class="td-empty">오늘 불러온 입원·퇴원이 없어요.</div>';
+        : `<div class="td-empty">${isToday() ? '오늘 ' : ''}불러온 입원·퇴원이 없어요.</div>`;
       actions.insertAdjacentHTML('afterbegin', '<button class="btn-secondary" id="tdp-copy">전달 문구 복사</button>');
       actions.querySelector('#tdp-copy').addEventListener('click', () => $('td-copy').click());
     } else if (popup.kind === 'todo') {
@@ -178,20 +194,26 @@ export async function mount(root) {
       if (unmounted || my !== seq) return;
 
       const openToday = todayTodos.filter((t) => t.status !== 'done');
-      const overdue = pickOverdue(openTodos, today);
+      // 지난 미완료는 "지금 기준"의 밀린 일이라 오늘을 볼 때만 보여준다
+      const overdue = isToday() ? pickOverdue(openTodos, today) : { recent: [], older: 0 };
       const admItems = adm && adm.enabled ? adm.items : null;
       const count = (day, kind) => (admItems ? admItems.filter((i) => i.date === day && i.kind === kind).length : 0);
 
       const stats = [
-        { label: '오늘 일정', value: events.length, pop: 'events' },
-        { label: '오늘 마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos' },
-        { label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue' },
+        { label: isToday() ? '오늘 일정' : '일정', value: events.length, pop: 'events' },
+        { label: isToday() ? '오늘 마감' : '마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos' },
+        ...(isToday() ? [{ label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue' }] : []),
       ];
       if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info', pop: 'adm' });
       $('td-stats').innerHTML = stats
         .map((s) => `<button class="td-stat ${s.tone || ''}" data-pop="${s.pop}"><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
         .join('');
-      $('td-sub').textContent = `오늘 챙길 것 ${events.length + openToday.length}건${admItems ? ` · 입원 ${count(today, 'admission')} · 퇴원 ${count(today, 'discharge')}` : ''}`;
+      $('td-h1').textContent = dayLabel(today);
+      $('td-goToday').style.display = isToday() ? 'none' : '';
+      $('td-tlTitle').textContent = isToday() ? '오늘 하루' : `${md(today)} 하루`;
+      $('td-nextTitle').textContent = isToday() ? '내일 미리보기' : '다음 날 미리보기';
+      $('td-nextDate').textContent = `${md(tomorrow)} (${WEEK[new Date(`${tomorrow}T00:00:00`).getDay()]})`;
+      $('td-sub').textContent = `${isToday() ? '오늘' : '이 날'} 챙길 것 ${events.length + openToday.length}건${admItems ? ` · 입원 ${count(today, 'admission')} · 퇴원 ${count(today, 'discharge')}` : ''}`;
 
       state.events = events;
       state.todayTodos = todayTodos;
@@ -200,6 +222,10 @@ export async function mount(root) {
       renderTimeline(events, todayTodos);
       $('td-admPanel').style.display = admItems ? '' : 'none';
       if (admItems) renderAdmission(admItems);
+      $('td-overPanel').style.display = isToday() ? '' : 'none';
+      const reschedBtn = $('td-reschedAll');
+      reschedBtn.style.display = isToday() && state.overdueAll.length ? '' : 'none';
+      reschedBtn.textContent = `전부 오늘로 (${state.overdueAll.length}건)`;
       renderOverdue(overdue);
 
       const nextParts = [
@@ -215,7 +241,45 @@ export async function mount(root) {
     }
   }
 
+  // 마감일을 옮기고 "되돌리기" 안내를 잠깐 보여준다(옮기기 전 날짜를 기억해 두었다가 그대로 복구)
+  let undoTimer = null;
+  async function reschedule(list, label) {
+    const items = list.filter((t) => t.due_date !== realToday).map((t) => ({ id: t.id, dueDate: realToday }));
+    if (!items.length) return;
+    const before = list.filter((t) => t.due_date !== realToday).map((t) => ({ id: t.id, dueDate: t.due_date }));
+    try {
+      await window.itda.todos.reschedule({ items });
+    } catch (err) {
+      return errorToast(err, '옮기지 못했어요');
+    }
+    const bar = $('td-undo');
+    bar.innerHTML = `<span>${escapeHtml(label)} ${items.length}건을 오늘로 옮겼어요</span><button class="btn-secondary" id="td-undoBtn">되돌리기</button>`;
+    bar.style.display = '';
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => (bar.style.display = 'none'), 12000);
+    $('td-undoBtn').addEventListener('click', async () => {
+      clearTimeout(undoTimer);
+      bar.style.display = 'none';
+      try {
+        await window.itda.todos.reschedule({ items: before });
+        toast('원래 마감일로 되돌렸어요');
+      } catch (err) {
+        errorToast(err, '되돌리지 못했어요');
+      }
+    });
+  }
+  function shiftDay(delta) {
+    const d = delta === 0 ? now : addDays(new Date(`${today}T00:00:00`), delta);
+    today = toKey(d);
+    tomorrow = toKey(addDays(d, 1));
+    closePopup();
+    load();
+  }
+
   const onClick = async (e) => {
+    const one = e.target.closest('[data-resched]');
+    if (one) return reschedule(state.overdueAll.filter((t) => t.id === Number(one.dataset.resched)), '지난 미완료');
+    if (e.target.closest('#td-reschedAll') || e.target.closest('[data-resched-all]')) return reschedule(state.overdueAll, '지난 미완료');
     const pop = e.target.closest('[data-pop]');
     if (pop) return openPopup({ kind: pop.dataset.pop });
     const todoOpen = e.target.closest('[data-todo-open]');
@@ -245,6 +309,26 @@ export async function mount(root) {
   page.addEventListener('change', onChange);
   popupEl.addEventListener('change', onChange);
   $('td-refresh').addEventListener('click', load);
+  $('td-prevDay').addEventListener('click', () => shiftDay(-1));
+  $('td-nextDay').addEventListener('click', () => shiftDay(1));
+  $('td-goToday').addEventListener('click', () => shiftDay(0));
+  // 바로 추가 — 지금 보는 날이 마감일인 할 일로 들어간다
+  $('td-addInput').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    const title = e.target.value.trim();
+    if (!title) return;
+    e.target.disabled = true;
+    try {
+      await window.itda.todos.add({ title, dueDate: today });
+      e.target.value = '';
+      toast(`${md(today)} 할 일로 추가했어요`);
+    } catch (err) {
+      errorToast(err, '추가하지 못했어요');
+    } finally {
+      e.target.disabled = false;
+      e.target.focus();
+    }
+  });
   $('td-copy').addEventListener('click', async () => {
     try {
       const texts = [];
@@ -265,10 +349,20 @@ export async function mount(root) {
   const onKey = (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey || isUserTyping() || document.querySelector('.modal-overlay.open')) return;
     if (e.key === 'r' || e.key === 'R') load();
+    else if (e.key === 'ArrowLeft') shiftDay(-1);
+    else if (e.key === 'ArrowRight') shiftDay(1);
+    else if (e.key === 't' || e.key === 'T') shiftDay(0);
+    else if (e.key === 'n' || e.key === 'N') {
+      e.preventDefault();
+      $('td-addInput').focus();
+    }
     else if ((e.key === 'c' || e.key === 'C') && $('td-admPanel').style.display !== 'none') copyBtn().click();
   };
   document.addEventListener('keydown', onKey);
   setScreenShortcuts('오늘', [
+    { label: '할 일 추가', keys: 'N' },
+    { label: '전날 / 다음 날', keys: '← →' },
+    { label: '오늘로 돌아오기', keys: 'T' },
     { label: '새로고침', keys: 'R' },
     { label: '입퇴원 전달 문구 복사', keys: 'C' },
   ]);
@@ -283,6 +377,7 @@ export async function mount(root) {
   return () => {
     unmounted = true;
     clearTimeout(timer);
+    clearTimeout(undoTimer);
     document.removeEventListener('keydown', onKey);
     offEsc();
     setScreenShortcuts(null, []);

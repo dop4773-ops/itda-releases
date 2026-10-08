@@ -184,6 +184,12 @@ module.exports = function createTodosRepository(db) {
       ).run(status, isDone, isDone, id);
     },
 
+    // 여러 할 일의 마감일을 한 번에 바꾼다(오늘 화면의 "오늘로 미루기"·되돌리기용). 휴지통 항목은 건드리지 않고 바뀐 개수를 돌려준다
+    reschedule(items) {
+      const stmt = db.prepare('UPDATE todos SET due_date = ? WHERE id = ? AND deleted_at IS NULL');
+      return db.transaction(() => items.reduce((n, it) => n + stmt.run(it.dueDate, it.id).changes, 0))();
+    },
+
     setFavorite(id, isFavorite) {
       db.prepare('UPDATE todos SET is_favorite = ? WHERE id = ?').run(isFavorite ? 1 : 0, id);
     },
