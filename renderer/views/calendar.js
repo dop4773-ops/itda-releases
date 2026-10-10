@@ -8,6 +8,7 @@ import { confirmSeriesScope } from '../shared/series-scope.js';
 import { setScreenShortcuts } from '../shared/shell.js';
 import { promptText } from '../shared/text-prompt.js';
 import { openBulkScheduleDialog } from '../shared/bulk-schedule-dialog.js';
+import { isMultiDayAllDay, layoutMultiDayLanes } from '../shared/calendar-lanes.js';
 import {
   WEEKDAY_LABELS,
   dateKey as toKey,
@@ -86,6 +87,9 @@ export function queryRange(view, anchor) {
   return { fromDate: toKey(anchor), toDate: toKey(anchor) };
 }
 
+// 월간 칸에 한 번에 보여주는 일정 수(넘으면 "+N개 더보기")
+const MONTH_MAX_VISIBLE = 5;
+
 export function groupByDateKey(events) {
   const map = new Map();
   const addToDay = (key, e) => {
@@ -115,13 +119,6 @@ export function groupByDateKey(events) {
   return map;
 }
 
-// 여러 날에 걸친 종일 일정(휴가·연휴 등) 판별 — 종일이고 종료일이 시작일보다 뒤.
-function isMultiDayAllDay(e) {
-  const s = (e.start_at || '').slice(0, 10);
-  const en = (e.end_at || '').slice(0, 10);
-  return !!e.all_day && !!en && en > s;
-}
-
 // 순수 HTML 빌더 — 이벤트 바인딩 없이 마크업만 반환 (달력 화면 + 대시보드 위젯이 공유)
 // compact:true면 대시보드 사이드 패널용 — pill을 늘어놓지 않고 "점 + 개수"만 표시해서
 // 하루에 일정이 몇 개든 셀 높이가 항상 일정하게 유지된다(월 전체 높이가 안정적).
@@ -137,11 +134,14 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
     const i = alldayOrder.indexOf(e.id);
     return i === -1 ? Number.MAX_SAFE_INTEGER : i;
   };
-  const sortDayEvents = (list) => {
+  const lanesByKey = new Map();
+  for (let w = 0; w < dates.length; w += 7) {
+    layoutMultiDayLanes(dates.slice(w, w + 7).map(toKey), byDate).forEach((v, k) => lanesByKey.set(k, v));
+  }
+  // 반환: 칸에 그릴 목록(여러 날 일정 줄 → 단일 종일 → 시간 일정). null = 빈 줄 자리표시.
+  const sortDayEvents = (list, key) => {
     const cmpStart = (a, b) => (a.start_at || '').localeCompare(b.start_at || '') || (a.id > b.id ? 1 : -1);
-    // 여러 날 이어지는 종일 일정은 어느 칸에서도 항상 맨 위 같은 자리에 오게 — 안 그러면 구글 일정
-    // 등이 사이에 끼어 칸마다 위치가 달라져 막대가 끊겨 보인다. (시작일→id 순으로 결정적 정렬)
-    const multi = list.filter((e) => isMultiDayAllDay(e)).sort(cmpStart);
+    const multi = lanesByKey.get(key) || list.filter((e) => isMultiDayAllDay(e)).sort(cmpStart);
     const allday = list.filter((e) => e.all_day && !isMultiDayAllDay(e)).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpStart(a, b));
     const timed = list.filter((e) => !e.all_day).sort(cmpStart);
     return [...multi, ...allday, ...timed];
@@ -150,14 +150,15 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
   const cells = dates
     .map((d) => {
       const key = toKey(d);
-      const dayEvents = sortDayEvents(byDate.get(key) || []);
+      const dayEvents = sortDayEvents(byDate.get(key) || [], key);
       const isOtherMonth = d.getMonth() !== anchor.getMonth();
       const isToday = isSameDay(d, today);
 
+      const realCount = dayEvents.filter(Boolean).length;
       if (compact) {
         const indicator =
-          dayEvents.length > 0
-            ? `<div class="month-compact-indicator" title="${dayEvents.length}개 일정"><span class="month-compact-dot"></span>${dayEvents.length}</div>`
+          realCount > 0
+            ? `<div class="month-compact-indicator" title="${realCount}개 일정"><span class="month-compact-dot"></span>${realCount}</div>`
             : '';
         return `
         <div class="month-cell month-cell-compact ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}" ${holidayNames.has(key) ? `title="${escapeHtml(holidayNames.get(key))}"` : ''}>
@@ -166,9 +167,19 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
         </div>`;
       }
 
-      const visible = dayEvents.slice(0, 3);
-      const overflow = dayEvents.length - visible.length;
+      // 한도는 실제 일정 기준 — 막대 줄 맞춤용 빈 줄(null)은 개수에 안 센다
+      let shown = 0;
+      let cut = dayEvents.length;
+      for (let i = 0; i < dayEvents.length; i += 1) {
+        if (dayEvents[i] && (shown += 1) > MONTH_MAX_VISIBLE) {
+          cut = i;
+          break;
+        }
+      }
+      const visible = dayEvents.slice(0, cut);
+      const overflow = realCount - visible.filter(Boolean).length;
       const pill = (e) => {
+        if (!e) return '<div class="month-event-pill is-spacer">&nbsp;</div>';
         const bg = e.source === 'google' ? '#9AA5B1' : e.color_hex || 'var(--text-faint)';
         const fg = e.source === 'google' ? '#fff' : e.text_color || '#000';
         // 여러 날짜에 걸친 종일 일정(휴가 등)은 구글 캘린더처럼 이어지는 막대로 — 시작/끝/중간
@@ -253,13 +264,14 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   };
   // 여러 날 이어지는 종일 일정을 맨 위 같은 자리에 고정 — 구글 일정이 사이에 껴도 막대가 안 끊기게.
   const cmpAllDay = (a, b) => (a.start_at || '').localeCompare(b.start_at || '') || (a.id > b.id ? 1 : -1);
-  const sortAllDay = (list) => {
-    const multi = list.filter(isMultiDayAllDay).sort(cmpAllDay);
+  const sortAllDay = (list, key) => {
+    const multi = weekLanes.get(key) || list.filter(isMultiDayAllDay).sort(cmpAllDay);
     const single = list.filter((e) => !isMultiDayAllDay(e)).sort((a, b) => alldayIdx(a) - alldayIdx(b) || cmpAllDay(a, b));
     return [...multi, ...single];
   };
   const today = new Date();
   const days = dayCount === 7 ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(anchor), i)) : [anchor];
+  const weekLanes = layoutMultiDayLanes(days.map(toKey), byDate);
   const hourCount = HOUR_END - HOUR_START;
   const totalHeight = hourCount * ROW_HEIGHT;
 
@@ -277,9 +289,10 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   const alldayRowCells = days
     .map((d) => {
       const key = toKey(d);
-      const allDayEvents = sortAllDay((byDate.get(key) || []).filter((e) => e.all_day));
+      const allDayEvents = sortAllDay((byDate.get(key) || []).filter((e) => e.all_day), key);
       const bars = allDayEvents
         .map((e) => {
+          if (!e) return '<div class="allday-bar is-spacer"><span>&nbsp;</span></div>';
           const isGoogle = e.source === 'google';
           // 여러 날 이어지는 종일 일정은 구글 캘린더처럼 — 안쪽 모서리를 각지게, 제목은
           // 시작일/주의 첫 칸에만. (칸 사이 세로 경계는 남지만 같은 색으로 이어져 보인다.)
@@ -711,7 +724,7 @@ export async function mount(root, deepLinkId) {
       });
     });
 
-    container.querySelectorAll('.time-event-block,.allday-bar').forEach((block) => {
+    container.querySelectorAll('.time-event-block,.allday-bar:not(.is-spacer)').forEach((block) => {
       block.addEventListener('click', (ev) => {
         if (ev.target.closest('[data-action="delete"]')) return;
         if (block.dataset.source === 'google') return; // 구글 일정은 읽기전용 — 로컬 상세모달(삭제/연결) 대상 아님
@@ -724,7 +737,7 @@ export async function mount(root, deepLinkId) {
     // 여기서는 제공하지 않는다 — 대신 상세 모달의 "위젯으로 보기" 버튼(openDetail 참고)으로 대체.
 
     // 우클릭 컨텍스트 메뉴 (연결/위젯으로 보기/삭제) — 구글 일정은 읽기전용이라 대상 아님
-    container.querySelectorAll('.time-event-block,.allday-bar').forEach((block) => {
+    container.querySelectorAll('.time-event-block,.allday-bar:not(.is-spacer)').forEach((block) => {
       if (block.dataset.source === 'google') return;
       attachContextMenu(
         block,
@@ -777,9 +790,7 @@ export async function mount(root, deepLinkId) {
       errorToast(e, '위젯을 열지 못했어요');
     }
   });
-  $('c-detailOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'c-detailOverlay') closeDetail();
-  });
+  // 상세 팝업은 바깥을 눌러도 닫히지 않는다 — ✕ 버튼 또는 Esc로만 닫힘(실수로 닫히는 것 방지).
   $('cd-delete').addEventListener('click', async () => {
     const id = Number($('cd-detailId').value);
     let scope = 'this';

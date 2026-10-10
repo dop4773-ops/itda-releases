@@ -7,12 +7,18 @@ import { escapeHtml, errorToast, toast, goToHash, isUserTyping } from '../shared
 import { setScreenShortcuts } from '../shared/shell.js';
 import { mountEventDetailModal } from '../shared/event-detail-modal.js';
 import { registerEscClose } from '../shared/esc-close.js';
-import { buildTimeline, pickOverdue, OVERDUE_DAYS, toKey, addDays } from '../shared/today-logic.js';
+import { buildTimeline, pickOverdue, OVERDUE_DAYS, toKey, addDays, eventState, nextUp, minutesText, greeting, weekKeys, countByDay, nowMinutes } from '../shared/today-logic.js';
 
 const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
 const md = (key) => `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}`;
 const SUN_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>`;
 const REFRESH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>`;
+
+// 가장 오래 밀린 할 일이 며칠 전인지(없으면 0)
+function oldestOverdueDays(openTodos, today) {
+  const dues = openTodos.filter((t) => t.due_date && t.due_date < today).map((t) => t.due_date).sort();
+  return dues.length ? Math.round((new Date(`${today}T00:00:00`) - new Date(`${dues[0]}T00:00:00`)) / 86400000) : 0;
+}
 
 export async function mount(root) {
   let realToday = toKey(new Date());
@@ -40,9 +46,11 @@ export async function mount(root) {
         <button class="btn-secondary" id="td-refresh">${REFRESH_ICON} 새로고침</button>
       </div>
     </div>
+    <div class="td-hero" id="td-hero"></div>
     <div class="td-add"><input type="text" id="td-addInput" class="input" maxlength="200" placeholder="할 일 추가 — 입력하고 Enter (마감은 지금 보는 날)" /></div>
     <div class="td-undo" id="td-undo" style="display:none;"></div>
     <div class="td-stats" id="td-stats"></div>
+    <div class="td-week" id="td-week"></div>
     <div class="td-grid">
       <div class="panel td-timeline"><div class="panel-head"><h3 id="td-tlTitle">오늘 하루</h3></div><div id="td-timeline"></div></div>
       <div class="td-side">
@@ -57,7 +65,7 @@ export async function mount(root) {
 
   // 상단 카드·할 일을 누르면 화면을 옮기지 않고 팝업으로 보여준다. 일정 상세 모달보다 먼저 만들어 DOM에서 앞에 두면
   // 목록 팝업 위에 일정 상세가 겹쳐 뜬다(닫으면 목록으로 돌아옴).
-  const state = { events: [], todayTodos: [], overdueAll: [], admItems: null };
+  const state = { events: [], todayTodos: [], overdueAll: [], admItems: null, week: null };
   let popup = null; // { kind: 'events'|'todos'|'overdue'|'adm'|'todo', id? }
   const popupEl = document.createElement('div');
   popupEl.className = 'modal-overlay td-popup';
@@ -83,11 +91,29 @@ export async function mount(root) {
     <div class="td-row ${t.status === 'done' ? 'done' : ''}" data-todo="${t.id}">
       <input type="checkbox" data-check="${t.id}" ${t.status === 'done' ? 'checked' : ''} />
       <span class="td-dot" style="background:${t.color_hex || 'var(--text-faint)'}"></span>
-      <span class="td-txt" data-todo-open="${t.id}">${escapeHtml(t.title)}</span>
+      <span class="td-txt" data-todo-open="${t.id}"><b>${escapeHtml(t.title)}</b></span>
+      ${t.category_name && !showDate ? `<span class="td-chip">${escapeHtml(t.category_name)}</span>` : ''}
       ${t.is_favorite ? '<span class="td-flag">★</span>' : t.priority === 1 ? '<span class="td-flag hi">중요</span>' : ''}
       ${showDate ? `<span class="td-when">${md(t.due_date)}</span>` : ''}
       ${showDate && isToday() ? `<button class="td-mini" data-resched="${t.id}" title="오늘로 옮기기">오늘로</button>` : ''}
     </div>`;
+
+  // 타임라인 한 줄 — nowMin이 있으면(오늘을 볼 때) 끝난 일정은 흐리게, 진행 중인 일정은 강조
+  function lineHtml(r, nowMin) {
+    if (r.type === 'todo') return `<div class="td-line"><span class="td-time"><b>${escapeHtml(r.time)}</b></span>${todoRow(r.data)}</div>`;
+    const e = r.data;
+    const st = nowMin === null ? '' : eventState(e, nowMin);
+    const end = !e.all_day && (e.end_at || '').slice(0, 10) === (e.start_at || '').slice(0, 10) ? (e.end_at || '').slice(11, 16) : '';
+    const color = e.color_hex || 'var(--text-faint)';
+    return `<div class="td-line ${st ? `st-${st}` : ''}"><span class="td-time"><b>${escapeHtml(r.time)}</b>${end && end !== r.time ? `<small>~${end}</small>` : ''}</span>
+      <div class="td-row td-ev" data-event="${e.id}" style="--ev:${color}">
+        <span class="td-bar"></span>
+        <span class="td-ev-main"><span class="td-txt"><b>${escapeHtml(e.title)}</b></span>${e.memo ? `<span class="td-memo">${escapeHtml(String(e.memo).split('\n')[0])}</span>` : ''}</span>
+        ${st === 'now' ? '<span class="td-live">진행 중</span>' : ''}
+        ${e.category_name ? `<span class="td-chip" style="--chip:${color}">${escapeHtml(e.category_name)}</span>` : ''}
+        ${e.location ? `<span class="td-when">📍 ${escapeHtml(e.location)}</span>` : ''}
+      </div></div>`;
+  }
 
   function renderTimeline(events, todos) {
     const rows = buildTimeline(events, todos);
@@ -95,12 +121,67 @@ export async function mount(root) {
       $('td-timeline').innerHTML = `<div class="td-empty">${isToday() ? '오늘은' : '이 날은'} 일정도 마감도 없어요. 여유로운 하루네요.</div>`;
       return;
     }
-    $('td-timeline').innerHTML = rows
-      .map((r) =>
-        r.type === 'event'
-          ? `<div class="td-line"><span class="td-time">${escapeHtml(r.time)}</span><div class="td-row" data-event="${r.data.id}"><span class="td-dot" style="background:${r.data.color_hex || 'var(--text-faint)'}"></span><span class="td-txt">${escapeHtml(r.data.title)}</span>${r.data.location ? `<span class="td-when">${escapeHtml(r.data.location)}</span>` : ''}</div></div>`
-          : `<div class="td-line"><span class="td-time">${escapeHtml(r.time)}</span>${todoRow(r.data)}</div>`
-      )
+    const nowMin = isToday() ? nowMinutes() : null;
+    const nowKey = nowMin === null ? null : `${String(Math.floor(nowMin / 60)).padStart(2, '0')}:${String(nowMin % 60).padStart(2, '0')}`;
+    let marked = nowKey === null;
+    const out = [];
+    rows.forEach((r) => {
+      // "지금" 줄 — 아직 안 지난 첫 항목 바로 앞에 한 번만
+      if (!marked && r.sort > nowKey) {
+        out.push(`<div class="td-nowline"><span>지금 ${nowKey}</span></div>`);
+        marked = true;
+      }
+      out.push(lineHtml(r, nowMin));
+    });
+    if (!marked) out.push(`<div class="td-nowline"><span>지금 ${nowKey}</span></div>`);
+    $('td-timeline').innerHTML = out.join('');
+  }
+
+  // 맨 위 요약 — 인사 + 지금/다음 일정 + 오늘 할 일 진행도
+  function renderHero() {
+    const total = state.todayTodos.length;
+    const done = state.todayTodos.filter((t) => t.status === 'done').length;
+    const open = total - done;
+    let head;
+    let line;
+    if (isToday()) {
+      head = greeting(new Date().getHours());
+      const { now, next } = nextUp(state.events, nowMinutes());
+      const t = (ev) => (ev.start_at || '').slice(11, 16);
+      if (now) line = `<em>지금</em> <b>${escapeHtml(now.title)}</b> <span>${t(now)}${now.end_at ? `~${(now.end_at || '').slice(11, 16)}` : ''}</span>`;
+      else if (next) line = `다음 일정 <b>${t(next.event)}</b> <b>${escapeHtml(next.event.title)}</b> <span>${minutesText(next.inMin)}</span>`;
+      else line = state.events.length ? '오늘 남은 시간 일정은 모두 끝났어요' : '오늘은 정해진 시간 일정이 없어요';
+    } else {
+      const diff = Math.round((new Date(`${today}T00:00:00`) - new Date(`${realToday}T00:00:00`)) / 86400000);
+      head = diff > 0 ? `${diff}일 뒤` : `${-diff}일 전`;
+      line = `일정 <b>${state.events.length}</b>건 · 마감 <b>${open}</b>건`;
+    }
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const C = 2 * Math.PI * 20;
+    $('td-hero').innerHTML = `
+      <div class="td-hero-main"><span class="td-hero-hi">${escapeHtml(head)}</span><div class="td-hero-line">${line}</div></div>
+      <div class="td-hero-prog" title="마감 할 일 ${done}/${total} 완료">
+        <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="20" class="td-ring-bg"/><circle cx="26" cy="26" r="20" class="td-ring" stroke-dasharray="${(C * pct) / 100} ${C}" transform="rotate(-90 26 26)"/></svg>
+        <div><b>${total ? `${done}/${total}` : '–'}</b><small>${total ? (open ? `${open}건 남음` : '모두 완료!') : '마감 없음'}</small></div>
+      </div>`;
+  }
+
+  // 이번 주 한눈에 — 날짜를 누르면 그날로 이동
+  function renderWeek() {
+    if (!state.week) {
+      $('td-week').innerHTML = '';
+      return;
+    }
+    const { keys, counts } = state.week;
+    $('td-week').innerHTML = keys
+      .map((k) => {
+        const c = counts[k];
+        const d = new Date(`${k}T00:00:00`);
+        return `<button class="td-wd ${k === today ? 'sel' : ''} ${k === realToday ? 'real' : ''} ${d.getDay() === 0 ? 'sun' : d.getDay() === 6 ? 'sat' : ''}" data-day="${k}">
+          <span class="td-wd-dow">${WEEK[d.getDay()]}</span><b>${d.getDate()}</b>
+          <span class="td-wd-cnt">${c.events || c.todos ? `${c.events ? `<i class="ev">${c.events}</i>` : ''}${c.todos ? `<i class="td">${c.todos}</i>` : ''}` : '<i class="none">·</i>'}</span>
+        </button>`;
+      })
       .join('');
   }
 
@@ -130,7 +211,7 @@ export async function mount(root) {
     if (popup.kind === 'events') {
       title.textContent = `${popTitle('events')} ${state.events.length}건`;
       body.innerHTML = state.events.length
-        ? buildTimeline(state.events, []).map((r) => `<div class="td-line"><span class="td-time">${escapeHtml(r.time)}</span><div class="td-row" data-event="${r.data.id}"><span class="td-dot" style="background:${r.data.color_hex || 'var(--text-faint)'}"></span><span class="td-txt">${escapeHtml(r.data.title)}</span>${r.data.location ? `<span class="td-when">${escapeHtml(r.data.location)}</span>` : ''}</div></div>`).join('')
+        ? buildTimeline(state.events, []).map((r) => lineHtml(r, isToday() ? nowMinutes() : null)).join('')
         : `<div class="td-empty">${isToday() ? '오늘 ' : ''}일정이 없어요.</div>`;
     } else if (popup.kind === 'todos' || popup.kind === 'overdue') {
       const list = popup.kind === 'todos' ? state.todayTodos : state.overdueAll;
@@ -182,13 +263,16 @@ export async function mount(root) {
     const my = ++seq;
     try {
       const msgCfg = await window.itda.messenger.getConfig().catch(() => ({ enabled: false }));
-      const [events, todayTodos, openTodos, tomEvents, tomTodos, adm] = await Promise.all([
+      const wk = weekKeys(today);
+      const [events, todayTodos, openTodos, tomEvents, tomTodos, adm, wkEvents, wkTodos] = await Promise.all([
         window.itda.events.range({ fromDate: today, toDate: today }),
         window.itda.todos.list({ fromDate: today, toDate: today }),
         window.itda.todos.list({ isDone: false }),
         window.itda.events.range({ fromDate: tomorrow, toDate: tomorrow }),
         window.itda.todos.list({ fromDate: tomorrow, toDate: tomorrow }),
         msgCfg.enabled ? window.itda.messenger.items({ fromDate: today, toDate: tomorrow }).catch(() => null) : null,
+        window.itda.events.range({ fromDate: wk[0], toDate: wk[6] }).catch(() => []),
+        window.itda.todos.list({ fromDate: wk[0], toDate: wk[6] }).catch(() => []),
       ]);
       if (unmounted || my !== seq) return;
 
@@ -198,12 +282,16 @@ export async function mount(root) {
       const admItems = adm && adm.enabled ? adm.items : null;
       const count = (day, kind) => (admItems ? admItems.filter((i) => i.date === day && i.kind === kind).length : 0);
 
+      const nowMin = nowMinutes();
+      const upcoming = isToday() ? nextUp(events, nowMin).next : null;
+      const overCount = overdue.recent.length + overdue.older;
+      const oldest = oldestOverdueDays(openTodos, today);
       const stats = [
-        { label: isToday() ? '오늘 일정' : '일정', value: events.length, pop: 'events', hue: 'green' },
-        { label: isToday() ? '오늘 마감' : '마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : '', pop: 'todos', hue: 'purple' },
-        ...(isToday() ? [{ label: '지난 미완료', value: overdue.recent.length + overdue.older, tone: overdue.recent.length + overdue.older ? 'warn' : '', pop: 'overdue', hue: 'yellow' }] : []),
+        { label: isToday() ? '오늘 일정' : '일정', value: events.length, sub: upcoming ? `다음 ${(upcoming.event.start_at || '').slice(11, 16)}` : events.length ? '' : '여유로워요', pop: 'events', hue: 'green' },
+        { label: isToday() ? '오늘 마감' : '마감', value: openToday.length, sub: todayTodos.length - openToday.length ? `${todayTodos.length - openToday.length}건 완료` : openToday.length ? '' : '없어요', pop: 'todos', hue: 'purple' },
+        ...(isToday() ? [{ label: '지난 미완료', value: overCount, sub: overCount && oldest ? `가장 오래된 ${oldest}일 전` : overCount ? '' : '깔끔해요', tone: overCount ? 'warn' : '', pop: 'overdue', hue: 'yellow' }] : []),
       ];
-      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, tone: 'info', pop: 'adm', hue: 'blue' });
+      if (admItems) stats.push({ label: '입원 · 퇴원', value: `${count(today, 'admission')} · ${count(today, 'discharge')}`, sub: `내일 ${count(tomorrow, 'admission')} · ${count(tomorrow, 'discharge')}`, tone: 'info', pop: 'adm', hue: 'blue' });
       $('td-stats').innerHTML = stats
         .map((s) => `<button class="td-stat ${s.tone || ''}" data-pop="${s.pop}" data-hue="${s.hue || ''}"><span>${s.label}</span><b>${s.value}</b>${s.sub ? `<small>${s.sub}</small>` : ''}</button>`)
         .join('');
@@ -218,7 +306,10 @@ export async function mount(root) {
       state.todayTodos = todayTodos;
       state.overdueAll = [...openTodos.filter((t) => t.due_date && t.due_date < today)].sort((a, b) => a.due_date.localeCompare(b.due_date));
       state.admItems = admItems;
+      state.week = { keys: wk, counts: countByDay(wk, wkEvents, wkTodos) };
       renderTimeline(events, todayTodos);
+      renderHero();
+      renderWeek();
       $('td-admPanel').style.display = admItems ? '' : 'none';
       if (admItems) renderAdmission(admItems);
       $('td-overPanel').style.display = isToday() ? '' : 'none';
@@ -267,6 +358,14 @@ export async function mount(root) {
       }
     });
   }
+  function goDate(key) {
+    if (key === today) return;
+    realToday = toKey(new Date());
+    today = key;
+    tomorrow = toKey(addDays(new Date(`${key}T00:00:00`), 1));
+    closePopup();
+    load();
+  }
   function shiftDay(delta) {
     const d = delta === 0 ? new Date() : addDays(new Date(`${today}T00:00:00`), delta);
     realToday = toKey(new Date()); // 오늘로 돌아올 땐 "지금" 기준
@@ -277,6 +376,8 @@ export async function mount(root) {
   }
 
   const onClick = async (e) => {
+    const wd = e.target.closest('[data-day]');
+    if (wd) return goDate(wd.dataset.day);
     const one = e.target.closest('[data-resched]');
     if (one) return reschedule(state.overdueAll.filter((t) => t.id === Number(one.dataset.resched)), '지난 미완료');
     if (e.target.closest('#td-reschedAll') || e.target.closest('[data-resched-all]')) return reschedule(state.overdueAll, '지난 미완료');
@@ -369,9 +470,15 @@ export async function mount(root) {
 
   // 자정을 넘기면 자동으로 새 날짜로 — 오늘을 보고 있었으면 새 오늘로 넘어가고(다른 날을 보고 있었으면 그 날은 유지), 지난 미완료 등도 다시 계산한다.
   // 앱을 켜 둔 채 절전에서 깨어나거나 창으로 돌아올 때도 확인한다(그동안은 타이머가 멈춰 있을 수 있어서).
+  // 1분마다: "지금" 줄·진행 중 표시·다음 일정까지 남은 시간을 새로 그린다(날짜가 안 바뀌었을 때)
+  const repaintLive = () => {
+    if (!isToday() || unmounted || !state.week) return;
+    renderTimeline(state.events, state.todayTodos);
+    renderHero();
+  };
   const checkNewDay = () => {
     const k = toKey(new Date());
-    if (k === realToday || unmounted) return;
+    if (k === realToday || unmounted) return repaintLive();
     const wasToday = today === realToday;
     realToday = k;
     if (wasToday) {

@@ -109,9 +109,7 @@ export function mountEventDetailModal(root, { onChange } = {}) {
     $('ed-detailLinks').innerHTML = '';
   }
   $('ed-detailClose').addEventListener('click', closeDetail);
-  $('ed-detailOverlay').addEventListener('click', (e) => {
-    if (e.target.id === 'ed-detailOverlay') closeDetail();
-  });
+  // 상세 팝업은 바깥을 눌러도 닫히지 않는다 — ✕ 버튼 또는 Esc로만 닫힘.
   $('ed-detailDelete').addEventListener('click', async () => {
     const id = Number($('ed-detailId').value);
     try {

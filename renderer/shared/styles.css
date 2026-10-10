@@ -711,6 +711,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .time-day-header.is-holiday:not(.is-today){color:var(--danger);}
 .agenda-day-label.is-holiday:not(.is-today){color:var(--danger);}
 .month-event-pill{font-size:10px;padding:2px 5px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.month-event-pill.is-spacer,.allday-bar.is-spacer{visibility:hidden;pointer-events:none;}
 .month-event-pill.is-google{border:1px dashed rgba(255,255,255,.7);}
 .month-more{font-size:10px;color:var(--text-faint);padding-left:2px;}
 /* 주/일 뷰의 "종일" 행에서 하루종일 일정이 많을 때 접기/펼치기(+N개 더보기 ↔ 접기) 버튼.
@@ -771,7 +772,11 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 #c-gridArea{flex:1 1 auto;min-height:420px;}
 .main[data-view="calendar"] .cal-legend{flex-shrink:0;}
 /* 주 수는 --month-weeks(4~6, "한 달만" 토글). 적을수록 칸이 커져 하루 일정이 더 보인다. */
-#c-gridArea .month-grid{height:100%;grid-template-rows:auto repeat(var(--month-weeks,6),1fr);}
+/* 칸은 최소 높이를 지키되 일정이 5개까지 보이면 그 줄만 늘어난다(전체가 넘치면 영역 안에서 스크롤) */
+#c-gridArea{overflow-y:auto;}
+#c-gridArea .month-grid{height:auto;min-height:100%;grid-template-rows:auto repeat(var(--month-weeks,6),minmax(92px,1fr));}
+#c-gridArea .month-grid .month-cell{min-height:92px;}
+.month-event-pill,.month-more{flex-shrink:0;}
 /* 세로는 넘치면 잘라내되(is-span 막대가 칸 사이를 넘어 이어질 수 있게 가로는 안 자름) */
 #c-gridArea .month-cell{height:auto;min-height:0;overflow:visible;}
 /* 여러 날 종일 일정 = 진짜로 이어지는 막대 (구글 캘린더식). 칸 사이 여백(패딩6+gap1=7px)만큼
@@ -2563,6 +2568,83 @@ html[data-theme="dark"] .dash-block[data-block="link"]:not([data-cardtheme="dark
 .td-mini{border:1px solid var(--border);background:var(--surface);color:var(--brand);border-radius:var(--radius-pill);padding:0 9px;font-size:11px;font-family:inherit;cursor:pointer;flex-shrink:0;line-height:20px;}
 .td-mini:hover{background:var(--bg);}
 
+/* ---- 오늘 화면: 요약 헤더 · 색 있는 카드 · 주간 막대 · 진행 중 강조 ---- */
+.td-hero{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 18px;margin-bottom:12px;border-radius:var(--radius-lg);background:linear-gradient(120deg,color-mix(in srgb,var(--brand) 16%,var(--surface)),color-mix(in srgb,var(--tone-green-fg) 10%,var(--surface)));border:1px solid color-mix(in srgb,var(--brand) 20%,var(--border));}
+.td-hero-main{min-width:0;}
+.td-hero-hi{font-size:12px;font-weight:600;color:var(--brand);letter-spacing:.2px;}
+.td-hero-line{font-size:16px;margin-top:3px;line-height:1.45;overflow-wrap:anywhere;}
+.td-hero-line b{font-weight:700;}
+.td-hero-line em{font-style:normal;font-weight:700;color:#fff;background:var(--brand);border-radius:var(--radius-pill);padding:1px 9px;font-size:12px;margin-right:4px;vertical-align:1px;}
+.td-hero-line span{font-size:13px;color:var(--text-soft);margin-left:4px;}
+.td-hero-prog{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.td-hero-prog b{display:block;font-size:18px;font-weight:700;line-height:1.1;}
+.td-hero-prog small{font-size:11.5px;color:var(--text-soft);}
+.td-ring-bg{fill:none;stroke:color-mix(in srgb,var(--brand) 16%,transparent);stroke-width:6;}
+.td-ring{fill:none;stroke:var(--brand);stroke-width:6;stroke-linecap:round;transition:stroke-dasharray .4s;}
+
+.td-stat{border-color:transparent;}
+.td-stat[data-hue=green]{background:var(--tone-green-bg);}
+.td-stat[data-hue=purple]{background:var(--tone-purple-bg);}
+.td-stat[data-hue=yellow]{background:var(--tone-yellow-bg);}
+.td-stat[data-hue=blue]{background:var(--tone-blue-bg);}
+.td-stat[data-hue=green] b,.td-stat[data-hue=green] span{color:var(--tone-green-fg);}
+.td-stat[data-hue=purple] b,.td-stat[data-hue=purple] span{color:var(--tone-purple-fg);}
+.td-stat[data-hue=yellow] b,.td-stat[data-hue=yellow] span{color:var(--tone-yellow-fg);}
+.td-stat[data-hue=blue] b,.td-stat[data-hue=blue] span{color:var(--tone-blue-fg);}
+.td-stat span{font-weight:600;}
+.td-stat b{font-size:26px;font-weight:700;}
+.td-stat small{font-weight:500;color:var(--text-soft);}
+.td-stat:hover{filter:brightness(.98);}
+
+.td-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-bottom:14px;}
+.td-wd{display:flex;flex-direction:column;align-items:center;gap:1px;padding:7px 2px 6px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface);color:var(--text);font-family:inherit;cursor:pointer;min-width:0;}
+.td-wd:hover{background:var(--bg);}
+.td-wd-dow{font-size:11px;color:var(--text-soft);}
+.td-wd.sun .td-wd-dow,.td-wd.sun b{color:var(--danger);}
+.td-wd.sat .td-wd-dow,.td-wd.sat b{color:var(--tone-blue-fg);}
+.td-wd b{font-size:15px;font-weight:700;}
+.td-wd.real b{color:var(--brand);}
+.td-wd.sel{background:color-mix(in srgb,var(--brand) 14%,var(--surface));border-color:var(--brand);}
+.td-wd-cnt{display:flex;gap:3px;min-height:15px;align-items:center;}
+.td-wd-cnt i{font-style:normal;font-size:10.5px;font-weight:700;border-radius:var(--radius-pill);padding:0 6px;line-height:15px;}
+.td-wd-cnt i.ev{background:var(--tone-green-fg);color:#fff;}
+.td-wd-cnt i.td{background:var(--tone-purple-fg);color:#fff;}
+.td-wd-cnt i.none{color:var(--text-faint);font-weight:400;padding:0;}
+
+.td-time{display:flex;flex-direction:column;line-height:1.25;}
+.td-time b{font-size:13px;font-weight:700;color:var(--text);}
+.td-time small{font-size:10.5px;color:var(--text-faint);}
+.td-line{grid-template-columns:54px 1fr;}
+.td-ev{position:relative;gap:10px;}
+.td-bar{width:4px;align-self:stretch;min-height:28px;border-radius:2px;background:var(--ev,var(--text-faint));flex-shrink:0;}
+.td-ev-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.td-ev-main .td-txt{flex:none;}
+.td-txt b{font-weight:600;}
+.td-memo{font-size:11.5px;color:var(--text-faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.td-chip{font-size:10.5px;font-weight:600;border-radius:var(--radius-pill);padding:1px 8px;flex-shrink:0;background:color-mix(in srgb,var(--chip,var(--text-faint)) 18%,transparent);color:var(--text-soft);}
+.td-live{font-size:10.5px;font-weight:700;color:#fff;background:var(--brand);border-radius:var(--radius-pill);padding:1px 8px;flex-shrink:0;}
+.td-line.st-past{opacity:.5;}
+.td-line.st-now{background:color-mix(in srgb,var(--brand) 9%,transparent);border-radius:var(--radius-sm);margin:0 -6px;padding-left:6px;padding-right:6px;}
+.td-nowline{display:flex;align-items:center;gap:8px;color:var(--danger);font-size:11px;font-weight:700;margin:2px 0;}
+.td-nowline::before,.td-nowline::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--danger) 45%,transparent);}
+.td-nowline::before{flex:0 0 14px;}
+.td-panel-count{font-weight:700;}
+@media (max-width:640px){.td-hero{flex-direction:column;align-items:flex-start;}}
+
+/* 미니 모드 — 요약은 한 줄로 줄이고 주간 막대는 숨긴다 */
+body.mini-mode .td-hero{padding:8px 11px;margin-bottom:8px;gap:8px;border-radius:var(--radius-md);}
+body.mini-mode .td-hero-hi{font-size:10.5px;}
+body.mini-mode .td-hero-line{font-size:13px;margin-top:1px;}
+body.mini-mode .td-hero-line span{font-size:11.5px;}
+body.mini-mode .td-hero-prog svg{width:34px;height:34px;}
+body.mini-mode .td-hero-prog b{font-size:13px;}
+body.mini-mode .td-hero-prog small{font-size:10px;}
+body.mini-mode .td-week{display:none;}
+body.mini-mode .td-stat b{font-weight:700;}
+body.mini-mode .td-line{grid-template-columns:46px 1fr;}
+body.mini-mode .td-time b{font-size:11.5px;}
+body.mini-mode .td-memo,body.mini-mode .td-chip{display:none;}
+
 /* ================= 미니 모드 (작은 창) — body.mini-mode 일 때만. 대시보드 등 다른 화면의 스타일은 건드리지 않는다 ================= */
 .mini-bar{display:none;}
 body.mini-mode{font-size:12.5px;}
@@ -2625,3 +2707,6 @@ body.mini-mode .td-popup-card{width:min(340px,94vw);font-size:12.5px;}
 .sidebar.collapsed #miniBtn,.sidebar.icon-only #miniBtn,.sidebar.auto-collapsed #miniBtn{margin:0;}
 
 .sidebar.no-mini-btn #miniBtn{display:none;}
+body.mini-mode .td-hero{flex-direction:row;align-items:center;}
+body.mini-mode .td-hero-prog small{display:none;}
+body.mini-mode .td-line.st-now{margin:0;padding-left:4px;padding-right:4px;}
