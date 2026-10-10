@@ -167,11 +167,11 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
         </div>`;
       }
 
-      // 한도는 실제 일정 기준 — 막대 줄 맞춤용 빈 줄(null)은 개수에 안 센다
+      // 한도는 일반 일정 기준 — 여러 날 막대와 줄 맞춤용 빈 줄(null)은 개수에 안 세고 항상 보인다(안 그러면 막대가 끊김)
       let shown = 0;
       let cut = dayEvents.length;
       for (let i = 0; i < dayEvents.length; i += 1) {
-        if (dayEvents[i] && (shown += 1) > MONTH_MAX_VISIBLE) {
+        if (dayEvents[i] && !isMultiDayAllDay(dayEvents[i]) && (shown += 1) > MONTH_MAX_VISIBLE) {
           cut = i;
           break;
         }
@@ -617,18 +617,16 @@ export async function mount(root, deepLinkId) {
   }
 
   // 칸 높이에 안 들어가는 일정은 뒤에서부터 접어 "+N개 더보기"로 — 스크롤이 생기지 않게(최대 5개, 칸이 작으면 알아서 줄어듦)
+  // 여러 날 이어지는 막대(is-span)와 그 줄 맞춤 자리표시는 절대 접지 않는다 — 한 칸에서만 사라지면 이어지는 막대가 끊겨 보인다.
   function fitMonthCells(container) {
     container.querySelectorAll('.month-cell:not(.month-cell-compact)').forEach((cell) => {
-      const pills = [...cell.querySelectorAll('.month-event-pill')];
+      const foldable = [...cell.querySelectorAll('.month-event-pill')].filter((p) => !p.classList.contains('is-span') && !p.classList.contains('is-spacer'));
       let more = cell.querySelector('.month-more');
       let hidden = more ? Number(more.dataset.n) : 0;
-      const real = () => pills.filter((p) => !p.classList.contains('is-spacer')).length;
       const fits = () => cell.scrollHeight <= cell.clientHeight + 1;
-      while (!fits() && real() > 1) {
-        let last = pills.pop();
-        if (!last.classList.contains('is-spacer')) hidden += 1;
-        last.remove();
-        while (pills.length && pills[pills.length - 1].classList.contains('is-spacer')) pills.pop().remove(); // 끝에 남은 빈 줄 자리표시 정리
+      while (!fits() && foldable.length) {
+        foldable.pop().remove();
+        hidden += 1;
         if (!more) {
           more = document.createElement('div');
           more.className = 'month-more';
