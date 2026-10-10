@@ -689,6 +689,10 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 /* ================= 캘린더 그리드 (월/주/일) ================= */
 .cal-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;}
 .cal-nav{display:flex;align-items:center;gap:8px;}
+/* 일정 화면 툴바 — 검색·한 달만·구글 캘린더·월/주/일을 같은 높이·같은 가운데 줄에 맞춘다(.tabs의 아래 여백 때문에 월/주/일만 위로 떠 있었음) */
+.main[data-view="calendar"] .cal-toolbar .tabs{margin-bottom:0;}
+.main[data-view="calendar"] .cal-toolbar .btn-secondary,.main[data-view="calendar"] .cal-toolbar .tab{height:32px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;padding-top:0;padding-bottom:0;}
+.main[data-view="calendar"] .cal-toolbar .btn-icon{height:32px;}
 .cal-period-label{font-size:14px;font-weight:600;min-width:150px;text-align:center;}
 
 .month-grid{display:grid;grid-template-columns:repeat(7,1fr);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;background:var(--border);gap:1px;}
