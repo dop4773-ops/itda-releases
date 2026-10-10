@@ -772,10 +772,8 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 #c-gridArea{flex:1 1 auto;min-height:420px;}
 .main[data-view="calendar"] .cal-legend{flex-shrink:0;}
 /* 주 수는 --month-weeks(4~6, "한 달만" 토글). 적을수록 칸이 커져 하루 일정이 더 보인다. */
-/* 칸은 최소 높이를 지키되 일정이 5개까지 보이면 그 줄만 늘어난다(전체가 넘치면 영역 안에서 스크롤) */
-#c-gridArea{overflow-y:auto;}
-#c-gridArea .month-grid{height:auto;min-height:100%;grid-template-rows:auto repeat(var(--month-weeks,6),minmax(92px,1fr));}
-#c-gridArea .month-grid .month-cell{min-height:92px;}
+/* 칸 높이는 고정(스크롤 없음) — 안 들어가는 일정은 JS(fitMonthCells)가 "+N개 더보기"로 접는다 */
+#c-gridArea .month-grid{height:100%;grid-template-rows:auto repeat(var(--month-weeks,6),minmax(0,1fr));}
 .month-event-pill,.month-more{flex-shrink:0;}
 /* 세로는 넘치면 잘라내되(is-span 막대가 칸 사이를 넘어 이어질 수 있게 가로는 안 자름) */
 #c-gridArea .month-cell{height:auto;min-height:0;overflow:visible;}

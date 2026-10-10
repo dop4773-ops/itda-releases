@@ -201,7 +201,7 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
       <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}">
         <div class="date-row"><span class="date-num">${d.getDate()}</span>${holidayNames.has(key) ? `<span class="holiday-name">${escapeHtml(holidayNames.get(key))}</span>` : ''}</div>
         ${visible.map(pill).join('')}
-        ${overflow > 0 ? `<div class="month-more">+${overflow}개 더보기</div>` : ''}
+        ${overflow > 0 ? `<div class="month-more" data-n="${overflow}">+${overflow}개 더보기</div>` : ''}
       </div>`;
     })
     .join('');
@@ -616,8 +616,35 @@ export async function mount(root, deepLinkId) {
     else renderTimeGrid(gridArea, byDate, currentView === 'week' ? 7 : 1);
   }
 
+  // 칸 높이에 안 들어가는 일정은 뒤에서부터 접어 "+N개 더보기"로 — 스크롤이 생기지 않게(최대 5개, 칸이 작으면 알아서 줄어듦)
+  function fitMonthCells(container) {
+    container.querySelectorAll('.month-cell:not(.month-cell-compact)').forEach((cell) => {
+      const pills = [...cell.querySelectorAll('.month-event-pill')];
+      let more = cell.querySelector('.month-more');
+      let hidden = more ? Number(more.dataset.n) : 0;
+      const real = () => pills.filter((p) => !p.classList.contains('is-spacer')).length;
+      const fits = () => cell.scrollHeight <= cell.clientHeight + 1;
+      while (!fits() && real() > 1) {
+        let last = pills.pop();
+        if (!last.classList.contains('is-spacer')) hidden += 1;
+        last.remove();
+        while (pills.length && pills[pills.length - 1].classList.contains('is-spacer')) pills.pop().remove(); // 끝에 남은 빈 줄 자리표시 정리
+        if (!more) {
+          more = document.createElement('div');
+          more.className = 'month-more';
+          cell.appendChild(more);
+        }
+        more.dataset.n = hidden;
+        more.textContent = `+${hidden}개 더보기`;
+      }
+    });
+  }
+
+  let lastMonthByDate = null;
   function renderMonth(container, byDate) {
+    lastMonthByDate = byDate;
     container.innerHTML = buildMonthGridHtml(anchor, byDate, { alldayOrder, trimMonth: monthTrim });
+    fitMonthCells(container);
 
     const goToDay = (dateKey) => {
       anchor = parseKey(dateKey);
@@ -1296,6 +1323,21 @@ export async function mount(root, deepLinkId) {
     }
   }
 
+  // 창 크기가 바뀌면 칸 높이도 바뀌므로 월간 보기는 보이는 개수를 다시 맞춘다
+  let lastGridSize = '';
+  const refitMonth = debounce(() => {
+    const el = $('c-gridArea');
+    if (el && currentView === 'month' && lastMonthByDate) renderMonth(el, lastMonthByDate);
+  }, 120);
+  const gridResizeObs = new ResizeObserver(() => {
+    const el = $('c-gridArea');
+    const size = el ? `${el.clientWidth}x${el.clientHeight}` : '';
+    if (size === lastGridSize) return;
+    lastGridSize = size;
+    refitMonth();
+  });
+  gridResizeObs.observe($('c-gridArea'));
+
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
     if (entity !== 'event') return;
@@ -1306,6 +1348,7 @@ export async function mount(root, deepLinkId) {
   return () => {
     unmounted = true;
     unsubscribeEsc();
+    gridResizeObs.disconnect();
     document.removeEventListener('keydown', handleDeleteKey);
     document.removeEventListener('keydown', handleQuickKeys);
     document.removeEventListener('click', handleDocClickForSearch);
