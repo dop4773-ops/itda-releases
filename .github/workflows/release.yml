@@ -33,6 +33,11 @@ jobs:
       - run: npm run lint
       # 마이그레이션 원자성 / 연결 정규화 / 반복 전개 회귀 테스트 — 실패 시 릴리스 중단.
       - run: npm test
+      # 앱을 실제로 띄워 모든 화면·설정 탭·달력 보기·미니 모드를 한 바퀴 돈다(scripts/smoke.js).
+      # 단위 테스트가 못 잡는 "화면이 통째로 오류" 사고(변수 누락, 잘못된 import 등)를 배포 전에 막는다.
+      - name: 화면 자동 점검 (스모크 테스트)
+        run: npm run smoke
+        timeout-minutes: 6
       - run: npm run release:win
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

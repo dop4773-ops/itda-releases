@@ -43,7 +43,8 @@
   - 큰 기능 / 여러 단계짜리 작업 / 의미 있는 업데이트 → **마이너** (예: 2.59.x → 2.60.0)
 - 실제 코드는 작업 폴더 `~/itda`에서 수정하고, 커밋은 git 클론인 `~/Desktop/itda_project`에서 한다.
   바뀐 파일을 **하나씩 명시적 경로로** 복사(`cp a a; cp b b` — `cp a b dest/` 사고 금지) → `package.json` 버전업 → 커밋 → `git push origin main`.
-- 커밋 후 CI(GitHub Actions)가 `npm run lint` → `npm test` → `electron-builder`로 Windows 설치본을 만들어
+- 화면을 건드린 변경은 커밋 전에 `npm run smoke`(앱을 실제로 띄워 모든 화면·설정 탭·달력·미니 모드를 점검, 약 30초)도 돌린다. 새 화면/탭이 생기면 `scripts/smoke.js`의 목록에도 추가.
+- 커밋 후 CI(GitHub Actions)가 `npm run lint` → `npm test` → `npm run smoke` → `electron-builder`로 Windows 설치본을 만들어
   dop4773-ops/itda-releases에 릴리스한다. 결과(success/실패)를 확인해서 보고한다.
 
 ## 세션 종료 전 체크
