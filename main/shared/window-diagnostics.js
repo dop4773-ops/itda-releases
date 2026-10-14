@@ -9,6 +9,12 @@ const path = require('path');
 
 const MAX_BYTES = 256 * 1024;
 const closeReasons = new WeakMap();
+let sink = null; // initWindowDiagnostics가 켠 뒤에만 기록(테스트·초기화 전엔 무시)
+
+// 다른 모듈이 창 관련 이상 징후 한 줄을 남길 때 쓴다 (예: 빠른찾기로 본 창을 열었는데 앞으로 안 온 경우)
+function note(event, detail) {
+  if (sink) sink(event, detail);
+}
 
 // 우리 쪽 코드가 창을 닫을 때 이유를 알려둔다 — 안 알린 close는 화면(window.close)이나 OS가 한 것
 function noteClose(win, reason) {
@@ -52,6 +58,7 @@ function createWriter(dir) {
 /** main.js에서 앱이 준비된 뒤 한 번 호출 */
 function initWindowDiagnostics({ app, screen, powerMonitor, logDir, logError }) {
   const write = createWriter(logDir());
+  sink = write;
 
   app.on('browser-window-created', (_e, win) => {
     const born = Date.now();
@@ -95,4 +102,4 @@ function initWindowDiagnostics({ app, screen, powerMonitor, logDir, logError }) 
   write('start', `v${app.getVersion()} displays=${screen.getAllDisplays().length}`);
 }
 
-module.exports = { initWindowDiagnostics, noteClose, labelOf, formatLine };
+module.exports = { initWindowDiagnostics, noteClose, note, labelOf, formatLine };

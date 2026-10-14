@@ -37,7 +37,32 @@ function setActiveNav(hash) {
   });
 }
 
+// 화면 이동은 겹칠 수 있다(빠른 클릭, 빠른 찾기·위젯의 이동 요청이 앞선 화면 로딩 중에 도착 등).
+// 로딩 중인 화면 위로 새 화면을 덮으면 먼저 시작한 화면이 사라진 DOM을 만지다 오류를 내고("눌렀는데 오류/빈 화면"),
+// 중간에 던진 화면은 등록해 둔 전역 리스너를 정리하지 못해 남는다. 그래서 한 번에 하나만 마운트하고,
+// 그동안 들어온 이동 요청은 가장 마지막 것 하나만 기억했다가 끝난 뒤 이어서 처리한다.
+let navRunning = false;
+let navAgain = false;
+let navStartedAt = 0;
+const NAV_STUCK_MS = 8000; // 어떤 화면의 로딩이 영영 안 끝나도 이동이 영원히 막히지 않게
 async function navigate() {
+  if (navRunning && Date.now() - navStartedAt < NAV_STUCK_MS) {
+    navAgain = true;
+    return;
+  }
+  navRunning = true;
+  navStartedAt = Date.now();
+  try {
+    do {
+      navAgain = false;
+      await navigateOnce();
+    } while (navAgain);
+  } finally {
+    navRunning = false;
+  }
+}
+
+async function navigateOnce() {
   const requested = location.hash || '#/dashboard';
   // '#/settings/update' 처럼 화면 뒤에 세부 대상을 붙일 수 있다 — base로 라우팅하고 sub는 mount에 넘긴다.
   const secondSlash = requested.indexOf('/', 2);
@@ -79,6 +104,21 @@ async function navigate() {
 window.addEventListener('hashchange', navigate);
 window.addEventListener('DOMContentLoaded', async () => {
   const tDom = now();
+  // 위젯 창의 "전체 OO 보기", 빠른 찾기, 알림 클릭에서 본 창을 앞으로 가져오며 화면 이동을 요청한다.
+  // - 리스너는 첫 await 전에 등록한다: 잠금 화면 대기·스타일 적용 중에 온 요청이 사라지지 않게.
+  // - 아직 준비 전(잠금 대기 등)이면 마지막 요청만 보관했다가 첫 화면이 뜬 뒤에 적용한다.
+  // - location.hash를 지금과 똑같은 값으로 다시 대입하면 hashchange가 안 터져 아무 반응이 없으므로(방금 연 메모를
+  //   검색해서 또 누르는 흔한 경우), 같은 값이면 navigate()를 직접 한 번 더 불러 강제로 다시 연다.
+  let navReady = false;
+  let pendingRoute = null;
+  const goRoute = (route) => {
+    if (location.hash === route) navigate();
+    else location.hash = route;
+  };
+  window.itda.onNavigate((route) => {
+    if (navReady) goRoute(route);
+    else pendingRoute = route;
+  });
   await initPerf();
   // 잠금화면에도 테마/글꼴/배율이 적용되도록, 잠금 해제 전에 스타일부터 맞춘다.
   // (설정 읽기 IPC는 잠금과 무관하게 동작한다. initShell이 잠금 해제 후 멱등하게 다시 적용한다.)
@@ -102,18 +142,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       /* 설정을 못 읽으면 대시보드 */
     }
   }
-  navigate();
-  perf('DOMContentLoaded→navigate 호출까지', tDom);
-  // 위젯 창(별도 BrowserWindow)의 "전체 OO 보기" 클릭 시, 그리고 빠른찾기/Spotlight에서
-  // 검색 결과를 눌렀을 때 메인 창이 여기로 이동한다.
-  // location.hash를 지금과 똑같은 값으로 다시 대입하면 브라우저가 hashchange를 아예 안 터뜨려서
-  // navigate()가 안 불리고 화면에 아무 반응이 없다 — 방금 열어본 일정/메모를 "최근 연 항목"에서
-  // 다시 누르거나, 상세를 보고 있는 항목을 검색해서 또 누르는 흔한 경우에 걸린다. 그럴 땐
-  // hashchange를 기다리지 않고 navigate()를 직접 한 번 더 불러 강제로 다시 연다.
-  window.itda.onNavigate((route) => {
-    if (location.hash === route) navigate();
-    else location.hash = route;
-  });
   // OS 전역 단축키(Ctrl/Cmd+Alt+L)로 어디서든 바로 다시 잠그기
   window.itda.onLockNow(lockNow);
+  await navigate();
+  perf('DOMContentLoaded→navigate 호출까지', tDom);
+  navReady = true;
+  if (pendingRoute) {
+    goRoute(pendingRoute);
+    pendingRoute = null;
+  }
 });

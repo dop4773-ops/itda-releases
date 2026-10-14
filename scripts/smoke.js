@@ -218,6 +218,25 @@ async function main() {
     await step('오늘: 팝업(일정 카드)', click('.td-stat[data-pop="events"]'));
     await evaluate(`document.getElementById('tdp-close')?.click()`);
 
+    // 7-1) 빠른 연속 이동 — 앞 화면이 로딩되는 도중에 다른 화면으로 가도 오류 패널·빈 화면이 없어야 한다
+    // (빠른 찾기/위젯의 이동 요청이 로딩 중에 겹쳐 "눌렀는데 오류/무반응"이 되던 문제의 회귀 방지)
+    await step('빠른 연속 화면 이동', async () => {
+      await evaluate(`(async () => {
+        // 무거운 화면(대시보드·달력·메모) 로딩이 끝나기 전에 바로 다음 화면으로 — 간격을 0~3ms로 촘촘하게
+        const routes = ['#/dashboard', '#/memo/1', '#/calendar', '#/dashboard', '#/today', '#/memo/1', '#/dashboard', '#/todo', '#/calendar', '#/memo', '#/dashboard', '#/search', '#/inbox'];
+        for (let round = 0; round < 3; round += 1) {
+          for (const r of routes) { location.hash = r; await new Promise((res) => setTimeout(res, round)); }
+          await new Promise((res) => setTimeout(res, 40));
+        }
+        return true;
+      })()`);
+      await sleep(1500);
+      const last = await evaluate(`location.hash`);
+      if (last !== '#/inbox') throw new Error(`마지막 이동이 반영되지 않았어요: ${last}`);
+      const view = await evaluate(`document.getElementById('view-root')?.dataset.view`);
+      if (view !== 'inbox') throw new Error(`마지막 화면이 inbox가 아니에요: ${view}`);
+    }, 300);
+
     // 8) 미니 모드 켜고 끄기
     await step('미니 모드 켜기', click('#miniBtn'), 1800);
     await step('미니 모드: 오늘 화면', async () => {

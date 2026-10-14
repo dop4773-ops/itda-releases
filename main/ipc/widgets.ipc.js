@@ -1,6 +1,7 @@
 const windowManager = require('../widgets/window-manager');
 const postitWindowManager = require('../postit-widget/window-manager');
-const { forceShowAndFocus } = require('../shared/window-focus');
+const { bringMainForward } = require('../shared/window-focus');
+const { note } = require('../shared/window-diagnostics');
 
 const WIDGET_TYPES = ['today-schedule', 'today-todo', 'postit-board', 'google-calendar-mini', 'inbox', 'dday', 'admission'];
 
@@ -73,11 +74,7 @@ module.exports = function registerWidgetsIpc(ipcMain, repos, getMainWindow) {
 
   // 위젯의 "전체 OO 보기" 링크에서 사용 — 메인 앱 창을 앞으로 가져오고 필요하면 특정 화면으로 이동
   ipcMain.handle('widgets:openMainApp', (event, route) => {
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return { ok: false };
-    forceShowAndFocus(win);
-    if (route) win.webContents.send('itda:navigate', route);
-    return { ok: true };
+    return { ok: bringMainForward(getMainWindow(), route, { note }) };
   });
 
   return { WIDGET_TYPES, openWidgetByType };

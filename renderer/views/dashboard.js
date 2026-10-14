@@ -2758,6 +2758,7 @@ export async function mount(root) {
     const card = cardId ? document.getElementById(`d-card-${cardId}`) : null;
     card?.querySelector('.dash-widget-error')?.remove(); // 재시도/새로고침 성공 시 이전 오류 표시 정리
     return Promise.resolve().then(fn).catch((e) => {
+      if (layoutEl && !layoutEl.isConnected) return; // 로딩 도중 다른 화면으로 이동해 대시보드가 이미 사라짐 — 오류가 아니라 취소
       console.error(`[dashboard] '${name}' 위젯 로드 실패`, e);
       if (!card || card.querySelector('.dash-widget-error')) return;
       const div = document.createElement('div');

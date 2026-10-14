@@ -8,7 +8,8 @@ const { findMessengerDbs } = require('../messenger/detect');
 const { startMessengerScheduler } = require('../messenger/scheduler');
 const F = require('../messenger/format');
 const { pendingNotice } = require('../messenger/notify');
-const { forceShowAndFocus } = require('../shared/window-focus');
+const { bringMainForward } = require('../shared/window-focus');
+const { note } = require('../shared/window-diagnostics');
 
 const STRICT = { full: 0, mask: 1, hide: 2 };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -30,10 +31,7 @@ module.exports = function registerMessengerIpc(ipcMain, repos, db, getMainWindow
       settings.set('messenger_pending_notified', notice.key);
       const n = new Notification({ title: notice.title, body: notice.body });
       n.on('click', () => {
-        const win = getMainWindow();
-        if (!win || win.isDestroyed()) return;
-        forceShowAndFocus(win);
-        win.webContents.send('itda:navigate', '#/settings/messenger');
+        bringMainForward(getMainWindow(), '#/settings/messenger', { note });
       });
       n.show();
     } catch (e) {
