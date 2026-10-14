@@ -1341,6 +1341,12 @@ export async function mount(root, deepLinkId) {
 
   const debouncedLoad = debounce(load, 200); // 이 화면 자신의 액션이 만든 브로드캐스트 메아리로 인한 이중 새로고침 방지
   const offDataChanged = window.itda.onDataChanged(({ entity }) => {
+    if (entity === 'category') {
+      // 카테고리가 추가·수정되면(일괄 등록이 만든 경우 포함) 선택 목록·범례·일정 색을 새로 읽는다 — 안 그러면 옛 목록으로 중복 생성될 수 있다
+      loadCategories();
+      debouncedLoad();
+      return;
+    }
     if (entity !== 'event') return;
     if (isUserTyping()) return;
     debouncedLoad();

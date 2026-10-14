@@ -407,7 +407,10 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   // ---------- 엑셀 (CCRT 평가일 · 현황 비회복기 전환) ----------
   // 평가일(COSAS) 일정은 "평가", 현황의 비회복기 전환은 "업무" 카테고리가 기본 — 사진·글 카테고리와 따로 고른다(바꿀 수 있음).
   const evalCat = categories.find((c) => c.name.trim() === '평가') || categories.find((c) => /평가/.test(c.name));
-  const workCat = categories.find((c) => c.name.trim() === '업무') || categories.find((c) => /업무/.test(c.name));
+  // 현황(비회복기 전환)은 전용 카테고리 — 없으면 등록할 때 "비회복기 전환"(로열 블루, 흰 글자)을 새로 만든다. 다른 카테고리와 겹치지 않는 파랑 계열.
+  const RECOVERY_CAT = { name: '비회복기 전환', colorHex: '#2F6BFF', textColor: '#FFFFFF' };
+  const NEW_CAT = '__new__';
+  const recoveryCat = categories.find((c) => c.name.trim() === RECOVERY_CAT.name) || categories.find((c) => /비회복기/.test(c.name));
   function applyExcel() {
     const { year, month } = ym();
     const msgs = [];
@@ -453,7 +456,11 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         xcatSet = true;
       }
       if (st.ok && !scatSet) {
-        $('#bulk-scat').value = workCat ? String(workCat.id) : '';
+        if (recoveryCat) $('#bulk-scat').value = String(recoveryCat.id);
+        else {
+          $('#bulk-scat').insertAdjacentHTML('afterbegin', `<option value="${NEW_CAT}">${RECOVERY_CAT.name} (새로 만들기 · 파랑)</option>`);
+          $('#bulk-scat').value = NEW_CAT;
+        }
         scatSet = true;
       }
     } catch (e) {
@@ -543,7 +550,15 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
       const catId = $('#bulk-cat').value;
       const toItems = (list) => list.map((r) => ({ title: r.title.trim(), date: r.date, memo: r.memo || undefined }));
       const xCat = $('#bulk-xcat').value;
-      const sCat = $('#bulk-scat').value;
+      let sCat = $('#bulk-scat').value;
+      if (sCat === NEW_CAT) {
+        // 현황 일정이 하나라도 있을 때만 카테고리를 만든다(등록할 게 없으면 만들지 않음)
+        if (picked.some((r) => r.xl === 'status')) {
+          // 화면이 가진 목록이 오래됐을 수 있어(다른 곳에서 이미 만들었거나 방금 만든 경우) 최신 목록에서 같은 이름을 먼저 찾는다 — 중복 생성 방지
+          const fresh = (await window.itda.categories.list()).find((c) => c.name.trim() === RECOVERY_CAT.name);
+          sCat = String(fresh ? fresh.id : (await window.itda.categories.add(RECOVERY_CAT)).id);
+        } else sCat = '';
+      }
       const groups = [
         [picked.filter((r) => !r.xl), catId ? Number(catId) : null],
         [picked.filter((r) => r.xl === 'ccrt'), xCat ? Number(xCat) : null],
