@@ -106,3 +106,61 @@ test('CCRT 시트가 없거나 엑셀이 아니면 이유를 돌려준다', asyn
   assert.match(no.reason, /CCRT명단/);
   await assert.rejects(readCcrtSheet(new TextEncoder().encode('not a zip file at all, just text'.repeat(3)).buffer), /엑셀/);
 });
+
+// ---- 현황(회복기) 시트 → 비회복기 전환 일정 ----
+const STR2 = ['순번', '구분', '진료과', '병실', '성명', '입원일', '회복기 기간\n(180일)', '입원', '특이사항', '뇌손상', 'MSK 60', '일반', 'RM7', '가나다', '라마바', '사아자', '차카타', '입원', '퇴원', '재입원', '-'];
+const t2 = (x) => STR2.indexOf(x);
+const c2 = (ref, x) => `<c r="${ref}" t="s"><v>${t2(x)}</v></c>`;
+function statusBook(sheetName = '현황(회복기)') {
+  const row = (r, kind, name, admit, end, st) =>
+    `<row r="${r}">${cn(`B${r}`, r - 2)}${c2(`C${r}`, kind)}${c2(`D${r}`, 'RM7')}${cn(`E${r}`, 701)}${c2(`F${r}`, name)}${cn(`G${r}`, serial(admit))}${end ? cn(`H${r}`, serial(end)) : c2(`H${r}`, '-')}${c2(`I${r}`, st)}</row>`;
+  const sheet = `<worksheet><sheetData>
+    <row r="1">${c2('B1', '뇌손상')}</row>
+    <row r="2">${['순번', '구분', '진료과', '병실', '성명', '입원일', '회복기 기간\n(180일)', '입원', '특이사항'].map((h, i) => c2(`${'BCDEFGHIJ'[i]}2`, h)).join('')}</row>
+    ${row(3, '뇌손상', '가나다', '2026-04-23', '2026-10-20', '입원')}
+    ${row(4, 'MSK 60', '라마바', '2026-08-21', '2026-10-20', '재입원')}
+    ${row(5, '뇌손상', '사아자', '2026-04-10', '2026-10-07', '퇴원')}
+    ${row(6, '일반', '차카타', '2026-09-01', null, '입원')}
+    ${row(7, '뇌손상', '가나다', '2026-05-10', '2026-11-06', '입원')}
+  </sheetData></worksheet>`;
+  return zip({
+    'xl/workbook.xml': `<workbook><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+    'xl/sharedStrings.xml': `<sst>${STR2.map((t) => `<si><t>${t}</t></si>`).join('')}</sst>`,
+    'xl/worksheets/sheet1.xml': sheet,
+  });
+}
+
+test('현황 시트: 머리글 → 환자별 구분·상태·회복기 종료일(없는 일반 환자는 빈 값)', async () => {
+  const { readStatusSheet } = await load();
+  const r = await readStatusSheet(statusBook());
+  assert.equal(r.ok, true);
+  assert.equal(r.patients.length, 5);
+  assert.deepEqual(
+    r.patients.map((p) => [p.kind, p.status, p.end]),
+    [['뇌손상', '입원', '2026-10-20'], ['MSK 60', '재입원', '2026-10-20'], ['뇌손상', '퇴원', '2026-10-07'], ['일반', '입원', ''], ['뇌손상', '입원', '2026-11-06']]
+  );
+});
+
+test('비회복기 전환: 그 달 종료일의 입원·재입원 환자만, 날짜별 "비회복기 전환(N명)", 이름은 메모', async () => {
+  const { readStatusSheet, statusRowsForMonth } = await load();
+  const r = await readStatusSheet(statusBook());
+  const full = statusRowsForMonth(r, 2026, 10);
+  assert.deepEqual(full.rows, [{ date: '2026-10-20', count: 2, title: '비회복기 전환(2명)', memo: '가나다(뇌손상), 라마바(MSK 60)' }]);
+  assert.equal(full.notAdmitted, 1); // 10/7 종료인데 이미 퇴원
+  const mask = statusRowsForMonth(r, 2026, 10, 'mask');
+  assert.equal(mask.rows[0].memo, '가○다(뇌손상), 라○바(MSK 60)');
+  assert.equal(statusRowsForMonth(r, 2026, 10, 'hide').rows[0].memo, '');
+  assert.equal(statusRowsForMonth(r, 2026, 10, 'hide').rows[0].title, '비회복기 전환(2명)');
+  assert.deepEqual(statusRowsForMonth(r, 2026, 11).rows.map((x) => x.title), ['비회복기 전환(1명)']);
+  assert.equal(statusRowsForMonth(r, 2026, 9).rows.length, 0);
+});
+
+test('현황 시트가 없으면 이유를 돌려주고, CCRT 파일과 서로 영향 없음', async () => {
+  const { readStatusSheet, readCcrtSheet } = await load();
+  const no = await readStatusSheet(statusBook('다른시트'));
+  assert.equal(no.ok, false);
+  assert.match(no.reason, /현황/);
+  assert.equal((await readCcrtSheet(statusBook())).ok, false); // 현황 파일은 CCRT로는 안 읽힘(각자 시트를 찾는다)
+  assert.equal((await readStatusSheet(book())).ok, false);
+});

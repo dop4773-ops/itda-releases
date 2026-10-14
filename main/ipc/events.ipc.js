@@ -96,7 +96,8 @@ module.exports = function registerEventsIpc(ipcMain, repos) {
         if (!title) throw new Error('일정 제목을 입력해주세요.');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.date))) throw new Error('날짜 형식이 올바르지 않아요.');
         const startAt = `${it.date} 00:00:00`;
-        return events.insert({ title, categoryId: categoryId ?? null, startAt, endAt: resolveEndAt(startAt, null, true), allDay: true, remindDay }).id;
+        const memo = it.memo ? String(it.memo).slice(0, 2000) : undefined; // 엑셀 가져오기가 명단을 메모에 적을 때 쓴다
+        return events.insert({ title, categoryId: categoryId ?? null, startAt, endAt: resolveEndAt(startAt, null, true), allDay: true, memo, remindDay }).id;
       })
     )();
     broadcastDataChanged('event', ids[ids.length - 1]);

@@ -21,7 +21,7 @@ import {
   addLearned,
 } from './schedule-image.js';
 import { SEED_TEMPLATES } from './schedule-seeds.js';
-import { readCcrtSheet, ccrtRowsForMonth } from './ccrt-xlsx.js';
+import { readCcrtSheet, ccrtRowsForMonth, readStatusSheet, statusRowsForMonth } from './ccrt-xlsx.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const attr = (v) => escapeHtml(v).replace(/"/g, '&quot;');
@@ -30,11 +30,13 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
   const now = new Date();
   // 근무표는 보통 월말에 다음 달 것이 나오므로, 20일 이후엔 다음 달을 기본값으로
   const base = now.getDate() >= 20 ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : now;
-  let rows = []; // { id, date, title, include, cell?, thumb?, xl? } — cell/thumb이 있으면 사진, xl이면 CCRT 엑셀에서 온 행
+  let rows = []; // { id, date, title, include, cell?, thumb?, xl?, memo? } — cell/thumb이 있으면 사진, xl이면 엑셀에서 온 행('ccrt' 평가일 / 'status' 비회복기 전환)
   let xcatSet = false;
+  let scatSet = false;
   let existing = []; // 이미 있는 일정 [{date, title, cat}] — 등록 전에 겹치는지 보려고 목록 날짜 범위만큼 읽어 둔다
   let existingSpan = null; // 읽어 둔 날짜 범위 [from, to]
   let ccrt = null; // 읽어 둔 CCRT명단 시트(달/이름 표시를 바꿀 때 다시 쓴다)
+  let status = null; // 읽어 둔 현황(회복기) 시트 — 비회복기 전환 일정용
   let nextId = 1;
   let srcCanvas = null;
   let learned = []; // 사용자가 확인해서 등록했던 칸 모양 [{label, v(base64)}] — 설정(schedule_templates)에 저장
@@ -65,19 +67,22 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
         <label id="bulk-xcat-wrap" style="display:none">엑셀 카테고리
           <select id="bulk-xcat" class="select">${catOptions}</select>
         </label>
-        <label id="bulk-name-wrap" style="display:none">CCRT 이름
+        <label id="bulk-scat-wrap" style="display:none">현황 카테고리
+          <select id="bulk-scat" class="select">${catOptions}</select>
+        </label>
+        <label id="bulk-name-wrap" style="display:none">엑셀 이름
           <select id="bulk-name" class="select">
             <option value="full">전체</option>
             <option value="mask">가림 (김○수)</option>
-            <option value="hide">숨김 (COSAS 2명)</option>
+            <option value="hide">숨김 (COSAS 2명 · 메모엔 이름 안 적음)</option>
           </select>
         </label>
         <label title="등록하는 모든 일정에 '당일 알림'을 켜요 — 그날 잇다를 켜면 작은 팝업으로 알려줘요"><input type="checkbox" id="bulk-remind" /> 당일 알림 켜기</label>
         <span class="bulk-note">하루종일 일정으로 등록돼요</span>
       </div>
-      <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. "CCRT명단" 시트가 있는 엑셀 파일을 넣으면 그 달 평가일을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
+      <p class="bulk-desc" id="bulk-desc">월간 표 캡처에서 하늘색 글씨 칸(평일)을 찾아 날짜와 RM·층을 채워요. "CCRT명단" 시트가 있는 엑셀은 그 달 평가일을, "현황(회복기)" 시트가 있는 엑셀(작업치료현황)은 그 달 비회복기 전환일을 채워요. 맞는지 확인하고 틀린 건 고쳐주세요.</p>
       <div class="bulk-drop" id="bulk-drop" tabindex="0">
-        <span id="bulk-drop-text">표 캡처를 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요 · CCRT 엑셀은 파일로</span>
+        <span id="bulk-drop-text">표 캡처를 <b>붙여넣기(Ctrl+V)</b>하거나 끌어다 놓으세요 · CCRT·현황 엑셀은 파일로</span>
         <button class="btn-secondary" id="bulk-pick">사진·엑셀 파일 선택…</button>
         <input type="file" id="bulk-file" accept="image/*,.xlsx" hidden />
       </div>
@@ -174,7 +179,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
 
   // ---------- 중복 ----------
   // 같은 날·같은 제목이 이미 있으면 "이미 있음"(처음엔 체크 해제 — 다시 체크하면 그대로 등록), 같은 날 같은 카테고리에 제목만 다른 일정이 있으면 "비슷함"(경고만).
-  const catOf = (r) => ($(r.xl ? '#bulk-xcat' : '#bulk-cat').value || null);
+  const catOf = (r) => ($(r.xl === 'status' ? '#bulk-scat' : r.xl ? '#bulk-xcat' : '#bulk-cat').value || null);
   const norm = (t) => String(t).replace(/\s+/g, '').toLowerCase();
   function dupOf(r) {
     const same = existing.filter((e) => e.date === r.date);
@@ -223,7 +228,7 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
       <div class="bulk-row xl" data-id="${r.id}">
         <input type="checkbox" class="bulk-inc" ${r.include ? 'checked' : ''} />
         <input type="date" class="input bulk-date" value="${attr(r.date)}" />
-        <input type="text" class="input bulk-title" value="${attr(r.title)}" />
+        <input type="text" class="input bulk-title" value="${attr(r.title)}"${r.memo ? ` title="${attr(`일정 메모에 적힐 명단: ${r.memo}`)}"` : ''} />
         <span class="bulk-dup-slot">${dupHtml(r)}</span>
         <button class="btn-icon bulk-del" title="이 행 빼기">✕</button>
       </div>`;
@@ -399,50 +404,78 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     analyze();
   }
 
-  // ---------- CCRT 엑셀 ----------
-  // 엑셀(COSAS) 일정은 "평가" 카테고리가 기본 — 사진·글 카테고리와 따로 고른다(바꿀 수 있음).
+  // ---------- 엑셀 (CCRT 평가일 · 현황 비회복기 전환) ----------
+  // 평가일(COSAS) 일정은 "평가", 현황의 비회복기 전환은 "업무" 카테고리가 기본 — 사진·글 카테고리와 따로 고른다(바꿀 수 있음).
   const evalCat = categories.find((c) => c.name.trim() === '평가') || categories.find((c) => /평가/.test(c.name));
-  function applyCcrt() {
+  const workCat = categories.find((c) => c.name.trim() === '업무') || categories.find((c) => /업무/.test(c.name));
+  function applyExcel() {
     const { year, month } = ym();
-    const { rows: found, skipped } = ccrtRowsForMonth(ccrt, year, month, $('#bulk-name').value);
+    const msgs = [];
     rows = rows.filter((r) => !r.xl);
-    found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, include: true, xl: true }));
-    $('#bulk-status').textContent = found.length
-      ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
-      : `CCRT명단에 ${year}년 ${month}월 평가일이 없어요.${skipped.length ? ` (${skipped.join(', ')})` : ''}`;
+    if (ccrt) {
+      const { rows: found, skipped } = ccrtRowsForMonth(ccrt, year, month, $('#bulk-name').value);
+      found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, include: true, xl: 'ccrt' }));
+      msgs.push(
+        found.length
+          ? `CCRT명단에서 ${year}년 ${month}월 평가일 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''}`
+          : `CCRT명단에 ${year}년 ${month}월 평가일이 없어요.${skipped.length ? ` (${skipped.join(', ')})` : ''}`
+      );
+    }
+    if (status) {
+      const { rows: found, notAdmitted } = statusRowsForMonth(status, year, month, $('#bulk-name').value);
+      found.forEach((f) => rows.push({ id: nextId++, date: f.date, title: f.title, memo: f.memo, include: true, xl: 'status' }));
+      msgs.push(
+        found.length
+          ? `현황에서 ${year}년 ${month}월 비회복기 전환 ${found.length}일(${found.reduce((n, f) => n + f.count, 0)}명)을 찾았어요${notAdmitted ? ` · 퇴원·외래 ${notAdmitted}명 제외` : ''}`
+          : `현황에 ${year}년 ${month}월에 회복기가 끝나는 입원 환자가 없어요.${notAdmitted ? ` (퇴원·외래 ${notAdmitted}명 제외)` : ''}`
+      );
+    }
+    $('#bulk-status').textContent = msgs.join(' / ');
     renderRows();
   }
 
   async function loadXlsx(file) {
+    let buf;
     try {
-      const r = await readCcrtSheet(await file.arrayBuffer());
-      if (!r.ok) {
-        $('#bulk-status').textContent = r.reason;
+      buf = await file.arrayBuffer();
+      // 한 파일에 두 시트가 다 있을 수 있어 둘 다 시도한다 — 어느 쪽이든 읽히면 사용
+      const [c, st] = [await readCcrtSheet(buf), await readStatusSheet(buf)];
+      if (!c.ok && !st.ok) {
+        $('#bulk-status').textContent = `"CCRT명단" 또는 "현황(회복기)" 시트를 찾지 못했어요.${c.reason && /시트:/.test(c.reason) ? ` ${c.reason.slice(c.reason.indexOf('(시트'))}` : ` ${c.reason}`}`;
         return;
       }
-      ccrt = r;
+      if (c.ok) ccrt = c;
+      if (st.ok) status = st;
+      $('#bulk-xcat-wrap').style.display = ccrt ? '' : 'none';
+      $('#bulk-scat-wrap').style.display = status ? '' : 'none';
+      if (c.ok && !xcatSet) {
+        $('#bulk-xcat').value = evalCat ? String(evalCat.id) : ''; // 처음 불러올 때만 기본값(그 뒤 사용자가 바꾼 값은 유지)
+        xcatSet = true;
+      }
+      if (st.ok && !scatSet) {
+        $('#bulk-scat').value = workCat ? String(workCat.id) : '';
+        scatSet = true;
+      }
     } catch (e) {
       errorToast(e, '엑셀 파일을 읽을 수 없어요');
       return;
     }
     $('#bulk-name-wrap').style.display = '';
-    $('#bulk-xcat-wrap').style.display = '';
-    if (!xcatSet) $('#bulk-xcat').value = evalCat ? String(evalCat.id) : ''; // 처음 불러올 때만 기본값(그 뒤 사용자가 바꾼 값은 유지)
-    xcatSet = true;
     $('#bulk-desc').style.display = 'none';
     $('#bulk-drop').classList.add('compact');
-    applyCcrt();
+    applyExcel();
   }
-  $('#bulk-name').addEventListener('change', () => ccrt && applyCcrt());
+  $('#bulk-name').addEventListener('change', () => (ccrt || status) && applyExcel());
   $('#bulk-cat').addEventListener('change', () => renderRows(true));
   $('#bulk-xcat').addEventListener('change', () => renderRows(true));
+  $('#bulk-scat').addEventListener('change', () => renderRows(true));
   const loadFile = (f) => (/\.xlsx$/i.test(f.name) ? loadXlsx(f) : loadImage(f));
 
   $('#bulk-month').addEventListener('change', () => {
     const { year, month } = ym();
     // 달만 바꾸면 사진을 다시 분석하지 않고, 사진에서 온 행의 날짜만 새 달 기준으로 다시 계산(고친 제목은 유지)
     rows.filter((r) => r.cell).forEach((r) => (r.date = cellDate(year, month, r.cell.week, r.cell.col)));
-    if (ccrt) applyCcrt(); // 엑셀은 달마다 평가일이 다르므로 그 달 것으로 다시 만든다
+    if (ccrt || status) applyExcel(); // 엑셀은 달마다 일정이 다르므로 그 달 것으로 다시 만든다
     else renderRows();
   });
 
@@ -508,11 +541,13 @@ export function openBulkScheduleDialog({ categories = [], onRegistered } = {}) {
     $('#bulk-submit').disabled = true;
     try {
       const catId = $('#bulk-cat').value;
-      const toItems = (list) => list.map((r) => ({ title: r.title.trim(), date: r.date }));
+      const toItems = (list) => list.map((r) => ({ title: r.title.trim(), date: r.date, memo: r.memo || undefined }));
       const xCat = $('#bulk-xcat').value;
+      const sCat = $('#bulk-scat').value;
       const groups = [
         [picked.filter((r) => !r.xl), catId ? Number(catId) : null],
-        [picked.filter((r) => r.xl), xCat ? Number(xCat) : null],
+        [picked.filter((r) => r.xl === 'ccrt'), xCat ? Number(xCat) : null],
+        [picked.filter((r) => r.xl === 'status'), sCat ? Number(sCat) : null],
       ].filter(([list]) => list.length);
       let added = 0;
       for (const [list, categoryId] of groups) added += (await window.itda.events.addMany({ items: toItems(list), categoryId, remindDay: $('#bulk-remind').checked ? 1 : 0 })).added;

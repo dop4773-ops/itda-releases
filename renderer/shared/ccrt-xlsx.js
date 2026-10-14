@@ -69,28 +69,42 @@ const maskName = (n) => {
   return (c.length <= 1 ? c.join('') : c.length === 2 ? `${c[0]}○` : `${c[0]}${'○'.repeat(c.length - 2)}${c[c.length - 1]}`) + tail;
 };
 
-/**
- * @returns {{ ok:false, reason } | { ok:true, year, sheet, patients:[{name, room, rm, dates:{1..12: 'YYYY-MM-DD'}, notes:{월: 원문}}] }}
- */
-export async function readCcrtSheet(buf) {
+// 엑셀 파일 → 시트 목록과 시트 내용 읽기(CCRT명단·현황 시트가 같은 방식으로 읽는다)
+async function openWorkbook(buf) {
   const zip = await readZip(buf);
   if (!zip['xl/workbook.xml']) return { ok: false, reason: '엑셀(.xlsx) 파일이 아니에요.' };
   const wb = await zip['xl/workbook.xml']();
   const rels = await zip['xl/_rels/workbook.xml.rels']();
   const sheets = [...wb.matchAll(/<sheet\b[^>]*>/g)].map((m) => ({ name: unxml((/\bname="([^"]*)"/.exec(m[0]) || [])[1] || ''), rid: (/\br:id="([^"]*)"/.exec(m[0]) || [])[1] }));
+  let shared = null;
+  const rowsOf = async (sheet) => {
+    const rel = [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((t) => new RegExp(`\\bId="${sheet.rid}"`).test(t));
+    const target = rel && /\bTarget="([^"]*)"/.exec(rel)[1];
+    const path = target && (target.startsWith('/') ? target.slice(1) : `xl/${target}`);
+    if (!path || !zip[path]) return null;
+    if (shared === null) {
+      shared = [];
+      if (zip['xl/sharedStrings.xml']) {
+        const ss = await zip['xl/sharedStrings.xml']();
+        shared = [...ss.matchAll(/<si\b[^>]*?(?:\/>|>([\s\S]*?)<\/si>)/g)].map((m) => unxml([...(m[1] || '').replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join('')));
+      }
+    }
+    return parseSheet(await zip[path](), shared);
+  };
+  return { ok: true, sheets, rowsOf };
+}
+
+/**
+ * @returns {{ ok:false, reason } | { ok:true, year, sheet, patients:[{name, room, rm, dates:{1..12: 'YYYY-MM-DD'}, notes:{월: 원문}}] }}
+ */
+export async function readCcrtSheet(buf) {
+  const wbk = await openWorkbook(buf);
+  if (!wbk.ok) return wbk;
+  const { sheets } = wbk;
   const sheet = sheets.find((s) => /CCRT/i.test(s.name));
   if (!sheet) return { ok: false, reason: `"CCRT명단" 시트를 찾지 못했어요. (시트: ${sheets.map((s) => s.name).join(', ') || '없음'})` };
-  const rel = [...rels.matchAll(/<Relationship\b[^>]*>/g)].map((m) => m[0]).find((t) => new RegExp(`\\bId="${sheet.rid}"`).test(t));
-  const target = rel && /\bTarget="([^"]*)"/.exec(rel)[1];
-  const path = target && (target.startsWith('/') ? target.slice(1) : `xl/${target}`);
-  if (!path || !zip[path]) return { ok: false, reason: '시트 내용을 찾지 못했어요.' };
-
-  let shared = [];
-  if (zip['xl/sharedStrings.xml']) {
-    const ss = await zip['xl/sharedStrings.xml']();
-    shared = [...ss.matchAll(/<si\b[^>]*?(?:\/>|>([\s\S]*?)<\/si>)/g)].map((m) => unxml([...(m[1] || '').replace(/<rPh\b[\s\S]*?<\/rPh>/g, '').matchAll(/<t\b[^>]*>([\s\S]*?)<\/t>/g)].map((x) => x[1]).join('')));
-  }
-  const rows = parseSheet(await zip[path](), shared);
+  const rows = await wbk.rowsOf(sheet);
+  if (!rows) return { ok: false, reason: '시트 내용을 찾지 못했어요.' };
 
   // 헤더 행: "n월" 칸이 6개 이상 있는 행
   const headRow = Object.keys(rows).map(Number).sort((a, b) => a - b).find((r) => Object.values(rows[r]).filter((v) => /^\d{1,2}월$/.test(String(v).trim())).length >= 6);
@@ -148,4 +162,77 @@ export function ccrtRowsForMonth(parsed, year, month, nameMode = 'full') {
     .sort()
     .map((date) => ({ date, count: byDate[date].length, title: nameMode === 'hide' ? `COSAS ${byDate[date].length}명` : `${byDate[date].join(',')} COSAS` }));
   return { rows, skipped };
+}
+
+/**
+ * "현황(회복기)" 시트 → 환자별 회복기 종료일. 헤더 행에 '성명'·'입원일'이 있고, "회복기 기간" 칸의 값이 종료일(엑셀 날짜 숫자, 일반 환자는 '-').
+ * @returns {{ ok:false, reason } | { ok:true, sheet, patients:[{name, kind, room, status, admit, end}] }}
+ */
+export async function readStatusSheet(buf) {
+  const wbk = await openWorkbook(buf);
+  if (!wbk.ok) return wbk;
+  const { sheets } = wbk;
+  const sheet = sheets.find((s) => /현황/.test(s.name));
+  if (!sheet) return { ok: false, reason: `"현황(회복기)" 시트를 찾지 못했어요. (시트: ${sheets.map((s) => s.name).join(', ') || '없음'})` };
+  const rows = await wbk.rowsOf(sheet);
+  if (!rows) return { ok: false, reason: '시트 내용을 찾지 못했어요.' };
+  const headRow = Object.keys(rows).map(Number).sort((a, b) => a - b).find((r) => {
+    const vals = Object.values(rows[r]).map((v) => String(v).trim());
+    return vals.includes('성명') && vals.some((v) => /^입원일/.test(v));
+  });
+  if (!headRow) return { ok: false, reason: '"성명"·"입원일" 머리글이 있는 줄을 찾지 못했어요.' };
+  const head = rows[headRow];
+  const colOf = (re) => Number(Object.keys(head).find((c) => re.test(String(head[c]).trim())));
+  const nameC = colOf(/^성명/);
+  const endC = colOf(/회복기/);
+  const statusC = colOf(/^입원$/);
+  if (!endC) return { ok: false, reason: '"회복기 기간" 칸을 찾지 못했어요.' };
+  const kindC = colOf(/^구분/);
+  const roomC = colOf(/^병실/);
+  const admitC = colOf(/^입원일/);
+  const isDate = (v) => typeof v === 'number' && v > 30000 && v < 80000;
+  const patients = [];
+  Object.keys(rows).map(Number).filter((r) => r > headRow).sort((a, b) => a - b).forEach((r) => {
+    const row = rows[r];
+    const name = String(row[nameC] ?? '').trim();
+    if (!name) return;
+    patients.push({
+      name,
+      kind: kindC ? String(row[kindC] ?? '').trim() : '',
+      room: roomC ? String(row[roomC] ?? '').trim() : '',
+      status: statusC ? String(row[statusC] ?? '').trim() : '',
+      admit: isDate(row[admitC]) ? serialToDate(row[admitC]) : '',
+      end: isDate(row[endC]) ? serialToDate(row[endC]) : '',
+    });
+  });
+  return { ok: true, sheet: sheet.name, patients };
+}
+
+// 지금 입원 중인(입원·재입원) 환자만 비회복기로 넘어간다 — 퇴원·외래는 제외
+const ADMITTED = new Set(['입원', '재입원']);
+
+/**
+ * 그 달에 회복기가 끝나는 입원 환자 → 종료일별 일정 후보 [{date, title:"비회복기 전환(N명)", memo, count}] (날짜순).
+ * 이름 표시: 'full' 이름 전체, 'mask' 가운데 가림(김○수), 'hide' 이름은 안 남김 — 이름은 제목이 아니라 메모에 적는다.
+ */
+export function statusRowsForMonth(parsed, year, month, nameMode = 'full') {
+  const ym = `${year}-${String(month).padStart(2, '0')}-`;
+  const byDate = {};
+  let notAdmitted = 0;
+  for (const p of parsed.patients) {
+    if (!p.end || !p.end.startsWith(ym)) continue;
+    if (!ADMITTED.has(p.status)) {
+      notAdmitted += 1;
+      continue;
+    }
+    (byDate[p.end] ||= []).push(p);
+  }
+  const rows = Object.keys(byDate)
+    .sort()
+    .map((date) => {
+      const list = byDate[date];
+      const label = (p) => `${nameMode === 'mask' ? maskName(p.name) : p.name}${p.kind ? `(${p.kind})` : ''}`;
+      return { date, count: list.length, title: `비회복기 전환(${list.length}명)`, memo: nameMode === 'hide' ? '' : list.map(label).join(', ') };
+    });
+  return { rows, notAdmitted };
 }
