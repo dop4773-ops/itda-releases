@@ -90,6 +90,9 @@ export function queryRange(view, anchor) {
 // 월간 칸에 한 번에 보여주는 일정 수(넘으면 "+N개 더보기")
 const MONTH_MAX_VISIBLE = 5;
 
+// 일요일 → 'dow-sun', 토요일 → 'dow-sat' (날짜·요일 글자색용, 공휴일은 CSS에서 항상 붉은색이 우선)
+const dowClass = (day) => (day === 0 ? ' dow-sun' : day === 6 ? ' dow-sat' : '');
+
 export function groupByDateKey(events) {
   const map = new Map();
   const addToDay = (key, e) => {
@@ -126,7 +129,7 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
   const today = new Date();
   const dates = monthGridDates(anchor, { trim: trimMonth && !compact });
   const weekCount = dates.length / 7;
-  const weekdayHeaders = WEEKDAY_LABELS.map((w) => `<div class="month-weekday-header">${w}</div>`).join('');
+  const weekdayHeaders = WEEKDAY_LABELS.map((w, i) => `<div class="month-weekday-header${dowClass(i)}">${w}</div>`).join('');
 
   // 주/일 뷰와 동일하게 — 종일 일정은 사용자가 드래그로 정한 순서(alldayOrder)를 먼저 따르고
   // (없는 건 시작일시), 그 다음 시간 지정 일정이 시작시각 순으로. buildTimeGridHtml과 규칙 일치.
@@ -161,7 +164,7 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
             ? `<div class="month-compact-indicator" title="${realCount}개 일정"><span class="month-compact-dot"></span>${realCount}</div>`
             : '';
         return `
-        <div class="month-cell month-cell-compact ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}" ${holidayNames.has(key) ? `title="${escapeHtml(holidayNames.get(key))}"` : ''}>
+        <div class="month-cell month-cell-compact${dowClass(d.getDay())} ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}" ${holidayNames.has(key) ? `title="${escapeHtml(holidayNames.get(key))}"` : ''}>
           <span class="date-num">${d.getDate()}</span>
           ${indicator}
         </div>`;
@@ -198,7 +201,7 @@ export function buildMonthGridHtml(anchor, byDate, { compact = false, alldayOrde
         return `<div class="month-event-pill ${e.source === 'google' ? 'is-google' : ''}${spanCls}" style="background:${bg};color:${fg}" data-source="${e.source || 'local'}" data-id="${e.id}">${label}</div>`;
       };
       return `
-      <div class="month-cell ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}">
+      <div class="month-cell${dowClass(d.getDay())} ${isOtherMonth ? 'other-month' : ''} ${isToday ? 'is-today' : ''} ${holidayNames.has(key) ? 'is-holiday' : ''}" data-date="${key}">
         <div class="date-row"><span class="date-num">${d.getDate()}</span>${holidayNames.has(key) ? `<span class="holiday-name">${escapeHtml(holidayNames.get(key))}</span>` : ''}</div>
         ${visible.map(pill).join('')}
         ${overflow > 0 ? `<div class="month-more" data-n="${overflow}">+${overflow}개 더보기</div>` : ''}
@@ -232,7 +235,7 @@ export function buildCompactAgendaHtml(anchor, byDate, dayCount, { maxVisible = 
       const key = toKey(d);
       const dayEvents = (byDate.get(key) || []).slice().sort((a, b) => (a.start_at || '').localeCompare(b.start_at || ''));
       const hol = holidayNames.get(key);
-      const dayLabel = dayCount === 7 ? `<div class="agenda-day-label ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}">${WEEKDAY_LABELS[d.getDay()]} ${d.getDate()}${hol ? ` · ${escapeHtml(hol)}` : ''}</div>` : '';
+      const dayLabel = dayCount === 7 ? `<div class="agenda-day-label${dowClass(d.getDay())} ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}">${WEEKDAY_LABELS[d.getDay()]} ${d.getDate()}${hol ? ` · ${escapeHtml(hol)}` : ''}</div>` : '';
 
       if (dayEvents.length === 0) {
         return `<div class="agenda-day-block">${dayLabel}<div class="agenda-empty">일정이 없어요</div></div>`;
@@ -278,7 +281,7 @@ export function buildTimeGridHtml(anchor, byDate, dayCount, { deletable = true, 
   const dayHeaders = days
     .map((d) => {
       const hol = holidayNames.get(toKey(d));
-      return `<div class="time-day-header ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}"><span class="dow">${WEEKDAY_LABELS[d.getDay()]}</span><span>${d.getDate()}</span>${hol ? `<span class="holiday-name">${escapeHtml(hol)}</span>` : ''}</div>`;
+      return `<div class="time-day-header${dowClass(d.getDay())} ${isSameDay(d, today) ? 'is-today' : ''} ${hol ? 'is-holiday' : ''}"><span class="dow">${WEEKDAY_LABELS[d.getDay()]}</span><span>${d.getDate()}</span>${hol ? `<span class="holiday-name">${escapeHtml(hol)}</span>` : ''}</div>`;
     })
     .join('');
 

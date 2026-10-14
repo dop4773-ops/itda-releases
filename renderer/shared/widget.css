@@ -275,6 +275,9 @@ body {
   justify-content: center;
 }
 .bw-mini-cal .month-cell.is-today .date-num { background: #6C8CF5; color: #fff; }
+.bw-mini-cal .month-cell.dow-sun:not(.is-today) .date-num { color: #E5484D; }
+.bw-mini-cal .month-cell.dow-sat:not(.is-today) .date-num { color: #3E63DD; }
+.bw-mini-cal .month-cell.is-holiday:not(.is-today) .date-num { color: #E5484D; }
 .bw-mini-cal .month-event-pill,
 .bw-mini-cal .month-more { display: none; } /* 공간이 좁아 숫자/오늘 표시만, 개별 일정 pill은 생략 */
 

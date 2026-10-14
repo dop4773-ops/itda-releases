@@ -206,6 +206,23 @@ async function main() {
       if (scroll > 1) throw new Error(`월간 달력에 스크롤이 생겼어요 (${scroll}px)`);
     });
 
+    // 일요일 붉은색·토요일 파란색·평일 기본색(공휴일은 붉은색 우선) — 요일 머리글과 날짜 숫자
+    await step('일정: 요일 색(일 빨강·토 파랑)', async () => {
+      const r = await evaluate(`(() => {
+        const col = (e) => getComputedStyle(e).color;
+        const hs = [...document.querySelectorAll('.month-weekday-header')].map(col);
+        const cells = [...document.querySelectorAll('.month-cell[data-date]:not(.is-today):not(.is-holiday)')];
+        const num = (dow) => { const c = cells.find((x) => new Date(x.dataset.date + 'T00:00:00').getDay() === dow); return c ? col(c.querySelector('.date-num')) : null; };
+        const hol = document.querySelector('.month-cell.is-holiday:not(.is-today) .date-num');
+        return { hs, sun: num(0), mon: num(1), sat: num(6), hol: hol ? col(hol) : null };
+      })()`);
+      if (r.hs.length !== 7) throw new Error('요일 머리글이 7개가 아니에요');
+      const [sun, mon, , , , , sat] = r.hs;
+      if (sun === mon || sat === mon || sun === sat) throw new Error(`요일 머리글 색이 구분되지 않아요: ${JSON.stringify(r.hs)}`);
+      if (r.sun !== sun || r.sat !== sat || r.mon !== mon) throw new Error(`날짜 숫자 색이 요일 머리글과 달라요: ${JSON.stringify(r)}`);
+      if (r.hol && r.hol !== sun) throw new Error(`공휴일 색이 붉은색(일요일 색)과 달라요: ${r.hol}`);
+    });
+
     // 6) 설정의 모든 탭
     await step('화면: 설정', go('#/settings'), 900);
     const tabs = await evaluate(`[...document.querySelectorAll('.settings-tab[data-tab]')].map((b) => b.dataset.tab)`);
