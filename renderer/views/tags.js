@@ -140,7 +140,7 @@ export async function mountTagsPanel(root) {
               <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />
             </div>
           </div>
-          <span class="badge badge-neutral" title="이 태그가 붙은 항목 수" style="background:${c.color_hex}22;color:${c.color_hex};border:none;flex-shrink:0;">${c.item_count}개</span>
+          <span class="badge badge-neutral" title="이 태그가 붙은 항목 수" style="background:${c.color_hex}22;color:var(--text);border:none;flex-shrink:0;font-weight:600;">${c.item_count}개</span>
           <div class="text-color-toggle" data-action="textColorToggle" title="캘린더 글자색">
             <button type="button" data-value="#000000" class="${(c.text_color || '#000000') === '#000000' ? 'is-active' : ''}">검정</button>
             <button type="button" data-value="#ffffff" class="${(c.text_color || '#000000') === '#ffffff' ? 'is-active' : ''}">흰색</button>

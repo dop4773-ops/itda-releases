@@ -228,6 +228,22 @@ async function main() {
     const tabs = await evaluate(`[...document.querySelectorAll('.settings-tab[data-tab]')].map((b) => b.dataset.tab)`);
     for (const t of tabs) await step(`설정 탭: ${t}`, click(`.settings-tab[data-tab="${t}"]`), 500);
 
+    // 태그 관리 — 행 안의 .main이 화면 전체용 .main의 안쪽 여백(위 26·아래 60px)을 물려받아 한 줄이 100px 넘게 차지하던 문제의 회귀 방지
+    await step('설정 태그: 카드·행 높이', async () => {
+      await evaluate(`document.querySelector('.settings-tab[data-tab="tags"]').click()`);
+      await sleep(500);
+      const r = await evaluate(`(() => {
+        const h = () => Math.round(document.querySelector('#tag-list .list-row').getBoundingClientRect().height);
+        const out = { board: h() };
+        document.querySelector('#tag-viewToggle [data-view="list"]').click();
+        out.list = h();
+        document.querySelector('#tag-viewToggle [data-view="board"]').click();
+        return out;
+      })()`);
+      if (r.board > 140) throw new Error(`태그 보드형 카드가 너무 높아요: ${r.board}px`);
+      if (r.list > 80) throw new Error(`태그 목록형 행이 너무 높아요: ${r.list}px`);
+    });
+
     // 7) 오늘 화면 조작: 전날/다음 날/오늘 + 상단 카드 팝업
     await step('오늘 화면 열기', go('#/today'), 900);
     await step('오늘: 전날', click('#td-prevDay'));
