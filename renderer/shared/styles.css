@@ -906,6 +906,20 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .compact-list.board-view .list-row .text-color-toggle{order:5;margin-left:auto;}
 .compact-list.board-view .tag-color-hex{width:80px;}
 
+/* 태그: 글자색 추천 표시, 비슷한 색 경고, 비어 있는 색 추천 칩 */
+.text-color-toggle button.is-suggested::after{content:"";display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--brand);margin-left:5px;vertical-align:middle;}
+.text-color-toggle button.is-active.is-suggested::after{background:#fff;}
+.text-color-toggle.is-poor{outline:1.5px solid var(--danger);outline-offset:2px;border-radius:7px;}
+.tag-warn{font-size:11px;color:var(--warning,#B7791F);margin-top:3px;line-height:1.35;}
+.tag-note{font-size:11.5px;color:var(--text-soft);background:color-mix(in srgb,var(--warning,#E0A73B) 14%,var(--surface));border:1px solid color-mix(in srgb,var(--warning,#E0A73B) 30%,var(--border));border-radius:var(--radius-sm);padding:7px 10px;margin-bottom:8px;line-height:1.5;}
+.tag-suggest{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.tag-suggest-label{font-size:11.5px;color:var(--text-faint);}
+.tag-suggest-chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.tag-chip{width:24px;height:24px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;padding:0;}
+.tag-chip:hover{transform:scale(1.12);}
+.tag-suggest-none{font-size:11.5px;color:var(--text-faint);}
+.compact-list.board-view .list-row .tag-warn{margin-top:1px;}
+
 /* 태그 색상: 스와치 + hex 텍스트 입력. wrapper를 flex-row로 고정해서 보드형(.list-row가
    flex-direction:column)에서도 둘이 나란히 붙어있는다. hex는 폰트가 앱 전역과 달라 보이지
    않도록 .input의 font-family:inherit를 그대로 쓴다(별도 지정 금지). */

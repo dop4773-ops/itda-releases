@@ -2,6 +2,7 @@ import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce 
 import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
+import { bestTextColor, isPoorContrast, findSimilar, findSimilarPairs, suggestColors } from '../shared/color-suggest.js';
 
 export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -12,6 +13,12 @@ const BOARD_VIEW_ICON = `<svg width="15" height="15" viewBox="0 0 24 24" fill="n
 // macOS 네이티브 색상 패널(<input type=color>)은 hex 붙여넣기가 잘 안 먹는 경우가 있어
 // 옆에 이 정규식으로 검증하는 일반 텍스트 입력을 따로 둔다 — 거기엔 그냥 붙여넣으면 된다.
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+// 이름 뒤에 붙는 조사(받침 있으면 '과', 없으면 '와'). 한글이 아닌 글자로 끝나면 '와'
+const gwa = (name) => {
+  const t = String(name).trim();
+  const code = t.charCodeAt(t.length - 1) - 0xac00;
+  return code >= 0 && code <= 11171 && code % 28 !== 0 ? '과' : '와';
+};
 const normalizeHex = (v) => {
   v = v.trim();
   if (v && !v.startsWith('#')) v = `#${v}`;
@@ -44,6 +51,7 @@ export async function mountTagsPanel(root) {
         <button class="btn-secondary" id="tag-bulkBlack">전체 검정으로</button>
         <button class="btn-secondary" id="tag-bulkWhite">전체 흰색으로</button>
       </div>
+      <div id="tag-similarNote" class="tag-note" hidden></div>
       <div id="tag-list" class="compact-list"></div>
       <div class="form-row" style="margin-top:10px;border-top:1px solid var(--divider);padding-top:10px;">
         <input type="text" id="tag-newName" class="input" placeholder="새 카테고리 이름" style="flex:1;min-width:160px;" />
@@ -53,6 +61,11 @@ export async function mountTagsPanel(root) {
         </div>
         <button class="btn" id="tag-addBtn">추가</button>
       </div>
+      <div class="tag-suggest" id="tag-suggest">
+        <span class="tag-suggest-label" title="지금 쓰는 색들과 가장 구분되는 색이에요. 누르면 위 색 칸에 들어가요">비어 있는 색 추천</span>
+        <span id="tag-suggestChips" class="tag-suggest-chips"></span>
+      </div>
+      <div class="tag-warn" id="tag-newWarn" hidden></div>
     </div>
 
     <div class="modal-overlay" id="tag-browseOverlay">
@@ -139,6 +152,7 @@ export async function mountTagsPanel(root) {
             <div style="display:flex;align-items:center;gap:4px;">
               <input type="text" data-action="name" class="card-title" style="font-weight:600;font-size:13px;color:var(--text);border:none;background:transparent;outline:none;width:100%;" value="${escapeHtml(c.name)}" />
             </div>
+            <div class="tag-warn" data-role="warn" hidden></div>
           </div>
           <span class="badge badge-neutral" title="이 태그가 붙은 항목 수" style="background:${c.color_hex}22;color:var(--text);border:none;flex-shrink:0;font-weight:600;">${c.item_count}개</span>
           <div class="text-color-toggle" data-action="textColorToggle" title="캘린더 글자색">
@@ -161,6 +175,24 @@ export async function mountTagsPanel(root) {
       const colorHexInput = row.querySelector('[data-action="colorHex"]');
       const textColorToggle = row.querySelector('[data-action="textColorToggle"]');
       let currentTextColor = textColorToggle.querySelector('.is-active')?.dataset.value || '#000000';
+      const warnEl = row.querySelector('[data-role="warn"]');
+      const others = categories.filter((c) => c.id !== id);
+      // 글자색 추천 표시(추천 쪽에 점)·읽기 힘든 조합 경고, 비슷한 색 경고를 지금 고른 색 기준으로 다시 그린다
+      const refreshHints = () => {
+        const bg = colorInput.value;
+        const best = bestTextColor(bg);
+        const poor = isPoorContrast(bg, currentTextColor);
+        textColorToggle.querySelectorAll('button').forEach((b) => {
+          b.classList.toggle('is-suggested', b.dataset.value === best);
+          b.title = b.dataset.value === best ? '이 배경색에서 더 잘 읽혀요' : '';
+        });
+        textColorToggle.classList.toggle('is-poor', poor);
+        textColorToggle.title = poor ? `이 글자색은 읽기 어려워요 — ${best === '#000000' ? '검정' : '흰색'}을 추천해요` : '캘린더 글자색';
+        const sim = findSimilar(bg, others);
+        warnEl.hidden = !sim;
+        if (sim) warnEl.textContent = `⚠ '${sim.name}'${gwa(sim.name)} 색이 비슷해요`;
+      };
+      refreshHints();
 
       const scheduleSave = wrapAutosave(async () => {
         try {
@@ -178,14 +210,23 @@ export async function mountTagsPanel(root) {
       nameInput.addEventListener('input', scheduleSave);
       // 네이티브 <input type=color> 스와치 — macOS 색상 패널에선 hex 붙여넣기가 잘 안 먹어서
       // 아래 텍스트 입력을 따로 둠. 스와치를 클릭해서 고르면 텍스트 쪽도 맞춰 보여준다.
+      // 배경색을 바꾸면 글자색도 잘 읽히는 쪽(검정/흰색)으로 맞춘다 — 마음에 안 들면 바로 옆 토글로 다시 바꾸면 된다
+      const applyAutoTextColor = () => {
+        currentTextColor = bestTextColor(colorInput.value);
+        textColorToggle.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b.dataset.value === currentTextColor));
+      };
       colorInput.addEventListener('input', () => {
         colorHexInput.value = colorInput.value.toUpperCase();
+        applyAutoTextColor();
+        refreshHints();
         scheduleSave();
       });
       colorHexInput.addEventListener('input', () => {
         const hex = normalizeHex(colorHexInput.value);
         if (!HEX_COLOR_RE.test(hex)) return; // 6자리 다 입력/붙여넣기 되기 전엔 저장 보류
         colorInput.value = hex;
+        applyAutoTextColor();
+        refreshHints();
         scheduleSave();
       });
       colorHexInput.addEventListener('blur', () => {
@@ -197,6 +238,7 @@ export async function mountTagsPanel(root) {
         btn.addEventListener('click', () => {
           currentTextColor = btn.dataset.value;
           textColorToggle.querySelectorAll('button').forEach((b) => b.classList.toggle('is-active', b === btn));
+          refreshHints();
           scheduleSave();
         });
       });
@@ -216,14 +258,48 @@ export async function mountTagsPanel(root) {
         });
       }
     });
+
+    // 서로 구분이 어려운 색 쌍 요약 + 비어 있는 색 추천
+    allCategories = categories;
+    const pairs = findSimilarPairs(categories);
+    const note = $('tag-similarNote');
+    note.hidden = !pairs.length;
+    if (pairs.length) note.textContent = `서로 비슷한 색이 있어요 — ${pairs.map((p) => `${p.a.name} ↔ ${p.b.name}`).join(', ')}. 달력에서 구분하기 어려울 수 있어요.`;
+    renderSuggestChips();
+    refreshNewWarn();
+  }
+
+  let allCategories = [];
+  function renderSuggestChips() {
+    const colors = suggestColors(allCategories.map((c) => c.color_hex), 6);
+    const chips = $('tag-suggestChips');
+    chips.innerHTML = colors.length
+      ? colors.map((c) => `<button type="button" class="tag-chip" data-color="${c}" title="${c.toUpperCase()}" style="background:${c}"></button>`).join('')
+      : '<span class="tag-suggest-none">색이 많아서 겹치지 않는 색을 더 못 찾았어요</span>';
+    chips.querySelectorAll('.tag-chip').forEach((b) =>
+      b.addEventListener('click', () => {
+        $('tag-newColor').value = b.dataset.color;
+        $('tag-newColorHex').value = b.dataset.color.toUpperCase();
+        refreshNewWarn();
+      })
+    );
+  }
+  function refreshNewWarn() {
+    const sim = findSimilar($('tag-newColor').value, allCategories);
+    $('tag-newWarn').hidden = !sim;
+    if (sim) $('tag-newWarn').textContent = `⚠ '${sim.name}'${gwa(sim.name)} 색이 비슷해요 — 위 추천 색을 골라 보세요`;
   }
 
   $('tag-newColor').addEventListener('input', () => {
     $('tag-newColorHex').value = $('tag-newColor').value.toUpperCase();
+    refreshNewWarn();
   });
   $('tag-newColorHex').addEventListener('input', () => {
     const hex = normalizeHex($('tag-newColorHex').value);
-    if (HEX_COLOR_RE.test(hex)) $('tag-newColor').value = hex;
+    if (HEX_COLOR_RE.test(hex)) {
+      $('tag-newColor').value = hex;
+      refreshNewWarn();
+    }
   });
   $('tag-newColorHex').addEventListener('blur', () => {
     $('tag-newColorHex').value = $('tag-newColor').value.toUpperCase();
@@ -238,7 +314,7 @@ export async function mountTagsPanel(root) {
     }
     const colorHex = $('tag-newColor').value;
     try {
-      await window.itda.categories.add({ name, colorHex, textColor: '#000000' });
+      await window.itda.categories.add({ name, colorHex, textColor: bestTextColor(colorHex) });
       $('tag-newName').value = '';
       load();
     } catch (e) {

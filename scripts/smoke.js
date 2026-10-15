@@ -242,6 +242,8 @@ async function main() {
       })()`);
       if (r.board > 140) throw new Error(`태그 보드형 카드가 너무 높아요: ${r.board}px`);
       if (r.list > 80) throw new Error(`태그 목록형 행이 너무 높아요: ${r.list}px`);
+      const chips = await evaluate(`document.querySelectorAll('#tag-suggestChips .tag-chip').length`);
+      if (!chips) throw new Error('비어 있는 색 추천 칩이 하나도 안 보여요');
     });
 
     // 7) 오늘 화면 조작: 전날/다음 날/오늘 + 상단 카드 팝업
