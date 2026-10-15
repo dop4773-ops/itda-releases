@@ -2,7 +2,7 @@ import { escapeHtml, toast, errorToast, emptyStateBlock, isUserTyping, debounce 
 import { TYPE_ROUTE, LINK_TYPE_LABEL } from '../shared/links-ui.js';
 import { registerEscClose } from '../shared/esc-close.js';
 import { wrapAutosave } from '../shared/pending-saves.js';
-import { bestTextColor, isPoorContrast, findSimilar, findSimilarPairs, suggestColors } from '../shared/color-suggest.js';
+import { bestTextColor, isPoorContrast, findSimilar, similarThreshold, suggestColors, SUGGEST_THEMES } from '../shared/color-suggest.js';
 
 export const TAG_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.2L3.2 9.59A2 2 0 003.83 11l9.58 9.59a2 2 0 002.82 0l4.36-4.36a2 2 0 000-2.82z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
 const TRASH_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/></svg>`;
@@ -51,7 +51,6 @@ export async function mountTagsPanel(root) {
         <button class="btn-secondary" id="tag-bulkBlack">전체 검정으로</button>
         <button class="btn-secondary" id="tag-bulkWhite">전체 흰색으로</button>
       </div>
-      <div id="tag-similarNote" class="tag-note" hidden></div>
       <div id="tag-list" class="compact-list"></div>
       <div class="form-row" style="margin-top:10px;border-top:1px solid var(--divider);padding-top:10px;">
         <input type="text" id="tag-newName" class="input" placeholder="새 카테고리 이름" style="flex:1;min-width:160px;" />
@@ -62,7 +61,10 @@ export async function mountTagsPanel(root) {
         <button class="btn" id="tag-addBtn">추가</button>
       </div>
       <div class="tag-suggest" id="tag-suggest">
-        <span class="tag-suggest-label" title="지금 쓰는 색들과 가장 구분되는 색이에요. 누르면 위 색 칸에 들어가요">비어 있는 색 추천</span>
+        <span class="tag-suggest-label" title="지금 쓰는 색들과 구분되는 색이에요. 누르면 위 색 칸에 들어가요">비어 있는 색 추천</span>
+        <select id="tag-suggestTheme" class="select tag-suggest-theme" title="추천 색의 분위기 — 기본은 지금 쓰는 색의 톤을 그대로 따라가요">
+          ${Object.entries(SUGGEST_THEMES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
+        </select>
         <span id="tag-suggestChips" class="tag-suggest-chips"></span>
       </div>
       <div class="tag-warn" id="tag-newWarn" hidden></div>
@@ -177,6 +179,7 @@ export async function mountTagsPanel(root) {
       let currentTextColor = textColorToggle.querySelector('.is-active')?.dataset.value || '#000000';
       const warnEl = row.querySelector('[data-role="warn"]');
       const others = categories.filter((c) => c.id !== id);
+      const simThr = similarThreshold(categories.map((c) => c.color_hex));
       // 글자색 추천 표시(추천 쪽에 점)·읽기 힘든 조합 경고, 비슷한 색 경고를 지금 고른 색 기준으로 다시 그린다
       const refreshHints = () => {
         const bg = colorInput.value;
@@ -188,7 +191,7 @@ export async function mountTagsPanel(root) {
         });
         textColorToggle.classList.toggle('is-poor', poor);
         textColorToggle.title = poor ? `이 글자색은 읽기 어려워요 — ${best === '#000000' ? '검정' : '흰색'}을 추천해요` : '캘린더 글자색';
-        const sim = findSimilar(bg, others);
+        const sim = findSimilar(bg, others, simThr);
         warnEl.hidden = !sim;
         if (sim) warnEl.textContent = `⚠ '${sim.name}'${gwa(sim.name)} 색이 비슷해요`;
       };
@@ -259,23 +262,20 @@ export async function mountTagsPanel(root) {
       }
     });
 
-    // 서로 구분이 어려운 색 쌍 요약 + 비어 있는 색 추천
+    // 새 카테고리 폼의 추천 칩·비슷한 색 경고는 지금 쓰는 색 기준으로 다시 계산
     allCategories = categories;
-    const pairs = findSimilarPairs(categories);
-    const note = $('tag-similarNote');
-    note.hidden = !pairs.length;
-    if (pairs.length) note.textContent = `서로 비슷한 색이 있어요 — ${pairs.map((p) => `${p.a.name} ↔ ${p.b.name}`).join(', ')}. 달력에서 구분하기 어려울 수 있어요.`;
     renderSuggestChips();
     refreshNewWarn();
   }
 
   let allCategories = [];
+  let suggestTheme = 'match';
   function renderSuggestChips() {
-    const colors = suggestColors(allCategories.map((c) => c.color_hex), 6);
+    const colors = suggestColors(allCategories.map((c) => c.color_hex), 6, suggestTheme);
     const chips = $('tag-suggestChips');
     chips.innerHTML = colors.length
       ? colors.map((c) => `<button type="button" class="tag-chip" data-color="${c}" title="${c.toUpperCase()}" style="background:${c}"></button>`).join('')
-      : '<span class="tag-suggest-none">색이 많아서 겹치지 않는 색을 더 못 찾았어요</span>';
+      : '<span class="tag-suggest-none">이 테마로는 겹치지 않는 색을 못 찾았어요 — 다른 테마를 골라 보세요</span>';
     chips.querySelectorAll('.tag-chip').forEach((b) =>
       b.addEventListener('click', () => {
         $('tag-newColor').value = b.dataset.color;
@@ -285,7 +285,7 @@ export async function mountTagsPanel(root) {
     );
   }
   function refreshNewWarn() {
-    const sim = findSimilar($('tag-newColor').value, allCategories);
+    const sim = findSimilar($('tag-newColor').value, allCategories, similarThreshold(allCategories.map((c) => c.color_hex)));
     $('tag-newWarn').hidden = !sim;
     if (sim) $('tag-newWarn').textContent = `⚠ '${sim.name}'${gwa(sim.name)} 색이 비슷해요 — 위 추천 색을 골라 보세요`;
   }
@@ -347,6 +347,20 @@ export async function mountTagsPanel(root) {
   }
   $('tag-bulkBlack').addEventListener('click', () => bulkSetTextColor('#000000'));
   $('tag-bulkWhite').addEventListener('click', () => bulkSetTextColor('#ffffff'));
+
+  // 추천 색 테마(기본: 현재 색에 맞춤) — 고른 값은 설정에 저장
+  try {
+    const saved = await window.itda.settings.get('tag_suggest_theme');
+    if (saved && SUGGEST_THEMES[saved]) suggestTheme = saved;
+  } catch (e) {
+    /* 기본값 */
+  }
+  $('tag-suggestTheme').value = suggestTheme;
+  $('tag-suggestTheme').addEventListener('change', () => {
+    suggestTheme = $('tag-suggestTheme').value;
+    window.itda.settings.set({ key: 'tag_suggest_theme', value: suggestTheme }).catch(() => {});
+    renderSuggestChips();
+  });
 
   await load();
 

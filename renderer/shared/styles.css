@@ -915,6 +915,7 @@ textarea.input{resize:vertical;min-height:60px;width:100%;}
 .tag-suggest{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
 .tag-suggest-label{font-size:11.5px;color:var(--text-faint);}
 .tag-suggest-chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.tag-suggest-theme{height:28px;font-size:11.5px;padding:2px 8px;min-width:0;}
 .tag-chip{width:24px;height:24px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;padding:0;}
 .tag-chip:hover{transform:scale(1.12);}
 .tag-suggest-none{font-size:11.5px;color:var(--text-faint);}

@@ -91,29 +91,82 @@ function hslToHex(h, s, l) {
   const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
   return rgbToHex([f(0) * 255, f(8) * 255, f(4) * 255]);
 }
-
-// 후보 팔레트: 색상 24단계 × (선명/연함/진함) — 달력 막대로 쓰기 좋은 중간 밝기·채도만.
-// bonus: 형광처럼 튀는 색보다 차분한 쪽을 살짝 우대(같은 정도로 안 겹치면 보기 좋은 색을 먼저 추천)
-const CANDIDATES = (() => {
-  const out = [];
-  for (let h = 0; h < 360; h += 15) for (const [s, l, bonus] of [[0.62, 0.58, 6], [0.55, 0.74, 3], [0.5, 0.42, 2]]) out.push({ hex: hslToHex(h, s, l), bonus });
-  return out;
-})();
+function hexToHsl(hex) {
+  const [r, g, b] = hexToRgb(hex).map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, s, l];
+}
+const median = (a) => {
+  const v = [...a].sort((x, y) => x - y);
+  return v.length ? v[Math.floor(v.length / 2)] : 0;
+};
 
 /**
- * 이미 쓰는 색들과 가장 안 겹치는 색 n개 — 후보마다 "가장 가까운 기존/선택된 색까지의 거리"를 보고(35가 넘으면 더 멀어도 이득 없음)
- * 점수가 높은 것부터 하나씩 뽑는다. 기준(minDistance) 미만으로 가까운 후보는 제외해서, 이미 색이 빽빽하면 적게(또는 0개) 돌려준다.
+ * "비슷하다"의 기준은 팔레트에 따라 달라진다 — 파스텔끼리는 원래 서로 가까워서(색 거리가 작아서) 고정 기준을 쓰면 전부 "비슷"하다고 나온다.
+ * 지금 쓰는 색들 사이 거리의 중앙값에 비례해서 정한다(눈에 거의 같아 보이는 정도만 잡도록): 파스텔 ≈ 4~5, 선명한 색 ≈ 22.
  */
-export function suggestColors(existing, n = 6, minDistance = SIMILAR_BELOW) {
+export function similarThreshold(hexes) {
+  const list = hexes.filter(isHex);
+  if (list.length < 4) return SIMILAR_BELOW;
+  const d = [];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) d.push(deltaE(list[i], list[j]));
+  return Math.max(3, Math.min(SIMILAR_BELOW, median(d) * 0.3));
+}
+
+/** 추천 색 테마 — match는 지금 쓰는 색들의 밝기·채도를 따라가고, 나머지는 고정 톤. 각 항목은 [채도, 밝기] 후보 */
+export const SUGGEST_THEMES = {
+  match: { label: '현재 색에 맞춤' },
+  pastel: { label: '파스텔', tones: [[0.75, 0.9], [0.6, 0.86]] },
+  vivid: { label: '선명', tones: [[0.78, 0.55], [0.65, 0.62]] },
+  muted: { label: '차분', tones: [[0.35, 0.66], [0.3, 0.56]] },
+  deep: { label: '진하게', tones: [[0.55, 0.38], [0.5, 0.45]] },
+};
+
+function toneCandidates(existing, theme) {
+  let tones = SUGGEST_THEMES[theme]?.tones;
+  if (!tones) {
+    // 현재 색에 맞춤: 이미 쓰는 색들의 채도·밝기 중앙값을 그대로 따라간다(조금씩만 흔들어 후보를 늘림)
+    const hsl = existing.filter(isHex).map(hexToHsl);
+    const s = median(hsl.map((x) => x[1]));
+    const l = median(hsl.map((x) => x[2]));
+    tones = hsl.length ? [[s, l], [Math.max(0.2, s * 0.85), Math.min(0.97, l + 0.02)], [s, Math.max(0.2, l - 0.03)]] : SUGGEST_THEMES.pastel.tones;
+  }
+  const out = [];
+  for (let h = 0; h < 360; h += 15) for (const [s, l] of tones) out.push(hslToHex(h, s, l));
+  return out;
+}
+
+/**
+ * 이미 쓰는 색들과 가장 안 겹치는 색 n개 — 후보마다 "가장 가까운 기존/선택된 색까지의 거리"를 보고(cap 넘으면 더 멀어도 이득 없음)
+ * 높은 것부터 하나씩 뽑는다. 거의 같은 색(기준×1.5 미만)은 제외한다. theme 기본은 'match'(지금 색의 톤을 따라가서 튀지 않음).
+ */
+export function suggestColors(existing, n = 6, theme = 'match') {
   const taken = existing.filter(isHex).map(norm);
+  const thr = similarThreshold(taken);
+  // 'match'는 지금 색들과 확실히 구분되는 색만, 직접 고른 테마는 거의 같은 색만 피한다(그 톤을 원해서 고른 것이므로)
+  // (쓰는 색이 거의 없으면 기준이 의미 없으므로 서로 확실히 다른 정도만 요구)
+  const floor = taken.length < 4 ? 10 : theme === 'match' || !SUGGEST_THEMES[theme] ? Math.max(thr * 1.5, 4) : Math.max(thr * 0.5, 4);
+  const cap = Math.max(15, thr * 1.6);
+  // 추천끼리도 서로 구분되게(직접 고른 테마는 기존 색과의 기준이 느슨해서 비슷한 색만 여러 개 나오기 쉬움)
+  const spread = Math.max(floor, theme === 'match' || !SUGGEST_THEMES[theme] ? 0 : 18);
   const picked = [];
+  const candidates = toneCandidates(taken, theme);
   for (let k = 0; k < n; k++) {
     let best = null;
-    for (const c of CANDIDATES) {
-      const nearest = Math.min(...[...taken, ...picked].map((t) => deltaE(c.hex, t)), Infinity);
-      if (nearest < minDistance) continue;
-      const score = Math.min(nearest, 35) + c.bonus;
-      if (!best || score > best.score) best = { color: c.hex, score };
+    for (const c of candidates) {
+      if (picked.includes(c)) continue;
+      const nearTaken = Math.min(...taken.map((t) => deltaE(c, t)), Infinity);
+      const nearPicked = Math.min(...picked.map((t) => deltaE(c, t)), Infinity);
+      if (nearTaken < floor || nearPicked < spread) continue;
+      // 1순위: 기존 색과 충분히 먼 것(cap까지), 같으면 이미 고른 추천과도 먼 것 — 그래야 색상이 골고루 퍼진다
+      const score = Math.min(nearTaken, cap) * 100 + Math.min(nearPicked, 80);
+      if (!best || score > best.score) best = { color: c, score };
     }
     if (!best) break;
     picked.push(best.color);
